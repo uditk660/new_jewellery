@@ -31,3 +31,4 @@ Setup
 Notes
 - This is a scaffolded skeleton to get you started. For production apps, switch to PostgreSQL and add authentication, authorization, admin UI, and image uploads.
 - Tests are minimal. Expand with Rails' built-in test helpers and fixtures.
+# new_jewellery
