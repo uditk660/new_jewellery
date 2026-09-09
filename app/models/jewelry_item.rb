@@ -12,8 +12,29 @@ class JewelryItem < ActiveRecord::Base
   belongs_to :jewellery_category, optional: true
 
   before_validation :set_sku, on: :create
+  before_validation :sync_metal_from_purity
+  validate :purity_belongs_to_metal
+  validate :category_belongs_to_metal
 
   scope :available_for_sale, -> { where('quantity > 0') }
+
+  def sync_metal_from_purity
+    self.metal_id = purity.metal_id if purity
+  end
+
+  def purity_belongs_to_metal
+    return if purity.blank? || metal_id.blank?
+    return if purity.metal_id == metal_id
+
+    errors.add(:purity_id, 'must belong to the selected metal')
+  end
+
+  def category_belongs_to_metal
+    return if jewellery_category.blank? || metal_id.blank?
+    return if jewellery_category.metal_id == metal_id
+
+    errors.add(:jewellery_category_id, 'must belong to the selected metal')
+  end
 
   def set_sku
     return if sku.present?

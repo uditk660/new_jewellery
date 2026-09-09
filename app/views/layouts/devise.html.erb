@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= content_for?(:title) ? yield(:title) : 'Jewellery Login' %></title>
+    <%= csrf_meta_tags %>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body.auth-page {
+        min-height: 100vh;
+        background:
+          radial-gradient(1200px 500px at 10% -10%, rgba(212, 175, 55, 0.18), transparent 55%),
+          radial-gradient(900px 420px at 100% 110%, rgba(37, 99, 235, 0.16), transparent 50%),
+          linear-gradient(180deg, #0b1220 0%, #111827 55%, #0b1220 100%);
+        color: #0f172a;
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .auth-viewport {
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 16px;
+      }
+      .auth-card {
+        width: 100%;
+        max-width: 420px;
+        background: #ffffff;
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+        overflow: hidden;
+      }
+      .auth-header {
+        padding: 28px 28px 20px;
+        background: linear-gradient(180deg, #0b1220, #132033);
+        color: #e6eef8;
+        text-align: center;
+      }
+      .brand-mark {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 12px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #f4e2a8, #c9a227);
+        font-size: 24px;
+        box-shadow: 0 8px 20px rgba(201, 162, 39, 0.35);
+      }
+      .brand-name {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #fff;
+      }
+      .brand-sub {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 0.92rem;
+      }
+      .auth-body { padding: 24px 28px 28px; }
+      .form-group { margin-bottom: 14px; }
+      label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 6px;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="email"] {
+        width: 100%;
+        padding: 11px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        font-size: 14px;
+        color: #0f172a;
+      }
+      input[type="text"]:focus,
+      input[type="password"]:focus,
+      input[type="email"]:focus {
+        outline: none;
+        border-color: #c9a227;
+        box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.18);
+        background: #fff;
+      }
+      .remember-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0 16px;
+        font-size: 13px;
+      }
+      .remember-row label { margin: 0; font-weight: 500; color: #475569; }
+      .btn-primary {
+        width: 100%;
+        background: linear-gradient(90deg, #c9a227, #a17c12);
+        color: #0b1220;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: none;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .btn-primary:hover { filter: brightness(1.05); }
+      .help-row { margin-top: 14px; text-align: center; }
+      .help-row a { color: #0b1220; font-weight: 600; text-decoration: none; }
+      .help-row a:hover { color: #a17c12; }
+      .forgot-tip {
+        display: none;
+        margin-top: 10px;
+        background: #fff8e6;
+        border: 1px solid #f5e0b7;
+        padding: 8px 10px;
+        border-radius: 8px;
+        color: #7a5a00;
+        font-size: 13px;
+      }
+      .footer-note {
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px dashed #e2e8f0;
+        color: #64748b;
+        font-size: 13px;
+        text-align: center;
+      }
+      .error-box {
+        background: #fff1f2;
+        border: 1px solid #fecaca;
+        color: #9f1239;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        font-size: 13px;
+      }
+      .flash { margin: 0 0 14px; }
+      @media (max-width: 480px) {
+        .auth-card { border-radius: 14px; }
+        .auth-header, .auth-body { padding-left: 20px; padding-right: 20px; }
+      }
+    </style>
+  </head>
+  <body class="auth-page">
+    <%= yield %>
+  </body>
+</html>

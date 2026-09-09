@@ -1,6 +1,5 @@
 class HomeController < ApplicationController
-  # ensure only signed-in users can see the dashboard; unauthenticated users will be sent to sign-in
-  before_action :authenticate_user!, only: [:dashboard]
+  before_action :authenticate_user!
 
   def dashboard
   scope = Order.where(status: 'paid')

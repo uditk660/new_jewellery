@@ -1,113 +1,246 @@
-<nav class="navbar">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%">
-    <div style="display:flex;align-items:center;gap:12px">
-      <div class="brand"><a href="<%= root_path %>">JewelryApp</a></div>
-      <% if respond_to?(:user_signed_in?) && user_signed_in? %>
-        <button class="nav-toggle" aria-expanded="false">☰ Menu</button>
-      <% end %>
-    </div>
+<style>
+  .jewel-nav.navbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    background: linear-gradient(90deg, #0b1220, #16120e 55%, #0b1220);
+    border-bottom: 1px solid rgba(201, 162, 39, 0.28);
+    position: sticky;
+    top: 0;
+    z-index: 1200;
+    color: #e8eef7;
+    font-family: Inter, system-ui, sans-serif;
+  }
+  .jewel-nav .jewel-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    min-width: 160px;
+    flex-shrink: 0;
+  }
+  .jewel-nav .jewel-mark {
+    width: 34px; height: 34px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #e8d5a3, #c9a227);
+    font-size: 16px;
+  }
+  .jewel-nav .jewel-brand-text {
+    display: flex; flex-direction: column; line-height: 1.15;
+  }
+  .jewel-nav .jewel-brand-text strong {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.15rem;
+    color: #fff;
+    font-weight: 600;
+  }
+  .jewel-nav .jewel-brand-text span { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #e8d5a3; }
+  .jewel-nav .nav-toggle {
+    display: none;
+    background: transparent;
+    border: 1px solid rgba(201,162,39,0.35);
+    color: #e8d5a3;
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+  .jewel-nav .nav-menu {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+  }
+  .jewel-nav .nav-item { position: relative; }
+  .jewel-nav .nav-menu > .nav-item > a {
+    color: #d6cbb8;
+    text-decoration: none;
+    padding: 8px 11px;
+    border-radius: 8px;
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .jewel-nav .nav-menu > .nav-item > a:hover,
+  .jewel-nav .nav-item:focus-within > a {
+    background: rgba(201, 162, 39, 0.12);
+    color: #fff;
+  }
+  .jewel-nav .submenu {
+    position: absolute;
+    top: calc(100% - 2px);
+    left: 0;
+    min-width: 230px;
+    background: #12151c;
+    border: 1px solid rgba(201, 162, 39, 0.28);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+    z-index: 1600;
+  }
+  .jewel-nav .nav-item:hover .submenu,
+  .jewel-nav .nav-item:focus-within .submenu {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .jewel-nav .submenu li { list-style: none; }
+  .jewel-nav .submenu a {
+    display: block;
+    padding: 8px 10px;
+    border-radius: 8px;
+    color: #e8eef7;
+    text-decoration: none;
+    font-size: 13px;
+  }
+  .jewel-nav .submenu a:hover { background: rgba(201,162,39,0.14); color: #e8d5a3; }
+  .jewel-nav .submenu-label {
+    padding: 6px 10px 4px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #8a8072;
+  }
+  .jewel-nav .jewel-account {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .jewel-nav .jewel-user {
+    text-align: right;
+    font-size: 12px;
+    color: #d6cbb8;
+  }
+  .jewel-nav .jewel-user strong { display: block; color: #fff; font-size: 13px; }
+  .jewel-nav .sign-out-btn {
+    background: transparent;
+    border: 1px solid rgba(201,162,39,0.4);
+    color: #e8d5a3;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .jewel-nav .sign-in-link { color: #e8d5a3; font-weight: 600; text-decoration: none; font-size: 13px; }
+  @media (max-width: 960px) {
+    .jewel-nav .nav-toggle { display: inline-block; }
+    .jewel-nav .nav-menu {
+      display: none;
+      flex-direction: column;
+      align-items: stretch;
+      position: absolute;
+      left: 12px; right: 12px; top: 58px;
+      background: #12151c;
+      border: 1px solid rgba(201,162,39,0.28);
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .jewel-nav .nav-menu.show { display: flex; }
+    .jewel-nav .submenu { position: relative; visibility: visible; opacity: 1; transform: none; box-shadow: none; border: 0; padding-left: 8px; display: block; }
+    .jewel-nav .nav-item:hover .submenu { display: block; }
+    .jewel-nav .jewel-user { display: none; }
+  }
+</style>
 
-    <% if respond_to?(:user_signed_in?) && user_signed_in? %>
-      <ul id="nav-icons" class="nav-menu" role="menubar" style="flex:1;margin:0 20px;">
-    <!-- Master Data -->
-    <li class="nav-item" role="none">
-      <a role="menuitem" href="<%= jewelry_items_path %>" tabindex="0" aria-haspopup="true" aria-expanded="false">Master Data ▾</a>
-      <ul class="submenu" role="menu">
-        <li><a href="<%= jewelry_items_path %>">Existing Items</a></li>
-        <li><a href="<%= new_jewelry_item_path %>">New Item</a></li>
-        <li class="submenu-divider" aria-hidden="true">—</li>
-        <li><a href="<%= metals_path %>">Existing Metals</a></li>
-        <li><a href="<%= purities_path %>">Existing Purities</a></li>
-  <li><a href="<%= customers_path %>">Existing Customers</a></li>
-      </ul>
-    </li>
+<nav class="navbar jewel-nav">
+  <% shop_label = (user_signed_in? && current_user.respond_to?(:display_name)) ? current_user.display_name : 'Jewellery OS' %>
+  <%= link_to root_path, class: 'jewel-brand' do %>
+    <span class="jewel-mark" aria-hidden="true">💎</span>
+    <span class="jewel-brand-text">
+      <strong><%= shop_label %></strong>
+      <span>Showroom</span>
+    </span>
+  <% end %>
 
-    <!-- Rates -->
-    <li class="nav-item" role="none">
-       <a role="menuitem" href="<%= rates_path %>" tabindex="0" aria-haspopup="true" aria-expanded="false">Rates ▾</a>
-      <ul class="submenu" role="menu">
-        <li><a href="<%= rates_path %>">Today Rates</a></li>
-      </ul>
-    </li>
+  <% signed_in_store = respond_to?(:user_signed_in?) && user_signed_in? && (!respond_to?(:subscription_live?) || subscription_live?) && (!respond_to?(:shop_setup_complete?) || shop_setup_complete?) %>
 
-    <!-- Billing & Sales -->
-    <li class="nav-item" role="none">
-      <a role="menuitem" href="<%= orders_path %>" tabindex="0" aria-haspopup="true" aria-expanded="false">Sales ▾</a>
-      <ul class="submenu" role="menu">
-        <li><a href="<%= orders_path %>">Existing Orders</a></li>
-        <li><a href="<%= new_order_path %>">New Order</a></li>
-  <li class="submenu-divider" aria-hidden="true">—</li>
-  <li><a href="<%= returns_path %>">Returns & Exchanges</a></li>
-  <li><a href="<%= new_return_path %>">New Return / Exchange</a></li>
-      </ul>
-    </li>
+  <% if signed_in_store %>
+    <button class="nav-toggle" type="button" aria-expanded="false">Menu</button>
+    <ul id="nav-icons" class="nav-menu" role="menubar">
+      <li class="nav-item" role="none">
+        <a role="menuitem" href="<%= jewelry_items_path %>" aria-haspopup="true">Catalogue</a>
+        <ul class="submenu" role="menu">
+          <li class="submenu-label">Pieces</li>
+          <li><%= link_to 'Existing pieces', jewelry_items_path %></li>
+          <li><%= link_to 'Register a new piece', new_jewelry_item_path %></li>
+          <li class="submenu-label">Masters</li>
+          <li><%= link_to 'Metals, hallmarks & categories', metals_path %></li>
+        </ul>
+      </li>
+      <li class="nav-item" role="none">
+        <a role="menuitem" href="<%= rates_path %>" aria-haspopup="true">Rates</a>
+        <ul class="submenu" role="menu">
+          <li><%= link_to "Today's rates", rates_path %></li>
+          <li><%= link_to 'New rate', new_rate_path %></li>
+        </ul>
+      </li>
+      <li class="nav-item" role="none">
+        <a role="menuitem" href="<%= orders_path %>" aria-haspopup="true">Sales</a>
+        <ul class="submenu" role="menu">
+          <li><%= link_to 'Orders', orders_path %></li>
+          <li><%= link_to 'New bill', new_order_path %></li>
+          <li><%= link_to 'Counter (POS)', pos_path %></li>
+          <li class="submenu-label">After sales</li>
+          <li><%= link_to 'Returns & exchanges', returns_path %></li>
+          <li><%= link_to 'New return', new_return_path %></li>
+        </ul>
+      </li>
+      <li class="nav-item" role="none">
+        <a role="menuitem" href="<%= inventory_items_path %>" aria-haspopup="true">Stock</a>
+        <ul class="submenu" role="menu">
+          <li><%= link_to 'Inventory', inventory_items_path %></li>
+          <li><%= link_to 'Metal stock', metal_stocks_path %></li>
+          <li><%= link_to 'Stores', stores_path %></li>
+        </ul>
+      </li>
+      <li class="nav-item" role="none">
+        <a role="menuitem" href="<%= customers_path %>" aria-haspopup="true">People</a>
+        <ul class="submenu" role="menu">
+          <li><%= link_to 'Customers', customers_path %></li>
+          <li><%= link_to 'New customer', new_customer_path %></li>
+        </ul>
+      </li>
+      <li class="nav-item" role="none">
+        <a role="menuitem" href="<%= reports_path %>" aria-haspopup="true">Books</a>
+        <ul class="submenu" role="menu">
+          <li><%= link_to 'Ledgers', ledgers_path %></li>
+          <li><%= link_to 'Profit / Loss', profit_losses_path %></li>
+          <li><%= link_to 'Reports', reports_path %></li>
+          <li><%= link_to 'Sales log', sales_log_reports_path %></li>
+        </ul>
+      </li>
+      <li class="nav-item" role="none">
+        <a role="menuitem" href="<%= shop_profile_path %>" aria-haspopup="true">House</a>
+        <ul class="submenu" role="menu">
+          <li><%= link_to 'Shop registration', shop_profile_path %></li>
+          <li><%= link_to 'Edit showroom details', shop_setup_path %></li>
+          <li class="submenu-label">Access</li>
+          <li><%= link_to 'Users & audit', security_index_path %></li>
+          <li><%= link_to 'New user / role', new_security_path %></li>
+        </ul>
+      </li>
+    </ul>
+  <% end %>
 
-    <!-- Ledger & Accounting -->
-    <li class="nav-item" role="none">
-      <a role="menuitem" href="#" tabindex="0" aria-haspopup="true" aria-expanded="false">Ledger</a>
-    </li>
-
-    <!-- Profit & Loss -->
-    <li class="nav-item" role="none">
-      <a role="menuitem" href="#" tabindex="0" aria-haspopup="true" aria-expanded="false">Profit / Loss ▾</a>
-    </li>
-
-    <!-- Reports & Analytics -->
-    <li class="nav-item" role="none">
-      <a role="menuitem" href="#" tabindex="0" aria-haspopup="true" aria-expanded="false">Reports ▾</a>
-      <ul class="submenu" role="menu">
-        <li><a href="#">All Reports</a></li>
-        <li><a href="#">New Report</a></li>
-  <li class="submenu-divider" aria-hidden="true">—</li>
-  <li><a href="#">Sales Log</a></li>
-      </ul>
-    </li>
-
-    <!-- Security & Audit -->
-    <li class="nav-item right" role="none">
-      <a role="menuitem" href="#" tabindex="0" aria-haspopup="true" aria-expanded="false">Security ▾</a>
-      <ul class="submenu" role="menu">
-        <li><a href="#">Users & Audit</a></li>
-        <li><a href="#">New User / Role</a></li>
-      </ul>
-    </li>
-      </ul>
-    <% end %>
-
-    <div id="auth-area" style="margin-left:12px">
-    <%# Use Devise helpers when available, otherwise fall back to common Devise paths */ %>
+  <div class="jewel-account" id="auth-area">
     <% sign_in_path = respond_to?(:new_user_session_path) ? new_user_session_path : '/users/sign_in' %>
-    <% sign_out_path = respond_to?(:destroy_user_session_path) ? destroy_user_session_path : '/users/sign_out' %>
     <% if respond_to?(:user_signed_in?) && user_signed_in? %>
-      <%# show only the local-part of the email (before '@'), fall back to first name then generic label %>
-      <% display_name = nil %>
-      <% if current_user.respond_to?(:email) && current_user.email.present? %>
-        <% display_name = current_user.email.to_s.split('@').first %>
-      <% elsif current_user.respond_to?(:name) && current_user.name.present? %>
-        <% display_name = current_user.name.to_s.split(' ').first %>
-      <% end %>
-      Signed in as <strong><%= h(display_name.presence || 'Account') %></strong>
-      <%= link_to 'Sign out', sign_out_path, method: :delete, id: 'sign-out-link', style: 'margin-left:12px; color:#f3f4f6' %>
+      <div class="jewel-user">
+        <strong><%= h(current_user.display_name) %></strong>
+        <%= current_user.email %>
+      </div>
+      <%= button_to 'Sign out', destroy_user_session_path, method: :delete, class: 'sign-out-btn', form: { style: 'margin:0' } %>
     <% else %>
-      <%= link_to 'Sign in', sign_in_path, id: 'sign-in-link', style: 'margin-left:12px; color:#f3f4f6' %>
+      <%= link_to 'Sign in', sign_in_path, class: 'sign-in-link', id: 'sign-in-link' %>
     <% end %>
   </div>
-  <script>
-    (function(){
-      try{
-        var signOut = document.getElementById('sign-out-link');
-        var navIcons = document.getElementById('nav-icons');
-        var authArea = document.getElementById('auth-area');
-        var signInPath = '<%= j sign_in_path %>';
-        if(signOut){
-          signOut.addEventListener('click', function(){
-            try{
-              if(navIcons) navIcons.style.display = 'none';
-              if(authArea) authArea.innerHTML = '<a id="sign-in-link" href="'+signInPath+'" style="margin-left:12px; color:#f3f4f6">Sign in</a>';
-            }catch(e){}
-          });
-        }
-      }catch(e){}
-    })();
-  </script>
 </nav>

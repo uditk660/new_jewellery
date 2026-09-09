@@ -1,94 +1,63 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Sign in</title>
-  <style>
-    /* Scoped modern sign-in styles - do not affect other pages */
-    /* keep card closer to the top instead of perfectly centered */
-    .auth-viewport{display:flex;min-height:100vh;align-items:flex-start;justify-content:center;background:linear-gradient(180deg,#f7fbff 0%, #eef7ff 100%);padding:24px 16px 48px}
-    .auth-card{width:420px;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(16,24,40,0.08);overflow:hidden;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
-    .auth-header{padding:28px 28px 12px 28px;border-bottom:1px solid #f1f5f9}
-    .brand{display:flex;gap:12px;align-items:center}
-    .brand-logo{width:46px;height:46px;border-radius:10px;background:linear-gradient(135deg,#b30000,#003f8f);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px}
-    .brand-name{font-size:18px;color:#0f172a;font-weight:700}
-    .brand-sub{color:#475569;font-size:13px;margin-top:4px}
-    .auth-body{padding:20px 28px 28px 28px}
-    .form-group{margin-bottom:12px}
-    label{display:block;font-size:13px;color:#0f172a;margin-bottom:6px}
-    input[type=text],input[type=password],input[type=email]{width:100%;padding:10px 12px;border:1px solid #e6eef6;border-radius:8px;background:#fbfdff;font-size:14px}
-    .actions{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
-    .btn-primary{background:linear-gradient(90deg,#003f8f,#b30000);color:#fff;padding:10px 14px;border-radius:8px;border:none;cursor:pointer;font-weight:600}
-    .muted{color:#64748b;font-size:13px}
-    .help-row{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
-    .footer-note{padding:14px 28px;border-top:1px dashed #eef2ff;background:#fbfdff;color:#475569;font-size:13px}
-    .error-box{background:#fff1f2;border:1px solid #fecaca;color:#9f1239;padding:10px;border-radius:8px;margin-bottom:10px}
-    @media (max-width:480px){.auth-card{width:100%;border-radius:8px;padding:0;margin:0}}
-  </style>
-</head>
-<body>
-  <main class="auth-viewport">
-    <section class="auth-card" role="main" aria-labelledby="signin-heading">
-      <div class="auth-header">
-        <div class="brand">
-          <div class="brand-logo">RA</div>
-          <div>
-            <div class="brand-name">Rajesh Alankar Mandir</div>
-            <div class="brand-sub">Secure access to your store dashboard</div>
-          </div>
+<main class="auth-viewport">
+  <section class="auth-card" role="main" aria-labelledby="signin-heading">
+    <header class="auth-header">
+      <div class="brand-mark" aria-hidden="true">💎</div>
+      <h1 id="signin-heading" class="brand-name">Jewellery Login</h1>
+      <p class="brand-sub">Sign in to your store dashboard</p>
+    </header>
+
+    <div class="auth-body">
+      <% if flash[:alert].present? %>
+        <div class="error-box"><%= flash[:alert] %></div>
+      <% end %>
+      <% if flash[:notice].present? %>
+        <div class="flash notice"><%= flash[:notice] %></div>
+      <% end %>
+
+      <%= form_for(resource, as: resource_name, url: session_path(resource_name)) do |f| %>
+        <div class="form-group">
+          <%= f.label :email, 'Email' %>
+          <%= f.email_field :email, autofocus: true, autocomplete: 'email', placeholder: 'you@example.com' %>
         </div>
-      </div>
 
-      <div class="auth-body">
-        <h1 id="signin-heading" style="margin:0 0 12px 0;font-size:16px;color:#0f172a">Sign in to your account</h1>
-        <p class="muted" style="margin:0 0 14px 0">Enter your credentials to continue.</p>
+        <div class="form-group">
+          <%= f.label :password, 'Password' %>
+          <%= f.password_field :password, autocomplete: 'current-password', placeholder: 'Enter your password' %>
+        </div>
 
-        <% if flash[:alert].present? %>
-          <div class="error-box"><%= flash[:alert] %></div>
-        <% end %>
-
-        <%= form_for(resource, as: resource_name, url: session_path(resource_name)) do |f| %>
-          <div class="form-group">
-            <%= f.label :email, 'Email' %>
-            <%= f.email_field :email, autofocus: true, autocomplete: "email" %>
-          </div>
-
-          <div class="form-group">
-            <%= f.label :password, 'Password' %>
-            <%= f.password_field :password, autocomplete: "current-password" %>
-          </div>
-
-          <div class="help-row">
-            <div class="muted">
-              <a href="#" id="forgot-password-link">Forgot password?</a>
-              <div id="forgot-password-tip" style="display:none;margin-top:8px;background:#fff8e6;border:1px solid #f5e0b7;padding:8px;border-radius:6px;color:#7a5a00;font-size:13px;">Please contact your company administrator to reset your password.</div>
-            </div>
-            <div>
-              <%= f.submit 'Sign in', class: 'btn-primary' %>
-            </div>
+        <% if devise_mapping.rememberable? %>
+          <div class="remember-row">
+            <%= f.check_box :remember_me %>
+            <%= f.label :remember_me, 'Remember me' %>
           </div>
         <% end %>
 
-        <div class="footer-note">If you don't have an account, contact your system administrator to create one.</div>
-      </div>
-    </section>
-  </main>
+        <%= f.submit 'Sign in', class: 'btn-primary' %>
+      <% end %>
 
-  <script>(function(){
+      <div class="help-row">
+        <a href="#" id="forgot-password-link">Forgot password?</a>
+        <div id="forgot-password-tip" class="forgot-tip">Please contact your company administrator to reset your password.</div>
+      </div>
+
+      <div class="footer-note">
+        New store? <%= link_to 'Create an account', new_user_registration_path %><br>
+        <span style="display:inline-block;margin-top:8px;font-size:12px;">
+          Staff? <%= link_to 'Employee portal', new_employee_session_path %>
+        </span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  (function(){
     var link = document.getElementById('forgot-password-link');
     var tip = document.getElementById('forgot-password-tip');
     if(!link || !tip) return;
     link.addEventListener('click', function(e){
       e.preventDefault();
-      if(tip.style.display === 'none' || tip.style.display === ''){
-        tip.style.display = 'block';
-        setTimeout(function(){ try{ tip.style.display = 'none'; }catch(e){} }, 6000);
-      } else {
-        tip.style.display = 'none';
-      }
+      tip.style.display = (tip.style.display === 'block') ? 'none' : 'block';
     });
-  })();</script>
-
-</body>
-</html>
+  })();
+</script>

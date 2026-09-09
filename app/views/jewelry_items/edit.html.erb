@@ -28,11 +28,15 @@
           <div class="form-row" style="margin-top:10px">
             <div style="flex:1">
               <%= f.label :metal_id, 'Metal' %>
-              <%= f.collection_select :metal_id, (@metals || []), :id, :name, include_blank: '— Select metal —', class: 'form-control' %>
+              <%= f.collection_select :metal_id, (@metals || []), :id, :name, { include_blank: '— Select metal —' }, { class: 'form-control' } %>
             </div>
             <div style="width:220px; margin-left:12px">
               <%= f.label :purity_id, 'Purity' %>
-              <%= f.collection_select :purity_id, (@purities || []), :id, :name, include_blank: '— Select purity —', class: 'form-control' %>
+              <%= f.collection_select :purity_id, (@purities || []), :id, :hallmark_label, { include_blank: '— Select purity —' }, { class: 'form-control' } %>
+            </div>
+            <div style="width:220px; margin-left:12px">
+              <%= f.label :jewellery_category_id, 'Category' %>
+              <%= f.collection_select :jewellery_category_id, (@categories || []), :id, :display_name, { include_blank: '— Select category —' }, { class: 'form-control' } %>
             </div>
           </div>
 
@@ -178,18 +182,40 @@
               ms = p.metal&.metal_stocks&.order(created_at: :desc)&.first
               (ms && ms.price_cents_per_gram.present?) ? (ms.price_cents_per_gram.to_f / 100.0) : 0.0
             end
-            { id: p.id, per_gram_price: per_gram, name: p.name, metal_id: p.metal_id }
+            { id: p.id, per_gram_price: per_gram, name: p.hallmark_label, metal_id: p.metal_id }
           end.to_json.html_safe %>;
+          const CATEGORIES = <%= (@categories || []).map { |c| { id: c.id, name: c.display_name, metal_id: c.metal_id } }.to_json.html_safe %>;
 
           function findPurity(id){ return PURITIES.find(x=>String(x.id) === String(id)); }
 
           document.addEventListener('DOMContentLoaded', function(){
+            const metalEl = document.querySelector('select[name="jewelry_item[metal_id]"]');
             const purityEl = document.querySelector('select[name="jewelry_item[purity_id]"]');
+            const categoryEl = document.querySelector('select[name="jewelry_item[jewellery_category_id]"]');
             const weightEl = document.querySelector('input[name="jewelry_item[weight_grams]"]');
             const qtyEl = document.querySelector('input[name="jewelry_item[quantity]"]');
             const priceRupeesEl = document.getElementById('price_rupees');
             const priceHiddenEl = document.getElementById('price_cents_hidden');
             const previewPrice = document.getElementById('preview-price');
+
+            function fillSelect(select, items, blankText, selectedMetalId, prev){
+              if(!select) return;
+              select.innerHTML = '';
+              const blank = document.createElement('option');
+              blank.value = '';
+              blank.text = blankText;
+              select.appendChild(blank);
+              items.filter(function(x){ return !selectedMetalId || String(x.metal_id) === String(selectedMetalId); }).forEach(function(x){
+                const opt = document.createElement('option');
+                opt.value = x.id;
+                opt.text = x.name;
+                select.appendChild(opt);
+              });
+              if(prev){
+                const still = Array.prototype.slice.call(select.options).some(o=>String(o.value)===String(prev));
+                if(still) select.value = prev;
+              }
+            }
 
             function computeAndSetPrice(){
               if(!priceRupeesEl || !priceHiddenEl) return;
@@ -204,7 +230,15 @@
             }
 
             [purityEl, weightEl, qtyEl].forEach(el=>{ if(!el) return; el.addEventListener('input', computeAndSetPrice); el.addEventListener('change', computeAndSetPrice); });
-            // init
+            if(metalEl){
+              metalEl.addEventListener('change', function(){
+                fillSelect(purityEl, PURITIES, '— Select purity —', metalEl.value, '');
+                fillSelect(categoryEl, CATEGORIES, '— Select category —', metalEl.value, '');
+                computeAndSetPrice();
+              });
+            }
+            fillSelect(purityEl, PURITIES, '— Select purity —', metalEl ? metalEl.value : null, purityEl ? purityEl.value : '');
+            fillSelect(categoryEl, CATEGORIES, '— Select category —', metalEl ? metalEl.value : null, categoryEl ? categoryEl.value : '');
             computeAndSetPrice();
           });
         })();

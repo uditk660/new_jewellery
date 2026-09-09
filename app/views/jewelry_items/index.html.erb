@@ -58,8 +58,10 @@
               </div>
             </td>
             <td class="small muted">
-              <% if item.jewellery_category %>
-                <%= link_to item.jewellery_category.name, jewellery_category_path(item.jewellery_category) %>
+              <% if item.jewellery_category && item.metal %>
+                <%= link_to item.jewellery_category.name, metal_path(item.metal) %>
+              <% elsif item.jewellery_category %>
+                <%= item.jewellery_category.name %>
               <% else %>
                 &mdash;
               <% end %>
@@ -73,7 +75,7 @@
             </td>
             <td class="small muted">
               <% if item.purity %>
-                <%= link_to item.purity.name, purity_path(item.purity) %>
+                <%= link_to item.purity.name, metal_path(item.purity.metal_id) %>
               <% else %>
                 &mdash;
               <% end %>

@@ -37,7 +37,7 @@
     <div class="purity-form">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:18px;font-weight:700;color:#0f172a">Edit Purity</div>
-        <div><%= link_to 'Back', purities_path, class: 'btn' %></div>
+        <div><%= link_to 'Back', metals_path, class: 'btn' %></div>
       </div>
 
       <%= form_for @purity, url: purity_path(@purity), method: :patch do |f| %>
@@ -71,7 +71,7 @@
         </div>
 
         <div class="form-actions">
-          <%= link_to 'Cancel', purities_path, class: 'btn' %>
+          <%= link_to 'Cancel', metals_path, class: 'btn' %>
           <%= f.submit 'Update Purity', class: 'btn' %>
         </div>
       <% end %>

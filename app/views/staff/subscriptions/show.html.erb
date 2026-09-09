@@ -1,0 +1,74 @@
+<% sub = @subscription %>
+<div class="top">
+  <div>
+    <h1><%= sub.user.display_name %></h1>
+    <div class="sub"><%= sub.user.email %> · <%= sub.plan.name %></div>
+  </div>
+  <span class="pill st-<%= sub.effective_status %>"><%= sub.effective_status %></span>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <p><strong>Store name</strong><br><%= sub.user.shop_name.presence || '—' %></p>
+    <p><strong>Owner</strong><br><%= sub.user.full_name.presence || '—' %> · <%= sub.user.phone.presence || '—' %></p>
+    <p><strong>Source</strong><br><%= sub.source.humanize %></p>
+    <p><strong>Price</strong><br><%= format_rupees(sub.plan.price_cents, cents: true) %> / year</p>
+    <p><strong>Starts</strong><br><%= sub.starts_at ? sub.starts_at.in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M') : '—' %></p>
+    <p><strong>Ends</strong><br><%= sub.ends_at ? sub.ends_at.in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M') : '—' %></p>
+    <p><strong>Last reviewed by</strong><br><%= sub.reviewed_by&.name || '—' %></p>
+    <% if sub.decision_note.present? %>
+      <p><strong>Note</strong><br><%= sub.decision_note %></p>
+    <% end %>
+  </div>
+  <div class="card">
+    <p class="sub">Actions are written to the activity log.</p>
+    <% if sub.live? %>
+      <%= form_tag suspend_staff_subscription_path(sub), method: :post do %>
+        <label>Suspend reason</label>
+        <%= text_area_tag :decision_note, nil, placeholder: 'Temporarily lock dashboard access' %>
+        <%= submit_tag 'Suspend', class: 'btn btn-warn', style: 'width:100%;margin-bottom:10px' %>
+      <% end %>
+      <%= form_tag cancel_staff_subscription_path(sub), method: :post do %>
+        <label>Cancel reason</label>
+        <%= text_area_tag :decision_note, nil, placeholder: 'End this subscription' %>
+        <%= submit_tag 'Cancel subscription', class: 'btn btn-danger', style: 'width:100%' %>
+      <% end %>
+    <% elsif sub.status == 'suspended' %>
+      <%= form_tag reactivate_staff_subscription_path(sub), method: :post do %>
+        <label>Reactivate note</label>
+        <%= text_area_tag :decision_note, nil %>
+        <%= submit_tag 'Reactivate', class: 'btn btn-gold', style: 'width:100%' %>
+      <% end %>
+      <%= form_tag cancel_staff_subscription_path(sub), method: :post, style: 'margin-top:12px' do %>
+        <%= text_area_tag :decision_note, nil, placeholder: 'Cancel instead' %>
+        <%= submit_tag 'Cancel', class: 'btn btn-danger', style: 'width:100%' %>
+      <% end %>
+    <% elsif sub.pending? %>
+      <%= link_to 'Open in approval queue', staff_subscription_request_path(sub), class: 'btn btn-gold' %>
+    <% else %>
+      <p class="sub">Grant a fresh plan from Add subscription if this store should return.</p>
+      <%= link_to 'Add subscription', new_staff_subscription_path, class: 'btn btn-gold' %>
+    <% end %>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin:0 0 12px;font-size:1.05rem">History</h2>
+  <% if @logs.empty? %>
+    <p class="sub">No log entries yet.</p>
+  <% else %>
+    <table>
+      <thead><tr><th>When</th><th>Employee</th><th>Action</th><th>Notes</th></tr></thead>
+      <tbody>
+        <% @logs.each do |log| %>
+          <tr>
+            <td><%= log.created_at.in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M') %></td>
+            <td><%= log.employee&.name %></td>
+            <td><%= log.action.humanize %></td>
+            <td><%= log.notes %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</div>

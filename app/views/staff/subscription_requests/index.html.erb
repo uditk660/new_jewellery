@@ -1,0 +1,36 @@
+<div class="top">
+  <div>
+    <h1>Approval queue</h1>
+    <div class="sub">Stores cannot use the dashboard until you approve a one-year subscription.</div>
+  </div>
+</div>
+
+<div class="card">
+  <% if @requests.empty? %>
+    <p class="sub">Queue is clear.</p>
+  <% else %>
+    <table>
+      <thead>
+        <tr>
+          <th>Store</th>
+          <th>Plan</th>
+          <th>Requested</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @requests.each do |sub| %>
+          <tr>
+            <td>
+              <strong><%= sub.user.display_name %></strong>
+              <div class="sub"><%= sub.user.email %> · <%= sub.user.phone %></div>
+            </td>
+            <td><%= sub.plan.name %><div class="sub"><%= format_rupees(sub.plan.price_cents, cents: true) %>/year</div></td>
+            <td><%= (sub.requested_at || sub.created_at).in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M') %></td>
+            <td><%= link_to 'Review', staff_subscription_request_path(sub), class: 'btn btn-gold' %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</div>

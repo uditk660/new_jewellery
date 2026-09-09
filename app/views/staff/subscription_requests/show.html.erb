@@ -1,0 +1,31 @@
+<% sub = @subscription %>
+<div class="top">
+  <div>
+    <h1>Review request</h1>
+    <div class="sub"><%= sub.user.display_name %> · <%= sub.user.email %></div>
+  </div>
+  <%= link_to 'Back to queue', staff_subscription_requests_path, class: 'btn btn-ghost' %>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <p><span class="pill st-<%= sub.effective_status %>"><%= sub.effective_status %></span></p>
+    <p><strong>Store</strong><br><%= sub.user.shop_name.presence || sub.user.display_name %></p>
+    <p><strong>Owner</strong><br><%= sub.user.full_name.presence || '—' %> · <%= sub.user.phone.presence || 'No phone' %></p>
+    <p><strong>Plan</strong><br><%= sub.plan.name %> · <%= format_rupees(sub.plan.price_cents, cents: true) %> / year</p>
+    <p><strong>Requested</strong><br><%= (sub.requested_at || sub.created_at).in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M IST') %></p>
+    <p class="sub">Approving starts a 12-month term from this moment.</p>
+  </div>
+  <div class="card">
+    <%= form_tag approve_staff_subscription_request_path(sub), method: :post do %>
+      <label>Note (optional)</label>
+      <%= text_area_tag :decision_note, nil, placeholder: 'Internal note for the audit log' %>
+      <%= submit_tag 'Approve 1-year access', class: 'btn btn-gold', style: 'width:100%;margin-bottom:10px' %>
+    <% end %>
+    <%= form_tag reject_staff_subscription_request_path(sub), method: :post do %>
+      <label>Rejection reason (required)</label>
+      <%= text_area_tag :decision_note, nil, placeholder: 'Shown to the store owner' %>
+      <%= submit_tag 'Reject request', class: 'btn btn-danger', style: 'width:100%' %>
+    <% end %>
+  </div>
+</div>

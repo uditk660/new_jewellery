@@ -1,4 +1,4 @@
-class AddFieldsToLineItems < ActiveRecord::Migration
+class AddFieldsToLineItems < ActiveRecord::Migration[5.0]
   def change
     add_column :line_items, :hsn, :string
     add_column :line_items, :gross_weight, :decimal, precision: 10, scale: 2, default: 0.0

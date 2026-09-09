@@ -1,56 +1,91 @@
-<style>
-  /* Scoped styles for Metals index */
-  .metals-wrap{max-width:1100px;margin:18px auto;padding:18px}
-  .metals-card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 8px 24px rgba(16,24,40,0.06)}
-  .metals-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-  .metals-title{font-size:20px;font-weight:700;color:#0f172a}
-  .metals-actions{display:flex;gap:8px}
-  .btn{padding:8px 12px;border-radius:8px;border:1px solid #e6eef6;background:#f8fafc;color:#0f172a;cursor:pointer}
-  .btn-primary{background:linear-gradient(90deg,#003f8f,#b30000);color:#fff;border:none}
-  .metals-table{width:100%;border-collapse:collapse;margin-top:8px}
-  .metals-table th,.metals-table td{padding:10px 12px;border-bottom:1px solid #f1f5f9;text-align:left}
-  .muted{color:#64748b;font-size:13px}
-  @media (max-width:720px){.metals-table td:nth-child(3),.metals-table th:nth-child(3){display:none}}
-</style>
+<%= render 'shared/atelier_styles' %>
 
-<div class="metals-wrap">
-  <div class="metals-card">
-    <div class="metals-header">
-      <div>
-        <div class="metals-title">Metals</div>
-        <div class="muted">Manage metals and their base units</div>
-      </div>
-
-      <div class="metals-actions">
-        <%= form_tag metals_path, method: :get, style: 'display:flex; gap:8px; align-items:center' do %>
-          <%= text_field_tag :q, params[:q], placeholder: 'Search metals', style: 'padding:8px 10px;border-radius:8px;border:1px solid #e6eef6' %>
-          <%= submit_tag 'Search', class: 'btn' %>
-        <% end %>
-        <%= link_to 'New Metal', new_metal_path, class: 'btn btn-primary' %>
-      </div>
+<div class="atelier-page metal-master">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">House masters</p>
+      <h1>Metals, hallmarks &amp; categories</h1>
+      <p class="lead">Each metal holds its own purities — Gold may be 18K, 20K and 22K — and the piece types you sell in that metal.</p>
     </div>
+    <%= link_to 'New metal', new_metal_path, class: 'atelier-back' %>
+  </header>
 
-    <table class="metals-table">
-      <thead>
-        <tr>
-          <th style="width:48px">#</th>
-          <th>Name</th>
-          <th>Base Unit</th>
-          <th style="width:160px">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% @metals.each_with_index do |m, idx| %>
-          <tr>
-            <td><%= idx + 1 %></td>
-            <td><strong><%= m.name %></strong><div class="muted" style="margin-top:4px">Created <%= m.created_at.strftime('%d %b %Y') if m.created_at %></div></td>
-            <td><%= m.base_unit %></td>
-            <td>
-              <%= link_to 'View', metal_path(m), class: 'btn' %>
-            </td>
-          </tr>
+  <% if params[:q].present? %>
+    <p class="hint" style="margin-bottom:16px">Showing matches for “<%= params[:q] %>”.</p>
+  <% end %>
+
+  <% if @metals.any? %>
+    <div class="metal-cards">
+      <% @metals.each do |metal| %>
+        <%= link_to metal_path(metal), class: 'metal-card' do %>
+          <div class="metal-card-top">
+            <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
+            <div>
+              <h2><%= metal.name %></h2>
+              <p><%= metal.code.presence || metal.base_unit.presence || 'gram' %><% if metal.bis_mandatory? %> · BIS<% end %></p>
+            </div>
+            <% unless metal.active? %><span class="off">Inactive</span><% end %>
+          </div>
+          <div class="chips">
+            <% if metal.purity_names.any? %>
+              <% metal.purities.ordered.each do |p| %>
+                <span class="chip"><%= p.name %></span>
+              <% end %>
+            <% else %>
+              <span class="chip muted-chip">No hallmarks yet</span>
+            <% end %>
+          </div>
+          <p class="cats">
+            <% if metal.category_names.any? %>
+              <%= metal.category_names.join(' · ') %>
+            <% else %>
+              No categories yet
+            <% end %>
+          </p>
         <% end %>
-      </tbody>
-    </table>
-  </div>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">No metals yet. Add Gold with 18K, 20K and 22K to start the catalogue.</p>
+      <div class="actions" style="margin-top:16px"><%= link_to 'Add the first metal', new_metal_path, class: 'btn-gold' %></div>
+    </div>
+  <% end %>
 </div>
+
+<style>
+  .metal-master .metal-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .metal-master .metal-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: #fffaf3;
+    border: 1px solid rgba(201,162,39,0.28);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 12px 28px rgba(20,17,15,0.05);
+  }
+  .metal-master .metal-card:hover { border-color: #c9a227; }
+  .metal-master .metal-card-top { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .metal-master .swatch { width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(201,162,39,0.35); flex-shrink: 0; }
+  .metal-master .metal-card h2 {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.45rem; margin: 0; font-weight: 600; color: #0b1220;
+  }
+  .metal-master .metal-card p { margin: 2px 0 0; color: #6b6258; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .metal-master .off {
+    margin-left: auto; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #9a9186; border: 1px solid #e6dcc8; border-radius: 999px; padding: 3px 8px;
+  }
+  .metal-master .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .metal-master .chip {
+    background: #fff; border: 1px solid rgba(201,162,39,0.28); border-radius: 999px;
+    padding: 4px 10px; font-size: 12px; font-weight: 600; color: #14110f;
+  }
+  .metal-master .muted-chip { color: #9a9186; font-weight: 500; }
+  .metal-master .cats { margin: 12px 0 0; color: #6b6258; font-size: 13px; }
+</style>

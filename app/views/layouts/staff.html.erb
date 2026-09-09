@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Employee portal · Jewellery OS</title>
+    <%= csrf_meta_tags %>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body.staff {
+        font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+        background: #07111f; color: #e5eef8; min-height: 100vh;
+      }
+      a { color: #f4e2a8; text-decoration: none; }
+      .shell { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+      .side {
+        background: linear-gradient(180deg, #0b1220, #0a1628);
+        border-right: 1px solid rgba(255,255,255,0.05);
+        padding: 22px 16px; display: flex; flex-direction: column;
+      }
+      .logo { font-weight: 800; letter-spacing: 0.02em; margin-bottom: 28px; }
+      .logo span { color: #c9a227; }
+      .nav a {
+        display: block; padding: 10px 12px; border-radius: 10px; color: #cbd5e1;
+        margin-bottom: 4px; font-size: 14px;
+      }
+      .nav a:hover, .nav a.active { background: rgba(201,162,39,0.12); color: #fff; }
+      .side-foot { margin-top: auto; font-size: 12px; color: #64748b; }
+      .main { padding: 24px 28px 48px; }
+      .top {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 22px;
+      }
+      h1 { margin: 0; font-size: 1.6rem; }
+      .sub { color: #94a3b8; margin-top: 4px; }
+      .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+      .metric {
+        background: #0f1b2e; border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 14px; padding: 16px;
+      }
+      .metric .label { color: #94a3b8; font-size: 12px; }
+      .metric .value { font-size: 1.7rem; font-weight: 800; margin-top: 6px; }
+      .card {
+        background: #0f1b2e; border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 16px; padding: 18px; margin-bottom: 16px;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th { text-align: left; color: #94a3b8; font-weight: 600; padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+      td { padding: 12px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+      tr:hover td { background: rgba(255,255,255,0.02); }
+      .pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+      .st-pending { background: #422006; color: #fbbf24; }
+      .st-active { background: #052e16; color: #86efac; }
+      .st-rejected { background: #3f1d1d; color: #fca5a5; }
+      .st-cancelled { background: #1e293b; color: #cbd5e1; }
+      .st-suspended { background: #3b1d0a; color: #fdba74; }
+      .st-expired { background: #1e293b; color: #94a3b8; }
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; font-size: 13px;
+      }
+      .btn-gold { background: linear-gradient(90deg,#f4e2a8,#c9a227); color: #111; }
+      .btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,0.12); color: #e5eef8; }
+      .btn-danger { background: #7f1d1d; color: #fecaca; }
+      .btn-warn { background: #7c2d12; color: #fed7aa; }
+      .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .flash { padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; }
+      .flash.notice { background: rgba(16,185,129,0.12); color: #a7f3d0; }
+      .flash.alert { background: rgba(220,38,38,0.15); color: #fecaca; }
+      label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+      input[type=text], input[type=email], input[type=number], input[type=password], select, textarea {
+        width: 100%; background: #0b1220; border: 1px solid rgba(255,255,255,0.1);
+        color: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;
+      }
+      textarea { min-height: 90px; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .filters a { margin-right: 10px; font-size: 13px; color: #94a3b8; }
+      .filters a.on { color: #f4e2a8; }
+      @media (max-width: 900px) {
+        .shell { grid-template-columns: 1fr; }
+        .metrics, .grid-2 { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body class="staff">
+    <div class="shell">
+      <aside class="side">
+        <div class="logo">💎 <span>Employee</span> Portal</div>
+        <nav class="nav">
+          <%= link_to 'Overview', staff_root_path, class: (controller_name == 'dashboard' ? 'active' : nil) %>
+          <%= link_to 'Approval queue', staff_subscription_requests_path, class: (controller_name == 'subscription_requests' ? 'active' : nil) %>
+          <%= link_to 'Subscriptions', staff_subscriptions_path, class: (controller_name == 'subscriptions' ? 'active' : nil) %>
+          <%= link_to 'Add subscription', new_staff_subscription_path %>
+          <%= link_to 'Plans', staff_plans_path, class: (controller_name == 'plans' ? 'active' : nil) %>
+          <%= link_to 'Activity logs', staff_logs_path, class: (controller_name == 'logs' ? 'active' : nil) %>
+        </nav>
+        <div class="side-foot">
+          <div style="color:#e5eef8;margin-bottom:6px"><%= current_employee.name %></div>
+          <%= current_employee.email %><br>
+          <%= button_to 'Sign out', destroy_employee_session_path, method: :delete, class: 'btn btn-ghost', style: 'margin-top:8px' %>
+        </div>
+      </aside>
+      <section class="main">
+        <% if flash[:notice] %><div class="flash notice"><%= flash[:notice] %></div><% end %>
+        <% if flash[:alert] %><div class="flash alert"><%= flash[:alert] %></div><% end %>
+        <%= yield %>
+      </section>
+    </div>
+  </body>
+</html>

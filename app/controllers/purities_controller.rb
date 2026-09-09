@@ -1,52 +1,46 @@
 class PuritiesController < ApplicationController
   before_action :set_purity, only: [:show, :edit, :update]
+
   def index
-    @purities = Purity.order(:name)
-    render template: 'purities/index'
+    redirect_to metals_path
   end
 
   def new
-    @purity = Purity.new
-    @metals = Metal.order(:name)
-    render template: 'purities/new'
+    redirect_to new_metal_path
   end
 
   def show
-    render template: 'purities/show'
+    redirect_to metal_path(@purity.metal)
   end
 
   def edit
-    @metals = Metal.order(:name)
-    render template: 'purities/edit'
+    @metals = Metal.ordered
   end
 
   def update
     if @purity.update(purity_params)
-      redirect_to purity_path(@purity), notice: 'Purity updated.'
+      redirect_to metal_path(@purity.metal), notice: 'Hallmark updated.'
     else
-      @metals = Metal.order(:name)
-      render template: 'purities/edit'
+      @metals = Metal.ordered
+      render :edit
     end
   end
 
   def create
-    @purity = Purity.new(purity_params)
-    if @purity.save
-      redirect_to purities_path, notice: 'Purity created.'
-    else
-      @metals = Metal.order(:name)
-      render template: 'purities/new'
-    end
+    redirect_to metals_path, alert: 'Add hallmarks on the metal itself.'
   end
 
   private
+
   def set_purity
     @purity = Purity.find_by(id: params[:id])
-    unless @purity
-      redirect_to purities_path, alert: 'Purity not found.' and return
-    end
+    redirect_to(metals_path, alert: 'Hallmark not found.') and return unless @purity
   end
+
   def purity_params
-    params.require(:purity).permit(:metal_id, :name, :purity_percent, :active, :updated_price, :remarks)
+    params.require(:purity).permit(
+      :metal_id, :name, :purity_percent, :active, :updated_price, :remarks,
+      :fineness, :hallmark_standard, :wastage_percent, :making_charge_percent, :position
+    )
   end
 end

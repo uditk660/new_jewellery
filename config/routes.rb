@@ -1,14 +1,39 @@
 Rails.application.routes.draw do
-  # Ensure Devise is loaded before calling devise_for so mappings are created
   begin
     require 'devise'
   rescue LoadError
-    # if require fails, Devise may be unavailable; routes will still include fallback paths
   end
-  devise_for :users
+
+  devise_for :employees, path: 'employee', skip: [:registrations]
+  devise_for :users, controllers: { registrations: 'users/registrations' }
+
+  namespace :staff, path: 'employee' do
+    root to: 'dashboard#show'
+    resources :subscription_requests, only: [:index, :show] do
+      member do
+        post :approve
+        post :reject
+      end
+    end
+    resources :subscriptions, only: [:index, :new, :create, :show] do
+      member do
+        post :cancel
+        post :suspend
+        post :reactivate
+      end
+    end
+    resources :plans, only: [:index, :new, :create]
+    resources :logs, only: [:index]
+  end
+
+  resource :subscription, only: [:new, :create] do
+    get :pending, on: :collection
+  end
+  resource :shop_setup, only: [:show, :update]
+  resource :shop_profile, only: [:show]
+
   root to: 'home#dashboard'
-  # Devise generates session routes via `devise_for :users` above. Do not redefine them here to avoid
-  # duplicate route name errors.
+
   resources :jewelry_items
   resources :orders, only: [:index, :show, :new, :create] do
     member do
@@ -29,14 +54,14 @@ Rails.application.routes.draw do
   get 'reports/sales_log', to: 'reports#sales_log', as: :sales_log_reports
   get 'security', to: 'security#index', as: :security_index
   get 'security/new', to: 'security#new', as: :new_security
-  resources :metals, only: [:index, :new, :create, :show, :destroy]
+  resources :metals, only: [:index, :new, :create, :show, :update, :destroy]
   resources :purities, only: [:index, :new, :create, :show, :edit, :update]
-    resources :customers, only: [:index, :new, :create, :show]
-    resources :payments, only: [:show] do
-      member do
-        get :invoice
-      end
+  resources :customers, only: [:index, :new, :create, :show]
+  resources :payments, only: [:show] do
+    member do
+      get :invoice
     end
+  end
   resources :jewellery_categories, only: [:index, :new, :create]
   resources :stores, only: [:index, :new, :create]
   resources :metal_stocks, only: [:index, :new, :create] do

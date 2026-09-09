@@ -1,0 +1,214 @@
+<%= render 'shared/atelier_styles' %>
+
+<div class="atelier-page metal-master">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">House masters</p>
+      <h1><%= @metal.persisted? ? @metal.name : 'New metal' %></h1>
+      <p class="lead">One metal, many hallmarks. Gold can carry 18K, 20K and 22K, each with its own fineness, rate and making.</p>
+    </div>
+    <%= link_to '← All metals', metals_path, class: 'atelier-back' %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Metal</span>
+    <span class="step"><b>2</b> Purities / hallmarks</span>
+    <span class="step"><b>3</b> Categories</span>
+  </div>
+
+  <%= form_for @metal do |f| %>
+    <% if @metal.errors.any? %>
+      <div class="errors"><%= @metal.errors.full_messages.to_sentence %></div>
+    <% end %>
+
+    <div class="atelier-form" style="margin-bottom:18px">
+      <section class="section">
+        <h2>Metal</h2>
+        <p class="hint">The parent record. Purities and categories below belong only to this metal.</p>
+        <div class="row">
+          <div class="field">
+            <%= f.label :name do %>Name <span class="req">*</span><% end %>
+            <%= f.text_field :name, class: 'form-control', placeholder: 'Gold' %>
+          </div>
+          <div class="field narrow">
+            <%= f.label :code, 'Code' %>
+            <%= f.text_field :code, class: 'form-control', placeholder: 'AU' %>
+          </div>
+          <div class="field narrow">
+            <%= f.label :base_unit, 'Unit' %>
+            <%= f.select :base_unit, Metal::BASE_UNITS, {}, class: 'form-control' %>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div class="field narrow">
+            <%= f.label :hsn_code, 'Default HSN' %>
+            <%= f.text_field :hsn_code, class: 'form-control', placeholder: '7113' %>
+          </div>
+          <div class="field narrow">
+            <%= f.label :colour, 'Chip colour' %>
+            <%= f.text_field :colour, class: 'form-control', placeholder: '#c9a227' %>
+          </div>
+          <div class="field narrow">
+            <%= f.label :display_order, 'Order' %>
+            <%= f.number_field :display_order, class: 'form-control', min: 0, step: 1 %>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div class="field">
+            <%= f.label :notes, 'Notes' %>
+            <%= f.text_area :notes, class: 'form-control', rows: 2, placeholder: 'BIS rules, buying notes, or showroom shorthand' %>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div class="field nested-flags" style="flex-direction:row; gap:18px;">
+            <label><%= f.check_box :active %> Active</label>
+            <label><%= f.check_box :bis_mandatory %> BIS hallmark required</label>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="atelier-form" style="margin-bottom:18px">
+      <section class="section">
+        <h2>Purities / hallmarks</h2>
+        <p class="hint">Example: Gold → 18K (750), 20K (833), 22K (916). Rates here feed catalogue valuation.</p>
+        <div id="purity-rows">
+          <%= f.fields_for :purities do |pf| %>
+            <%= render 'metals/purity_fields', f: pf %>
+          <% end %>
+        </div>
+        <button type="button" class="add-nested" data-add="purity" hidden>+ Add another purity</button>
+        <template id="purity-template">
+          <%= f.fields_for :purities, Purity.new(active: true, hallmark_standard: 'BIS'), child_index: 'NEW_PURITY' do |pf| %>
+            <%= render 'metals/purity_fields', f: pf %>
+          <% end %>
+        </template>
+      </section>
+    </div>
+
+    <div class="atelier-form" style="margin-bottom:18px">
+      <section class="section">
+        <h2>Categories</h2>
+        <p class="hint">Piece types sold in this metal — ring, necklace, bangle — with optional HSN and making.</p>
+        <div id="category-rows">
+          <%= f.fields_for :jewellery_categories do |cf| %>
+            <%= render 'metals/category_fields', f: cf %>
+          <% end %>
+        </div>
+        <button type="button" class="add-nested" data-add="category" hidden>+ Add another category</button>
+        <template id="category-template">
+          <%= f.fields_for :jewellery_categories, JewelleryCategory.new(active: true, gender: 'Unisex'), child_index: 'NEW_CATEGORY' do |cf| %>
+            <%= render 'metals/category_fields', f: cf %>
+          <% end %>
+        </template>
+      </section>
+    </div>
+
+    <div class="actions">
+      <% submit_label = @metal.persisted? ? 'Save metal' : 'Create metal' %>
+      <%= f.submit submit_label, class: 'btn-gold' %>
+      <%= link_to 'Cancel', metals_path, class: 'atelier-back' %>
+    </div>
+  <% end %>
+
+  <% if @metal.persisted? %>
+    <div class="actions" style="margin-top:12px">
+      <%= button_to 'Remove metal', metal_path(@metal), method: :delete, class: 'atelier-back', form: { style: 'margin:0', data: { confirm: 'Remove this metal and its unused hallmarks?' } } %>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .metal-master .nested-row {
+    background: #fff;
+    border: 1px solid rgba(201,162,39,0.22);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .metal-master .nested-row.is-removed { display: none; }
+  .metal-master .nested-flags {
+    display: flex; flex-direction: column; justify-content: flex-end; gap: 8px;
+  }
+  .metal-master .nested-flags label {
+    text-transform: none; letter-spacing: 0; font-size: 13px; color: #14110f; font-weight: 600;
+  }
+  .metal-master .add-nested,
+  .metal-master .remove-nested {
+    background: transparent;
+    border: 1px solid rgba(201,162,39,0.4);
+    color: #0b1220;
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .metal-master .remove-nested { color: #7f1d1d; border-color: #e8c4c4; }
+  .metal-master .add-nested { margin-top: 4px; }
+  .metal-master .add-nested[hidden] { display: none !important; }
+  .metal-master .nested-row:only-of-type .remove-nested { display: none; }
+</style>
+
+<script>
+  (function(){
+    function nextIndex(){ return Date.now().toString() + Math.floor(Math.random() * 1000); }
+    function visibleRows(kind){
+      var wrap = document.getElementById(kind + '-rows');
+      if(!wrap) return [];
+      return Array.prototype.filter.call(wrap.querySelectorAll('.nested-row'), function(row){
+        return !row.classList.contains('is-removed');
+      });
+    }
+    function rowFilled(row){
+      var name = row.querySelector('.nested-name');
+      return !!(name && name.value && name.value.trim());
+    }
+    function syncAddButtons(){
+      ['purity', 'category'].forEach(function(kind){
+        var btn = document.querySelector('[data-add="' + kind + '"]');
+        var rows = visibleRows(kind);
+        var ready = rows.length > 0 && rows.every(rowFilled);
+        if(btn) btn.hidden = !ready;
+      });
+    }
+    function addRow(kind){
+      var tpl = document.getElementById(kind + '-template');
+      var wrap = document.getElementById(kind + '-rows');
+      if(!tpl || !wrap) return;
+      if(!visibleRows(kind).every(rowFilled)) return;
+      var token = kind === 'purity' ? 'NEW_PURITY' : 'NEW_CATEGORY';
+      wrap.insertAdjacentHTML('beforeend', tpl.innerHTML.replace(new RegExp(token, 'g'), nextIndex()));
+      syncAddButtons();
+    }
+    document.addEventListener('click', function(e){
+      var add = e.target.closest('[data-add]');
+      if(add){ e.preventDefault(); addRow(add.getAttribute('data-add')); }
+      var remove = e.target.closest('[data-remove]');
+      if(remove){
+        e.preventDefault();
+        var row = remove.closest('.nested-row');
+        if(!row) return;
+        var kind = row.getAttribute('data-nested');
+        if(visibleRows(kind).length <= 1) return;
+        var id = row.querySelector('input[name$="[id]"]');
+        var flag = row.querySelector('.destroy-flag');
+        if(id && id.value){
+          if(flag) flag.value = '1';
+          row.classList.add('is-removed');
+        } else {
+          row.remove();
+        }
+        syncAddButtons();
+      }
+    });
+    document.addEventListener('input', function(e){
+      if(e.target && e.target.classList && e.target.classList.contains('nested-name')) syncAddButtons();
+    });
+    document.addEventListener('change', function(e){
+      if(e.target && e.target.classList && e.target.classList.contains('nested-name')) syncAddButtons();
+    });
+    syncAddButtons();
+  })();
+</script>

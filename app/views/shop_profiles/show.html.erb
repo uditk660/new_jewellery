@@ -1,0 +1,89 @@
+<%= render 'shared/atelier_styles' %>
+
+<div class="atelier-page">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">House</p>
+      <h1>Shop registration</h1>
+      <p class="lead">Statutory and showroom details used on invoices, hallmark bills, and the house profile.</p>
+    </div>
+    <%= link_to 'Edit showroom', shop_setup_path, class: 'atelier-back' %>
+  </header>
+
+  <div class="reg-grid">
+    <section class="atelier-form">
+      <div class="section">
+        <h2>House &amp; owner</h2>
+        <dl class="reg-dl">
+          <div><dt>Showroom</dt><dd><%= @profile.shop_name %></dd></div>
+          <div><dt>Legal name</dt><dd><%= @profile.legal_name.presence || '—' %></dd></div>
+          <div><dt>Proprietor</dt><dd><%= @profile.owner_name %></dd></div>
+          <div><dt>Type</dt><dd><%= @profile.jeweller_type.presence || '—' %></dd></div>
+          <div><dt>Tagline</dt><dd><%= @profile.tagline.presence || '—' %></dd></div>
+          <div><dt>Established</dt><dd><%= @profile.established_year.presence || '—' %></dd></div>
+        </dl>
+      </div>
+      <div class="section">
+        <h2>Contact</h2>
+        <dl class="reg-dl">
+          <div><dt>Phone</dt><dd><%= @profile.phone %></dd></div>
+          <div><dt>Alternate</dt><dd><%= @profile.alternate_phone.presence || '—' %></dd></div>
+          <div><dt>WhatsApp</dt><dd><%= @profile.whatsapp.presence || '—' %></dd></div>
+          <div><dt>Email</dt><dd><%= @profile.email %></dd></div>
+          <div><dt>Website</dt><dd><%= @profile.website.presence || '—' %></dd></div>
+          <div><dt>Hours</dt><dd><%= @profile.working_hours.presence || '—' %></dd></div>
+        </dl>
+      </div>
+      <div class="section">
+        <h2>Address</h2>
+        <p class="hint" style="white-space:pre-line"><%= @profile.formatted_address %></p>
+      </div>
+    </section>
+
+    <section class="atelier-form">
+      <div class="section">
+        <h2>GST &amp; licences</h2>
+        <dl class="reg-dl">
+          <div><dt>GSTIN</dt><dd><%= @profile.gstin %></dd></div>
+          <div><dt>PAN</dt><dd><%= @profile.pan.presence || '—' %></dd></div>
+          <div><dt>Trade licence</dt><dd><%= @profile.registration_number %></dd></div>
+          <div><dt>CIN</dt><dd><%= @profile.cin.presence || '—' %></dd></div>
+          <div><dt>Association</dt><dd><%= @profile.association_membership.presence || '—' %></dd></div>
+        </dl>
+      </div>
+      <div class="section">
+        <h2>Hallmark</h2>
+        <dl class="reg-dl">
+          <div><dt>BIS licence</dt><dd><%= @profile.bis_hallmark_licence %></dd></div>
+          <div><dt>Centre</dt><dd><%= @profile.hallmark_center.presence || '—' %></dd></div>
+          <div><dt>Centre code</dt><dd><%= @profile.hallmark_center_code.presence || '—' %></dd></div>
+        </dl>
+      </div>
+      <div class="section">
+        <h2>Bank</h2>
+        <dl class="reg-dl">
+          <div><dt>Bank</dt><dd><%= @profile.bank_name.presence || '—' %></dd></div>
+          <div><dt>Account name</dt><dd><%= @profile.account_holder.presence || '—' %></dd></div>
+          <div><dt>Account no.</dt><dd><%= @profile.account_number.presence || '—' %></dd></div>
+          <div><dt>IFSC</dt><dd><%= @profile.ifsc.presence || '—' %></dd></div>
+        </dl>
+      </div>
+      <div class="section">
+        <h2>Invoice note</h2>
+        <p class="hint" style="white-space:pre-line"><%= @profile.invoice_declaration.presence || '—' %></p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<style>
+  .reg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .reg-dl { margin: 0; }
+  .reg-dl > div { display: grid; grid-template-columns: 140px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(201,162,39,0.16); }
+  .reg-dl dt { color: #6b6258; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .reg-dl dd { margin: 0; color: #14110f; }
+  @media (max-width: 880px) {
+    .reg-grid { grid-template-columns: 1fr; }
+    .reg-dl > div { grid-template-columns: 1fr; }
+  }
+</style>

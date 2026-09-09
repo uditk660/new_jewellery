@@ -1,0 +1,33 @@
+<% content_for :title, 'Choose your jewellery subscription' %>
+<div class="hero">
+  <h1>Choose your subscription</h1>
+  <p>Every plan is billed for exactly one year. Your store dashboard stays locked until an employee approves this request from the staff portal.</p>
+</div>
+
+<% if @plans.blank? %>
+  <div class="status-card">
+    <h1>Plans are being prepared</h1>
+    <p class="muted">No subscription plans are available yet. Please check back after staff add a plan in the employee portal.</p>
+  </div>
+<% else %>
+  <div class="plans">
+    <% @plans.each do |plan| %>
+      <article class="plan <%= 'featured' if plan.featured? %>">
+        <% if plan.featured? %><span class="badge">Most chosen</span><% end %>
+        <h2><%= plan.name %></h2>
+        <p class="tagline"><%= plan.tagline %></p>
+        <p class="price"><%= format_rupees(plan.price_cents, cents: true) %> <span>/ year</span></p>
+        <ul class="features">
+          <% plan.feature_list.each do |item| %>
+            <li><%= item %></li>
+          <% end %>
+        </ul>
+        <%= form_tag subscription_path, method: :post do %>
+          <%= hidden_field_tag :plan_id, plan.id %>
+          <%= submit_tag 'Request this plan', class: 'btn-gold' %>
+        <% end %>
+      </article>
+    <% end %>
+  </div>
+<% end %>
+<p class="note">Approval is manual. You will see a pending screen until staff accept or reject the request.</p>

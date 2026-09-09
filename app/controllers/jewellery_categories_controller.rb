@@ -1,27 +1,13 @@
 class JewelleryCategoriesController < ApplicationController
   def index
-    @categories = JewelleryCategory.order(:name)
-    render template: 'jewellery_categories/index'
+    redirect_to metals_path
   end
 
   def new
-    @category = JewelleryCategory.new
-    @metals = Metal.order(:name)
-    render template: 'jewellery_categories/new'
+    redirect_to new_metal_path
   end
 
   def create
-    @category = JewelleryCategory.new(category_params)
-    if @category.save
-      redirect_to jewellery_categories_path, notice: 'Category created.'
-    else
-      @metals = Metal.order(:name)
-      render template: 'jewellery_categories/new'
-    end
-  end
-
-  private
-  def category_params
-    params.require(:jewellery_category).permit(:metal_id, :name, :active)
+    redirect_to metals_path, alert: 'Add categories on the metal itself.'
   end
 end

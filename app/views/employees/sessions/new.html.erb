@@ -1,0 +1,24 @@
+<div class="card">
+  <header>
+    <div style="font-size:28px">💎</div>
+    <h1>Employee portal</h1>
+    <p>Staff access only · accounts are created from the console</p>
+  </header>
+  <div class="body">
+    <% if flash[:alert] %><div class="error"><%= flash[:alert] %></div><% end %>
+    <% if flash[:notice] %><div class="error" style="background:rgba(16,185,129,0.12);color:#a7f3d0"><%= flash[:notice] %></div><% end %>
+    <%= form_for(resource, as: resource_name, url: session_path(resource_name)) do |f| %>
+      <%= f.label :email %>
+      <%= f.email_field :email, autofocus: true, autocomplete: 'email' %>
+      <%= f.label :password %>
+      <%= f.password_field :password, autocomplete: 'current-password' %>
+      <% if devise_mapping.rememberable? %>
+        <label style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+          <%= f.check_box :remember_me %> Remember this device
+        </label>
+      <% end %>
+      <%= f.submit 'Enter portal', class: 'btn' %>
+    <% end %>
+    <p class="hint">No self-signup. Ask an administrator to create your employee login.</p>
+  </div>
+</div>

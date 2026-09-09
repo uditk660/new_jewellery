@@ -1,8 +1,1 @@
-<div style="max-width:900px;margin:18px auto;padding:18px;background:#fff;border-radius:8px;box-shadow:0 8px 20px rgba(16,24,40,0.06)">
-  <h2 style="margin-top:0"><%= @metal.name %></h2>
-  <p class="muted">Base Unit: <strong><%= @metal.base_unit %></strong></p>
-  <div style="margin-top:18px">
-    <%= link_to 'Back to Metals', metals_path, class: 'btn' %>
-    <%= link_to 'Delete', metal_path(@metal), method: :delete, data: { confirm: 'Are you sure you want to delete this metal?' }, class: 'btn', style: 'margin-left:8px' %>
-  </div>
-</div>
+<%= render 'metals/form' %>

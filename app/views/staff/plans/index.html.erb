@@ -1,0 +1,25 @@
+<div class="top">
+  <div>
+    <h1>Subscription plans</h1>
+    <div class="sub">These plans appear on the store signup page.</div>
+  </div>
+  <%= link_to 'New plan', new_staff_plan_path, class: 'btn btn-gold' %>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Price / year</th><th>Status</th><th>Featured</th></tr>
+    </thead>
+    <tbody>
+      <% @plans.each do |plan| %>
+        <tr>
+          <td><strong><%= plan.name %></strong><div class="sub"><%= plan.tagline %></div></td>
+          <td><%= format_rupees(plan.price_cents, cents: true) %></td>
+          <td><%= plan.active? ? 'Live' : 'Hidden' %></td>
+          <td><%= plan.featured? ? 'Yes' : 'No' %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

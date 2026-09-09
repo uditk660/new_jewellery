@@ -1,0 +1,263 @@
+<%= render 'shared/atelier_styles' %>
+
+<div class="atelier-page">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Showroom opening</p>
+      <h1>Set up your jewellery house</h1>
+      <p class="lead">These details print on invoices and hallmark bills. Complete the house profile once — the catalogue opens after this.</p>
+    </div>
+    <%= button_to 'Sign out', destroy_user_session_path, method: :delete, class: 'atelier-back', form: { style: 'margin:0' } %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> House &amp; owner</span>
+    <span class="step"><b>2</b> Address</span>
+    <span class="step"><b>3</b> GST &amp; registration</span>
+    <span class="step"><b>4</b> Hallmark</span>
+  </div>
+
+  <div class="atelier-grid">
+    <div class="atelier-form">
+      <%= form_for @profile, url: shop_setup_path, method: :patch do |f| %>
+        <% if @profile.errors.any? %>
+          <div class="errors"><%= @profile.errors.full_messages.to_sentence %></div>
+        <% end %>
+
+        <section class="section">
+          <h2>House &amp; owner</h2>
+          <p class="hint">The name customers see on the bill head, with the proprietor who is responsible for the showroom.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :shop_name do %>Shop / showroom name <span class="req">*</span><% end %>
+              <%= f.text_field :shop_name, class: 'form-control', data: { preview: 'shop' }, placeholder: 'e.g. Meena Jewellers' %>
+            </div>
+            <div class="field">
+              <%= f.label :legal_name, 'Legal / trade name' %>
+              <%= f.text_field :legal_name, class: 'form-control', placeholder: 'As on GST certificate' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :owner_name do %>Owner / proprietor <span class="req">*</span><% end %>
+              <%= f.text_field :owner_name, class: 'form-control', data: { preview: 'owner' } %>
+            </div>
+            <div class="field narrow">
+              <%= f.label :jeweller_type, 'Business type' %>
+              <%= f.select :jeweller_type, ShopProfile::JEWELLER_TYPES, { include_blank: 'Select' }, class: 'form-control' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :tagline, 'Tagline' %>
+              <%= f.text_field :tagline, class: 'form-control', placeholder: 'Since 1974 · Trust in gold' %>
+            </div>
+            <div class="field narrow">
+              <%= f.label :established_year, 'Established' %>
+              <%= f.number_field :established_year, class: 'form-control', min: 1800, max: Date.current.year %>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Contact</h2>
+          <p class="hint">Phone and email used on invoices and for customer follow-up.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :phone do %>Phone <span class="req">*</span><% end %>
+              <%= f.text_field :phone, class: 'form-control', data: { preview: 'phone' } %>
+            </div>
+            <div class="field">
+              <%= f.label :alternate_phone, 'Alternate phone' %>
+              <%= f.text_field :alternate_phone, class: 'form-control' %>
+            </div>
+            <div class="field">
+              <%= f.label :whatsapp, 'WhatsApp' %>
+              <%= f.text_field :whatsapp, class: 'form-control' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :email do %>Email <span class="req">*</span><% end %>
+              <%= f.email_field :email, class: 'form-control', data: { preview: 'email' } %>
+            </div>
+            <div class="field">
+              <%= f.label :website, 'Website' %>
+              <%= f.text_field :website, class: 'form-control', placeholder: 'https://' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :working_hours, 'Working hours' %>
+              <%= f.text_field :working_hours, class: 'form-control', placeholder: 'Mon–Sat 10:30am – 8:00pm' %>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Showroom address</h2>
+          <p class="hint">Printed under the shop name on tax invoices.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :address_line1 do %>Address line 1 <span class="req">*</span><% end %>
+              <%= f.text_field :address_line1, class: 'form-control', data: { preview: 'addr1' }, placeholder: 'Street, building, market' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :address_line2, 'Address line 2' %>
+              <%= f.text_field :address_line2, class: 'form-control', data: { preview: 'addr2' } %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :city do %>City <span class="req">*</span><% end %>
+              <%= f.text_field :city, class: 'form-control', data: { preview: 'city' } %>
+            </div>
+            <div class="field">
+              <%= f.label :state do %>State <span class="req">*</span><% end %>
+              <%= f.select :state, ShopProfile::INDIAN_STATES, { include_blank: 'Select state' }, class: 'form-control', data: { preview: 'state' } %>
+            </div>
+            <div class="field narrow">
+              <%= f.label :pincode do %>PIN code <span class="req">*</span><% end %>
+              <%= f.text_field :pincode, class: 'form-control', maxlength: 6, data: { preview: 'pin' } %>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>GST &amp; registration</h2>
+          <p class="hint">Statutory numbers for GST invoices. GSTIN must be 15 characters.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :gstin do %>GSTIN <span class="req">*</span><% end %>
+              <%= f.text_field :gstin, class: 'form-control', maxlength: 15, data: { preview: 'gstin' }, placeholder: '22AAAAA0000A1Z5' %>
+            </div>
+            <div class="field">
+              <%= f.label :pan, 'PAN' %>
+              <%= f.text_field :pan, class: 'form-control', maxlength: 10, placeholder: 'ABCDE1234F' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :registration_number do %>Shop / trade licence no. <span class="req">*</span><% end %>
+              <%= f.text_field :registration_number, class: 'form-control', data: { preview: 'reg' } %>
+            </div>
+            <div class="field">
+              <%= f.label :cin, 'CIN (if company)' %>
+              <%= f.text_field :cin, class: 'form-control' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :association_membership, 'Jewellers association' %>
+              <%= f.text_field :association_membership, class: 'form-control', placeholder: 'Membership no. / chapter' %>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Hallmark</h2>
+          <p class="hint">BIS hallmark licence and the recognised hallmarking centre used by this house.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :bis_hallmark_licence do %>BIS hallmark licence <span class="req">*</span><% end %>
+              <%= f.text_field :bis_hallmark_licence, class: 'form-control', data: { preview: 'bis' } %>
+            </div>
+            <div class="field">
+              <%= f.label :hallmark_center, 'Hallmarking centre' %>
+              <%= f.text_field :hallmark_center, class: 'form-control' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :hallmark_center_code, 'Centre code / AH no.' %>
+              <%= f.text_field :hallmark_center_code, class: 'form-control' %>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Bank (for invoices)</h2>
+          <p class="hint">Optional. Shown when you print bank details on a bill.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :bank_name, 'Bank' %>
+              <%= f.text_field :bank_name, class: 'form-control' %>
+            </div>
+            <div class="field">
+              <%= f.label :account_holder, 'Account name' %>
+              <%= f.text_field :account_holder, class: 'form-control' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :account_number, 'Account number' %>
+              <%= f.text_field :account_number, class: 'form-control' %>
+            </div>
+            <div class="field">
+              <%= f.label :ifsc, 'IFSC' %>
+              <%= f.text_field :ifsc, class: 'form-control' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :invoice_declaration, 'Invoice declaration' %>
+              <%= f.text_area :invoice_declaration, rows: 3, class: 'form-control', placeholder: 'Certified that the particulars given above are true and correct.' %>
+            </div>
+          </div>
+        </section>
+
+        <div class="actions">
+          <%= f.submit 'Save showroom & open catalogue', class: 'btn-gold' %>
+        </div>
+      <% end %>
+    </div>
+
+    <aside class="preview" aria-live="polite">
+      <p class="preview-kicker">Invoice bill head</p>
+      <div class="gem" aria-hidden="true">💎</div>
+      <h2 id="pv-shop"><%= @profile.shop_name.presence || 'Your jewellery house' %></h2>
+      <p class="preview-desc" id="pv-owner"><%= @profile.owner_name.presence || 'Proprietor name' %></p>
+      <div class="chips">
+        <span class="chip">GSTIN <strong id="pv-gstin"><%= @profile.gstin.presence || '—' %></strong></span>
+        <span class="chip">BIS <strong id="pv-bis"><%= @profile.bis_hallmark_licence.presence || '—' %></strong></span>
+      </div>
+      <div class="preview-line" id="pv-addr"><%= @profile.address_line1.presence || 'Showroom address' %></div>
+      <div class="preview-line" id="pv-city"><%= [@profile.city, @profile.state, @profile.pincode].reject(&:blank?).join(', ').presence || 'City, state, PIN' %></div>
+      <div class="preview-line" id="pv-phone"><%= @profile.phone.presence || 'Phone' %> · <span id="pv-email"><%= @profile.email.presence || 'Email' %></span></div>
+      <div class="preview-line">Reg. <span id="pv-reg"><%= @profile.registration_number.presence || '—' %></span></div>
+      <p class="preview-note">This is how your house will read at the top of a tax invoice. The catalogue stays closed until this profile is saved.</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+  (function(){
+    function val(name){
+      var el = document.querySelector('[data-preview="'+name+'"]');
+      return el ? (el.value || '').trim() : '';
+    }
+    function set(id, text, fallback){
+      var n = document.getElementById(id);
+      if(n) n.textContent = text || fallback;
+    }
+    function sync(){
+      set('pv-shop', val('shop'), 'Your jewellery house');
+      set('pv-owner', val('owner'), 'Proprietor name');
+      set('pv-gstin', val('gstin'), '—');
+      set('pv-bis', val('bis'), '—');
+      set('pv-addr', val('addr1'), 'Showroom address');
+      var city = [val('city'), val('state'), val('pin')].filter(Boolean).join(', ');
+      set('pv-city', city, 'City, state, PIN');
+      set('pv-phone', val('phone'), 'Phone');
+      set('pv-email', val('email'), 'Email');
+      set('pv-reg', val('reg'), '—');
+    }
+    document.querySelectorAll('[data-preview]').forEach(function(el){
+      el.addEventListener('input', sync);
+      el.addEventListener('change', sync);
+    });
+    sync();
+  })();
+</script>

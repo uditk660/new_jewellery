@@ -1,6 +1,6 @@
 Devise.setup do |config|
   # Configure the e-mail address which will be shown in Devise::Mailer
-  config.mailer_sender = Rails.application.secrets.respond_to?(:[] ) ? (Rails.application.secrets[:mailer_sender] || 'please-change-me@example.com') : 'please-change-me@example.com'
+  config.mailer_sender = ENV.fetch('MAILER_SENDER', 'please-change-me@example.com')
 
   # Use ActiveRecord ORM
   require 'devise/orm/active_record'
@@ -10,5 +10,5 @@ Devise.setup do |config|
     config.secret_key = Rails.application.secret_key_base
   end
 
-  # Other Devise config defaults are acceptable for development/test here.
+  config.scoped_views = true
 end

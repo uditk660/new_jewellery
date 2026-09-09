@@ -1,0 +1,43 @@
+<% content_for :title, 'Waiting for approval' %>
+<% status = @subscription&.effective_status %>
+<div class="status-card">
+  <% if status == 'pending' %>
+    <div class="status-icon">⏳</div>
+    <span class="pill pill-pending">Pending approval</span>
+    <h1>Your store is waiting</h1>
+    <p class="muted">We received your subscription request. An employee must approve it in the jewellery staff portal before you can open the dashboard.</p>
+  <% elsif status == 'suspended' %>
+    <div class="status-icon">⛔</div>
+    <span class="pill pill-suspended">Suspended</span>
+    <h1>Access is paused</h1>
+    <p class="muted">Your subscription was suspended by staff. Dashboard access stays locked until they reactivate it.</p>
+  <% elsif status == 'rejected' %>
+    <div class="status-icon">✕</div>
+    <span class="pill pill-rejected">Rejected</span>
+    <h1>Request was not approved</h1>
+    <p class="muted"><%= @subscription.decision_note.presence || 'Staff declined this plan request.' %></p>
+    <p style="margin-top:18px"><%= link_to 'Choose another plan', new_subscription_path, class: 'btn-gold', style: 'display:inline-block;width:auto;padding:12px 22px;text-decoration:none' %></p>
+  <% elsif status == 'cancelled' || status == 'expired' %>
+    <div class="status-icon">↺</div>
+    <span class="pill pill-cancelled"><%= status.titleize %></span>
+    <h1>Subscription is not active</h1>
+    <p class="muted">Request a new one-year plan to restore dashboard access after staff approval.</p>
+    <p style="margin-top:18px"><%= link_to 'View plans', new_subscription_path, class: 'btn-gold', style: 'display:inline-block;width:auto;padding:12px 22px;text-decoration:none' %></p>
+  <% else %>
+    <h1>Complete your subscription</h1>
+    <p class="muted">Pick a yearly plan to continue.</p>
+    <p style="margin-top:18px"><%= link_to 'Choose a plan', new_subscription_path, class: 'btn-gold', style: 'display:inline-block;width:auto;padding:12px 22px;text-decoration:none' %></p>
+  <% end %>
+
+  <% if @subscription %>
+    <div class="meta">
+      <div class="row"><span class="muted">Store</span><strong><%= current_user.display_name %></strong></div>
+      <div class="row"><span class="muted">Plan</span><strong><%= @subscription.plan.name %></strong></div>
+      <div class="row"><span class="muted">Price</span><strong><%= format_rupees(@subscription.plan.price_cents, cents: true) %> / year</strong></div>
+      <div class="row"><span class="muted">Requested</span><strong><%= (@subscription.requested_at || @subscription.created_at).in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M') %></strong></div>
+      <% if @subscription.starts_at && @subscription.ends_at %>
+        <div class="row"><span class="muted">Term</span><strong><%= @subscription.starts_at.to_date %> → <%= @subscription.ends_at.to_date %></strong></div>
+      <% end %>
+    </div>
+  <% end %>
+</div>

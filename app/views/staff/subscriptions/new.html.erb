@@ -1,0 +1,21 @@
+<div class="top">
+  <div>
+    <h1>Grant a subscription</h1>
+    <div class="sub">Creates an active one-year term immediately. Use this when staff sell or assign a plan.</div>
+  </div>
+</div>
+
+<div class="card" style="max-width:560px">
+  <%= form_for @subscription, url: staff_subscriptions_path do |f| %>
+    <% if @subscription.errors.any? %>
+      <div class="flash alert"><%= @subscription.errors.full_messages.to_sentence %></div>
+    <% end %>
+    <label>Store user</label>
+    <%= f.select :user_id, @users.map { |u| ["#{u.display_name} (#{u.email})", u.id] }, prompt: 'Select a store account' %>
+    <label>Plan</label>
+    <%= f.select :plan_id, @plans.map { |p| ["#{p.name} — #{format_rupees(p.price_cents, cents: true)}/year", p.id] }, prompt: 'Select a plan' %>
+    <label>Internal note</label>
+    <%= f.text_area :decision_note, name: 'subscription[decision_note]' %>
+    <%= f.submit 'Activate 1-year subscription', class: 'btn btn-gold' %>
+  <% end %>
+</div>

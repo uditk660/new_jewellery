@@ -1,0 +1,55 @@
+<div class="top">
+  <div>
+    <h1>Staff overview</h1>
+    <div class="sub">Approve store subscriptions, manage access, and keep an audit trail.</div>
+  </div>
+  <%= link_to 'Review queue', staff_subscription_requests_path, class: 'btn btn-gold' %>
+</div>
+
+<div class="metrics">
+  <div class="metric"><div class="label">Waiting approval</div><div class="value"><%= @pending_count %></div></div>
+  <div class="metric"><div class="label">Live subscriptions</div><div class="value"><%= @active_count %></div></div>
+  <div class="metric"><div class="label">Suspended</div><div class="value"><%= @suspended_count %></div></div>
+  <div class="metric"><div class="label">Expiring in 30 days</div><div class="value"><%= @expiring_soon.size %></div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2 style="margin:0 0 12px;font-size:1.05rem">Latest requests</h2>
+    <% if @recent_requests.empty? %>
+      <p class="sub">No pending requests.</p>
+    <% else %>
+      <table>
+        <thead><tr><th>Store</th><th>Plan</th><th></th></tr></thead>
+        <tbody>
+          <% @recent_requests.each do |sub| %>
+            <tr>
+              <td><%= sub.user.display_name %><div class="sub"><%= sub.user.email %></div></td>
+              <td><%= sub.plan.name %></td>
+              <td><%= link_to 'Open', staff_subscription_request_path(sub) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+  <div class="card">
+    <h2 style="margin:0 0 12px;font-size:1.05rem">Recent activity</h2>
+    <% if @recent_logs.empty? %>
+      <p class="sub">Logs will appear when staff take action.</p>
+    <% else %>
+      <table>
+        <thead><tr><th>Action</th><th>By</th><th>When</th></tr></thead>
+        <tbody>
+          <% @recent_logs.each do |log| %>
+            <tr>
+              <td><%= log.action.humanize %></td>
+              <td><%= log.employee&.name || '—' %></td>
+              <td><%= log.created_at.in_time_zone('Asia/Kolkata').strftime('%d %b %H:%M') %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+</div>

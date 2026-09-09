@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>JewelryApp</title>
+    <title>Jewellery OS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <%= csrf_meta_tags %>
 
   <%= csp_meta_tag if respond_to?(:csp_meta_tag) %>
@@ -11,7 +14,10 @@
   </head>
 
   <body>
-    <%= render 'shared/navbar' %>
+    <% show_app_nav = !user_signed_in? || (subscription_live? && shop_setup_complete?) %>
+    <% if show_app_nav %>
+      <%= render 'shared/navbar' %>
+    <% end %>
     <div class="container">
       <% if flash[:notice] %>
         <div class="flash notice"><%= flash[:notice] %></div>

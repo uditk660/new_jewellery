@@ -1,0 +1,50 @@
+<div class="nested-row" data-nested="purity">
+  <%= f.hidden_field :id %>
+  <%= f.hidden_field :_destroy, class: 'destroy-flag', value: 'false' %>
+  <div class="row">
+    <div class="field">
+      <%= f.label :name, 'Hallmark' %>
+      <%= f.text_field :name, class: 'form-control nested-name', placeholder: 'e.g. 18K, 20K, 22K' %>
+    </div>
+    <div class="field narrow">
+      <%= f.label :purity_percent, 'Purity %' %>
+      <%= f.number_field :purity_percent, class: 'form-control', step: '0.0001', min: 0, max: 100, placeholder: '91.67' %>
+    </div>
+    <div class="field narrow">
+      <%= f.label :fineness, 'Fineness' %>
+      <%= f.text_field :fineness, class: 'form-control', placeholder: '916' %>
+    </div>
+    <div class="field narrow">
+      <%= f.label :hallmark_standard, 'Standard' %>
+      <%= f.select :hallmark_standard, Purity::HALLMARK_STANDARDS, { include_blank: '—' }, class: 'form-control' %>
+    </div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <div class="field">
+      <%= f.label :updated_price, 'Rate ₹ / g' %>
+      <%= f.number_field :updated_price, class: 'form-control', step: '0.01', min: 0, placeholder: '0.00' %>
+    </div>
+    <div class="field narrow">
+      <%= f.label :wastage_percent, 'Wastage %' %>
+      <%= f.number_field :wastage_percent, class: 'form-control', step: '0.01', min: 0, placeholder: '0' %>
+    </div>
+    <div class="field narrow">
+      <%= f.label :making_charge_percent, 'Making %' %>
+      <%= f.number_field :making_charge_percent, class: 'form-control', step: '0.01', min: 0, placeholder: '0' %>
+    </div>
+    <div class="field narrow">
+      <%= f.label :position, 'Order' %>
+      <%= f.number_field :position, class: 'form-control', min: 0, step: 1 %>
+    </div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <div class="field">
+      <%= f.label :remarks, 'Remarks' %>
+      <%= f.text_field :remarks, class: 'form-control', placeholder: 'Touch, BIS note, or shop shorthand' %>
+    </div>
+    <div class="field narrow nested-flags">
+      <label><%= f.check_box :active %> Active</label>
+      <button type="button" class="remove-nested" data-remove>Remove</button>
+    </div>
+  </div>
+</div>

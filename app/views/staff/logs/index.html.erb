@@ -1,0 +1,42 @@
+<div class="top">
+  <div>
+    <h1>Activity logs</h1>
+    <div class="sub">Every approval, rejection, grant, cancel, and suspend is recorded.</div>
+  </div>
+</div>
+
+<div class="filters" style="margin-bottom:12px">
+  <%= link_to 'All', staff_logs_path, class: (params[:action_filter].blank? ? 'on' : nil) %>
+  <% %w[approved rejected granted cancelled suspended reactivated created_plan].each do |act| %>
+    <%= link_to act.humanize, staff_logs_path(action_filter: act), class: (params[:action_filter] == act ? 'on' : nil) %>
+  <% end %>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>When</th>
+        <th>Employee</th>
+        <th>Action</th>
+        <th>Store</th>
+        <th>Plan</th>
+        <th>Notes</th>
+        <th>IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @logs.each do |log| %>
+        <tr>
+          <td><%= log.created_at.in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M') %></td>
+          <td><%= log.employee&.name || '—' %></td>
+          <td><%= log.action.humanize %></td>
+          <td><%= log.user&.display_name || '—' %></td>
+          <td><%= log.plan&.name || '—' %></td>
+          <td><%= log.notes %></td>
+          <td class="sub"><%= log.ip_address %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

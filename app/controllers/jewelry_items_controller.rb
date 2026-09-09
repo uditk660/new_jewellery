@@ -49,8 +49,9 @@ class JewelryItemsController < ApplicationController
 
   def new
     @item = JewelryItem.new
-    @metals = Metal.order(:name)
-    @purities = Purity.order(:name)
+    @metals = Metal.active.ordered
+    @purities = Purity.active.ordered
+    @categories = JewelleryCategory.active.ordered
     render template: 'jewelry_items/new'
   end
 
@@ -59,16 +60,18 @@ class JewelryItemsController < ApplicationController
     if @item.save
       redirect_to @item
     else
-      @metals = Metal.order(:name)
-      @purities = Purity.order(:name)
+      @metals = Metal.active.ordered
+      @purities = Purity.active.ordered
+      @categories = JewelleryCategory.active.ordered
       render template: 'jewelry_items/new'
     end
   end
 
   def edit
     @item = JewelryItem.find(params[:id])
-    @metals = Metal.order(:name)
-    @purities = Purity.order(:name)
+    @metals = Metal.active.ordered
+    @purities = Purity.active.ordered
+    @categories = JewelleryCategory.active.ordered
     render template: 'jewelry_items/edit'
   end
 
@@ -77,8 +80,9 @@ class JewelryItemsController < ApplicationController
     if @item.update(jewelry_item_params)
       redirect_to @item
     else
-      @metals = Metal.order(:name)
-      @purities = Purity.order(:name)
+      @metals = Metal.active.ordered
+      @purities = Purity.active.ordered
+      @categories = JewelleryCategory.active.ordered
       render template: 'jewelry_items/edit'
     end
   end
