@@ -1,227 +1,191 @@
-<style>
-/* inlined orders_page.css */
-/* ===============================
-   ORDERS PAGE
-================================ */
+<%= render 'shared/atelier_styles' %>
 
-.orders-container {
-  max-width: 1200px;
-  margin: auto;
-  padding: 16px;
-  font-family: "Segoe UI", Arial, sans-serif;
-}
+<%
+  bills = @orders.to_a
+  pending_count = bills.count { |o| o.status == 'pending' }
+%>
 
-/* HEADER */
-.orders-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.orders-header-left h1 {
-  margin: 0;
-  font-size: 24px;
-}
-
-.orders-header-left .lead {
-  margin: 4px 0 0;
-  color: #666;
-  font-size: 14px;
-}
-
-.orders-header-right {
-  text-align: right;
-}
-
-.today-badge {
-  margin-top: 8px;
-  background: #f1f5f9;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-/* CARD */
-.orders-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 14px;
-}
-
-/* SEARCH */
-.orders-search {
-  margin-bottom: 12px;
-}
-
-.orders-search form {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.orders-search input {
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  min-width: 240px;
-}
-
-/* TABLE */
-.table-wrap {
-  overflow-x: auto;
-}
-
-.orders-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  min-width: 900px;
-}
-
-.orders-table th,
-.orders-table td {
-  padding: 8px 6px;
-  border-bottom: 1px solid #e5e7eb;
-  vertical-align: top;
-}
-
-.orders-table th {
-  background: #f9fafb;
-  text-align: left;
-  font-weight: 600;
-}
-
-.num {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.total {
-  font-weight: 600;
-}
-
-.muted {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.items-cell {
-  max-width: 260px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* STATUS */
-.status-badge {
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  background: #e5e7eb;
-  display: inline-block;
-}
-
-/* BUTTONS */
-.btn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.btn-primary {
-  background: #2563eb;
-  color: #fff;
-  border-color: #2563eb;
-}
-
-.btn-sm {
-  padding: 4px 8px;
-  font-size: 11px;
-}
-
-/* RESPONSIVE */
-@media (max-width: 768px) {
-  .orders-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .orders-header-right {
-    text-align: left;
-  }
-}
-
-</style>
-<div class="orders-container container">
-  <div class="orders-header">
-    <div class="orders-header-left">
-      <h1>Orders</h1>
-      <p class="lead">All orders placed in the system. Search by order id or item id/name.</p>
+<div class="atelier-page bills-index" id="bills-index">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Sales</p>
+      <h1>Bills</h1>
+      <p class="lead">Every invoice raised at the desk — client, pieces, hallmark weight and settlement.</p>
     </div>
-    <div class="orders-header-right">
-      <div style="margin-bottom:8px">
-        <%= link_to 'New Sale', new_order_path, class: 'btn btn-primary' %>
+    <%= link_to 'Raise a bill', new_order_path, class: 'btn-gold' %>
+  </header>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag orders_path, method: :get, class: 'bills-search' do %>
+      <%= text_field_tag :q, @q, class: 'form-control', placeholder: 'Search bill no, client, piece or status' %>
+      <button type="submit" class="atelier-back">Search</button>
+      <% if @q.present? %>
+        <%= link_to 'Clear', orders_path, class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="bills-stats">
+      <div>
+        <span>On the book</span>
+        <strong><%= bills.size %></strong>
       </div>
-      <div class="today-badge">Today's Sales: <strong><%= "\u20B9#{'%.2f' % (@today_total.to_f || 0.0)}" %></strong></div>
+      <div>
+        <span>Open</span>
+        <strong><%= pending_count %></strong>
+      </div>
+      <div>
+        <span>Today’s sales</span>
+        <strong class="gold"><%= format_rupees(@today_total.to_f) %></strong>
+      </div>
     </div>
   </div>
 
-  <div class="orders-card card">
-    <div class="orders-search" style="display:flex; gap:12px; align-items:center; margin-bottom:12px">
-      <form method="get" action="<%= orders_path %>">
-        <input type="search" name="q" placeholder="Search order id, item id or text" value="<%=h @q %>" >
-        <button class="btn">Search</button>
-      </form>
-    </div>
-
-  <div class="table-wrap">
-  <table class="orders-table">
-      <thead>
-        <tr>
-          <th>SNo</th>
-          <th>Invoice</th>
-          <th>Order #</th>
-          <th>Status</th>
-          <th>Date</th>
-          <th>Items</th>
-          <th>Gross (g)</th>
-          <th>Net (g)</th>
-          <th>Total</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% @orders.each_with_index do |o, idx| %>
+  <% if bills.any? %>
+    <div class="bills-table-wrap">
+      <table class="bills-table">
+        <thead>
           <tr>
-            <td><%= idx + 1 %></td>
-            <td>
-              <% if o.invoice_number.present? %>
-                <%= link_to o.invoice_number, invoice_order_path(o), class: 'btn btn-sm' %>
-              <% else %>
-                <%= link_to 'Generate', invoice_order_path(o), class: 'btn btn-sm' %>
-              <% end %>
-            </td>
-            <td><%= link_to "#\u0000#{o.id}", order_path(o) %></td>
-            <td><span class="badge"><%= o.status %></span></td>
-            <td class="small muted"><%= o.created_at.strftime('%b %d, %H:%M') %></td>
-            <td class="small muted item-list" title="<%= h(o.line_items.map{ |li| "#{li.jewelry_item.try(:name)} x#{li.quantity}" }.join(', ')) %>">
-              <%= truncate(o.line_items.map{ |li| "#{li.jewelry_item.try(:name)} x#{li.quantity}" }.join(', '), length: 80) %>
-            </td>
-            <td class="small muted"><%= (o.gross_weight.to_f.nonzero? ? o.gross_weight.to_f : o.line_items.sum(:gross_weight).to_f) %></td>
-            <td class="small muted"><%= (o.net_weight.to_f.nonzero? ? o.net_weight.to_f : o.line_items.sum(:net_weight).to_f) %></td>
-            <td><%= "\u20B9#{'%.2f' % o.total_with_taxes(cgst_rate: o.cgst_rate.to_f, igst_rate: o.igst_rate.to_f)}" %></td>
-            <td><%= link_to 'View', order_path(o), class: 'btn' %></td>
+            <th>Bill</th>
+            <th>Client</th>
+            <th>Pieces</th>
+            <th class="num">Net</th>
+            <th class="num">Total</th>
+            <th>Status</th>
+            <th></th>
           </tr>
+        </thead>
+        <tbody>
+          <% bills.each do |o| %>
+            <%
+              bill = o.bill_breakdown
+              client = o.customer
+              lines = o.line_items.to_a
+              net = lines.sum { |li| li.net_weight.to_f }
+              piece_names = lines.map { |li| "#{li.jewelry_item&.name || 'Piece'} ×#{li.quantity}" }
+              bill_no = o.invoice_number.presence || format('INV-%03d', o.id)
+              when_at = o.sale_date.presence || o.created_at.to_date
+            %>
+            <tr>
+              <td>
+                <%= link_to order_path(o), class: 'bill-link' do %>
+                  <strong><%= bill_no %></strong>
+                  <span class="sub"><%= when_at.strftime('%d %b %Y') %></span>
+                <% end %>
+              </td>
+              <td>
+                <% if client %>
+                  <%= link_to client.full_name, customer_path(client), class: 'client-link' %>
+                  <span class="sub"><%= client.phone.presence || 'No phone' %></span>
+                <% else %>
+                  <span class="muted">Walk-in</span>
+                <% end %>
+              </td>
+              <td class="pieces" title="<%= h(piece_names.join(', ')) %>">
+                <%= truncate(piece_names.join(', '), length: 72) %>
+                <span class="sub"><%= pluralize(lines.size, 'piece') %></span>
+              </td>
+              <td class="num wt"><%= '%.2f' % net %><span>g</span></td>
+              <td class="num gold"><%= format_rupees(bill[:total]) %></td>
+              <td>
+                <span class="status-pill is-<%= o.status %>"><%= o.status.to_s.titleize %></span>
+                <% if o.status == 'pending' && bill[:remaining].to_f.positive? %>
+                  <span class="sub due"><%= format_rupees(bill[:remaining]) %> due</span>
+                <% end %>
+              </td>
+              <td class="actions">
+                <%= link_to 'Open', order_path(o), class: 'atelier-back' %>
+                <%= link_to (o.invoice_number.present? ? 'Invoice' : 'Print'), invoice_order_path(o), class: 'atelier-back', data: { turbolinks: false } %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="atelier-form empty">
+      <p class="eyebrow">Sales desk</p>
+      <h2><%= @q.present? ? 'No matching bills' : 'No bills yet' %></h2>
+      <p class="hint">
+        <% if @q.present? %>
+          Nothing matches “<%= @q %>”. Try a bill number, client name or piece.
+        <% else %>
+          Raise the first invoice from the desk — client, pieces, then settlement.
         <% end %>
-      </tbody>
-  </table>
-  </div>
-  </div>
+      </p>
+      <div class="actions" style="margin-top:16px">
+        <% if @q.present? %>
+          <%= link_to 'Clear search', orders_path, class: 'atelier-back' %>
+        <% else %>
+          <%= link_to 'Raise a bill', new_order_path, class: 'btn-gold' %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
 </div>
+
+<style>
+  .container:has(.bills-index) { max-width: 1240px; }
+  .bills-index a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .bills-index .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .bills-index .bills-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .bills-index .bills-search .form-control { max-width: 420px; }
+  .bills-index .bills-stats {
+    display: flex; gap: 22px; flex-wrap: wrap; color: #6b6258;
+    font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .bills-index .bills-stats strong {
+    display: block; font-size: 1.2rem; color: #0b1220;
+    letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums;
+  }
+  .bills-index .bills-stats .gold { color: #c9a227; }
+  .bills-index .bills-table-wrap {
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 18px;
+    overflow: auto; box-shadow: 0 12px 28px rgba(20,17,15,0.05);
+  }
+  .bills-index .bills-table { width: 100%; border-collapse: collapse; min-width: 860px; }
+  .bills-index .bills-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6258; font-weight: 700; padding: 14px 16px;
+    border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .bills-index .bills-table td {
+    padding: 14px 16px; border-bottom: 1px solid rgba(201,162,39,0.12);
+    vertical-align: middle; font-size: 14px; color: #14110f;
+  }
+  .bills-index .bills-table tbody tr:last-child td { border-bottom: 0; }
+  .bills-index .bills-table tbody tr:hover { background: rgba(232,213,163,0.22); }
+  .bills-index .bill-link { text-decoration: none; color: inherit; display: inline-block; }
+  .bills-index .bill-link strong {
+    display: block; font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.2rem; font-weight: 600; color: #0b1220;
+  }
+  .bills-index .sub { display: block; margin-top: 2px; font-size: 12px; color: #6b6258; }
+  .bills-index .sub.due { color: #7f1d1d; font-weight: 600; }
+  .bills-index .client-link { color: #0b1220; font-weight: 600; text-decoration: none; }
+  .bills-index .client-link:hover { color: #c9a227; }
+  .bills-index .muted { color: #6b6258; }
+  .bills-index .pieces { max-width: 280px; }
+  .bills-index .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .bills-index .num.gold { color: #c9a227; font-weight: 700; }
+  .bills-index .wt span { margin-left: 3px; color: #6b6258; font-size: 12px; font-weight: 600; }
+  .bills-index .status-pill {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700;
+    border: 1px solid rgba(201,162,39,0.35); color: #c9a227; background: rgba(201,162,39,0.12);
+  }
+  .bills-index .status-pill.is-paid { color: #3f5d3a; border-color: rgba(63,93,58,0.35); background: rgba(63,93,58,0.08); }
+  .bills-index .status-pill.is-pending { background: rgba(201,162,39,0.12); }
+  .bills-index .status-pill.is-failed,
+  .bills-index .status-pill.is-cancelled { color: #7f1d1d; border-color: rgba(127,29,29,0.3); background: rgba(127,29,29,0.06); }
+  .bills-index .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .bills-index .empty h2 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.6rem; margin: 6px 0 8px; font-weight: 600;
+  }
+  @media (max-width: 800px) {
+    .bills-index .bills-stats { width: 100%; }
+    .bills-index .bills-table th:nth-child(3),
+    .bills-index .bills-table td:nth-child(3) { display: none; }
+  }
+</style>

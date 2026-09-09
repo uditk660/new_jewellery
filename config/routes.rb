@@ -38,6 +38,9 @@ Rails.application.routes.draw do
   get 'contact', to: 'pages#contact', as: :contact
   post 'contact', to: 'pages#create_contact'
 
+  get 'i/:token', to: 'orders#shared_invoice', as: :shared_invoice, constraints: { token: /[A-Za-z0-9\-_]{16,64}/ }
+  get 'r/:token', to: 'payments#shared_invoice', as: :shared_receipt, constraints: { token: /[A-Za-z0-9\-_]{16,64}/ }
+
   resources :jewelry_items
   resources :orders, only: [:index, :show, :new, :create] do
     member do

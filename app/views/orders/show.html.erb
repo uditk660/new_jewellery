@@ -1,327 +1,528 @@
-<div class="order-show">
+<%= render 'shared/atelier_styles' %>
 
-  <!-- ===== HEADER ===== -->
-  <header class="order-header">
+<%
+  bill = @order.bill_breakdown
+  lines = @order.line_items.to_a
+  subtotal = bill[:subtotal]
+  discount = bill[:discount]
+  charges = bill[:charges]
+  taxable = bill[:taxable]
+  cgst_rate = bill[:cgst_rate]
+  igst_rate = bill[:igst_rate]
+  cgst = bill[:cgst]
+  igst = bill[:igst]
+  total = bill[:total]
+  paid = bill[:paid]
+  remaining = bill[:remaining]
+  pending = @order.status == 'pending'
+  client = @order.customer
+  bill_no = @order.invoice_number.presence || "##{@order.id}"
+  gross_total = lines.sum { |li| li.gross_weight.to_f }
+  net_total = lines.sum { |li| li.net_weight.to_f }
+%>
+
+<div class="atelier-page bill-show" id="bill-show"
+     data-subtotal="<%= '%.2f' % subtotal %>"
+     data-paid="<%= '%.2f' % paid %>"
+     data-discount="<%= '%.2f' % discount %>"
+     data-charges="<%= '%.2f' % charges %>"
+     data-cgst-rate="<%= '%.2f' % cgst_rate %>"
+     data-igst-rate="<%= '%.2f' % igst_rate %>">
+  <header class="atelier-hero">
     <div>
-      <h1>Sales Order <span>#<%= @order.id %></span></h1>
-      <p>
-        Status:
-        <strong class="status <%= @order.status %>">
-          <%= @order.status.capitalize %>
-        </strong>
-        · Created <%= @order.created_at.strftime('%d %b %Y, %I:%M %p') %>
+      <p class="eyebrow">Sales</p>
+      <h1>Bill <%= bill_no %></h1>
+      <p class="lead">
+        <span class="status-pill is-<%= @order.status %>"><%= @order.status.to_s.titleize %></span>
+        <% if @order.sale_date.present? %>
+          · <%= @order.sale_date.strftime('%d %b %Y') %>
+        <% end %>
+        <% if client %>
+          · <%= link_to client.full_name, customer_path(client), class: 'client-link' %>
+        <% end %>
       </p>
-      <% if @order.customer.present? %>
-        <p class="customer-info" style="margin-top:6px;color:#374151;font-size:0.95rem">
-          <strong><%= link_to @order.customer.full_name, customer_path(@order.customer), class: 'customer-link' %></strong>
-          <% if @order.customer.phone.present? %>
-            &nbsp;·&nbsp;<span class="muted"><%= @order.customer.phone %></span>
-          <% end %>
-        </p>
-      <% end %>
     </div>
-
-    <div class="header-actions">
-      <%= link_to 'Back to Orders', orders_path, class: 'btn btn-secondary' %>
-      <% if @order.status == 'pending' %>
-        <%= link_to 'Record Payment', '#charge-form', class: 'btn btn-primary' %>
+    <div class="bill-hero-actions">
+      <%= link_to '← Bills', orders_path, class: 'atelier-back' %>
+      <% if @order.invoice_number.present? %>
+        <%= link_to 'Invoice', invoice_order_path(@order), class: 'atelier-back', data: { turbolinks: false } %>
+      <% end %>
+      <% if pending %>
+        <button type="submit" form="payment-form" class="btn-gold" id="record-payment-hero" disabled>Record payment</button>
       <% end %>
     </div>
   </header>
 
-  <!-- ===== ITEMS ===== -->
-  <section class="card">
-    <h2>Order Items</h2>
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Pieces</span>
+    <span class="step"><b>2</b> Client</span>
+    <span class="step"><b>3</b> <%= pending ? 'Settlement' : 'Settled' %></span>
+  </div>
 
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th>Item</th>
-          <th>HUID</th>
-          <th>HSN</th>
-          <th class="center">Qty</th>
-          <th class="right">Gross (g)</th>
-          <th class="right">Net (g)</th>
-          <th class="right">Rate (₹)</th>
-          <th class="right">Making (₹)</th>
-          <th class="right">Addl (₹)</th>
-          <th class="right">Line Total (₹)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% subtotal_calc = 0.0 %>
-        <% @order.line_items.each do |li| %>
-          <% per_gram = (li.jewelry_item.respond_to?(:effective_price_per_gram) ? li.jewelry_item.effective_price_per_gram.to_f : nil) %>
-          <% per_line = if per_gram && li.net_weight.to_f > 0 && li.quantity.to_i > 0
-                          per_gram * li.net_weight.to_f * li.quantity.to_i
-                        else
-                          li.rate.to_f
-                        end %>
-          <% add_per_item = li.respond_to?(:additional_charge) ? li.additional_charge.to_f : 0.0 %>
-          <% add_total = add_per_item * li.quantity.to_i %>
-          <% line_total = per_line + li.making_charge.to_f + add_total %>
-          <% subtotal_calc += line_total %>
-          <tr>
-            <td class="item-name"><%= li.jewelry_item.name %></td>
-            <td><%= li.huid.presence || '-' %></td>
-            <td><%= li.hsn.presence || '-' %></td>
-            <td class="center"><%= li.quantity %></td>
-            <td class="right"><%= '%.2f' % li.gross_weight.to_f %></td>
-            <td class="right"><%= '%.2f' % li.net_weight.to_f %></td>
-            <td class="right"><%= '%.2f' % per_line %></td>
-            <td class="right"><%= '%.2f' % li.making_charge.to_f %></td>
-            <td class="right"><%= '%.2f' % add_per_item %></td>
-            <td class="right total-cell">
-              <%= '%.2f' % line_total %>
-            </td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  </section>
+  <% if @order.errors.any? %>
+    <div class="errors"><%= @order.errors.full_messages.to_sentence %></div>
+  <% end %>
 
-  <!-- ===== SUMMARY + PAYMENT ===== -->
-  <div class="layout-two">
-
-    <!-- SUMMARY -->
-    <aside class="summary-card">
-      <h3>Order Summary</h3>
-
-      <div class="summary-row">
-        <span>Subtotal</span>
-        <span>₹<%= '%.2f' % subtotal_calc %></span>
-      </div>
-
-      <div class="summary-row muted">
-        <span>Discount</span>
-        <span id="discount-display">₹<%= '%.2f' % @order.discount.to_f %></span>
-      </div>
-
-      <div class="summary-row muted">
-        <span>Making Charges</span>
-        <span>₹<%= '%.2f' % @order.charges.to_f %></span>
-      </div>
-
-      <hr>
-
-      <div class="summary-row emphasis">
-        <span>Taxable Amount</span>
-        <span id="taxable-display">
-          ₹<%= '%.2f' % (subtotal_calc - @order.discount.to_f + @order.charges.to_f) %>
-        </span>
-      </div>
-
-      <div class="summary-row">
-        <span>CGST (1.5%)</span>
-        <span id="cgst-amount">₹0.00</span>
-      </div>
-
-      <div class="summary-row">
-        <span>IGST (1.5%)</span>
-        <span id="igst-amount">₹0.00</span>
-      </div>
-
-      <div class="summary-total">
-        <span>Total Payable</span>
-        <% taxable_calc = subtotal_calc - @order.discount.to_f + @order.charges.to_f %>
-  <% cgst_amt = taxable_calc * (1.5 / 100.0) %>
-  <% igst_amt = taxable_calc * (1.5 / 100.0) %>
-        <strong id="total-display">
-          ₹<%= '%.2f' % (taxable_calc + cgst_amt + igst_amt) %>
-        </strong>
-      </div>
-      <%# show remaining due if any (server-side computed) %>
-      <% if @order.respond_to?(:remaining_cents) && @order.remaining_cents.to_i > 0 %>
-        <div class="summary-row muted">
-          <span>Remaining Due</span>
-          <span>₹<%= '%.2f' % (@order.remaining_cents.to_f / 100.0) %></span>
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>Pieces on this bill</h2>
+          <p class="hint">Metal is the stored ₹ per gram × net weight × qty from when the bill was raised. Making and extras sit on that metal value — today’s board does not rewrite this invoice.</p>
+          <% if lines.any? %>
+            <% lines.each do |li| %>
+              <%
+                item = li.jewelry_item
+                name = item&.name || 'Piece'
+                add_total = li.additional_charge.to_f * li.quantity.to_i
+                rpg = li.rate_per_gram_used
+                metal = li.metal_amount
+                making = li.making_charge.to_f
+                mk_pct = li.making_percent
+                meta = [
+                  item&.metal&.name,
+                  item&.purity&.name,
+                  item&.jewellery_category&.try(:display_name).presence || item&.jewellery_category&.name,
+                  li.huid.presence || item&.sku
+                ].compact
+              %>
+              <article class="piece-card">
+                <div class="piece-head">
+                  <div>
+                    <strong><%= name %></strong>
+                    <p class="piece-meta">
+                      <%= meta.join(' · ') %>
+                      <% if li.hsn.present? %> · HSN <%= li.hsn %><% end %>
+                    </p>
+                  </div>
+                  <div class="piece-line"><%= format_rupees(li.line_amount) %></div>
+                </div>
+                <div class="piece-stats">
+                  <div><span>Qty</span><strong><%= li.quantity %></strong></div>
+                  <div><span>Gross</span><strong><%= '%.2f' % li.gross_weight.to_f %> g</strong></div>
+                  <div><span>Net</span><strong><%= '%.2f' % li.net_weight.to_f %> g</strong></div>
+                  <div><span>₹ / g</span><strong><%= format_rupees(rpg) %></strong></div>
+                </div>
+                <p class="piece-formula">
+                  <%= format_rupees(rpg) %>/g × <%= '%.2f' % li.net_weight.to_f %> g × <%= li.quantity %>
+                  = <%= format_rupees(metal) %> metal
+                  · <%= '%.1f' % mk_pct %>% making <%= format_rupees(making) %>
+                  <% if add_total.positive? %>
+                    · extra <%= format_rupees(add_total) %>
+                  <% end %>
+                </p>
+              </article>
+            <% end %>
+            <div class="weight-row">
+              <span>House weights</span>
+              <strong>Gross <%= '%.2f' % gross_total %> g · Net <%= '%.2f' % net_total %> g</strong>
+            </div>
+          <% else %>
+            <p class="hint" style="margin:0">No pieces on this bill.</p>
+          <% end %>
         </div>
-      <% end %>
-    </aside>
-
-    <!-- PAYMENT -->
-    <% if @order.status == 'pending' %>
-      <section id="charge-form" class="payment-card">
-        <h3>Record Payment</h3>
-        <p class="hint">
-          Finalize the order by confirming tax, discount, and charges.
-        </p>
-
-        <form method="post"
-              action="<%= record_payment_order_path(@order) %>">
-          <input type="hidden"
-                 name="authenticity_token"
-                 value="<%= form_authenticity_token %>">
-
-          <div class="form-grid">
-            <div>
-              <label>Discount(If any ?)</label>
-              <div style="display:flex;align-items:center;gap:8px">
-                <select id="discount-type" style="width:150px">
-                  <option value="amount">Amount</option>
-                  <option value="percent">Percent</option>
-                </select>
-                <input id="discount_input" type="number" step="0.01" style="width:200px"
-                       value="<%= @order.discount.to_f %>">
-              </div>
-              <div id="discount-error" style="color:#a00; font-size:12px; display:none; margin-top:4px">Discount cannot exceed subtotal</div>
-            </div>
-
-            <div>
-              <label><span style="color:#a00;margin-right:6px">*</span>Paid via</label>
-                <select name="payment_method" id="payment_method_input" style="width:220px" required aria-required="true">
-                <option value="">-- Select --</option>
-                <option value="Cash" <%= 'selected' if (@order.respond_to?(:payment_method) && @order.payment_method.to_s == 'Cash') %>>Cash</option>
-                <option value="Card" <%= 'selected' if (@order.respond_to?(:payment_method) && @order.payment_method.to_s == 'Card') %>>Card</option>
-                <option value="Online" <%= 'selected' if (@order.respond_to?(:payment_method) && @order.payment_method.to_s == 'Online') %>>Online</option>
-                <option value="PhonePe" <%= 'selected' if (@order.respond_to?(:payment_method) && @order.payment_method.to_s == 'PhonePe') %>>PhonePe</option>
-                <option value="Paytm" <%= 'selected' if (@order.respond_to?(:payment_method) && @order.payment_method.to_s == 'Paytm') %>>Paytm</option>
-                <option value="GPay" <%= 'selected' if (@order.respond_to?(:payment_method) && @order.payment_method.to_s == 'GPay') %>>GPay</option>
-                <option value="Others" <%= 'selected' if (@order.respond_to?(:payment_method) && @order.payment_method.to_s == 'Others') %>>Others</option>
-              </select>
-              <div id="payment-error" style="color:#a00; font-size:12px; display:<%= @order.errors[:payment_method].present? ? 'block' : 'none' %>; margin-top:4px">
-                <%= (@order.errors[:payment_method].first if @order.errors[:payment_method].present?) || 'Please select a payment method' %>
-              </div>
-            </div>
-
-            <div>
-              <label>Payment Amount</label>
-              <%# show remaining by default %>
-              <% remaining = (@order.respond_to?(:remaining_cents) ? @order.remaining_cents : nil) || 0 %>
-              <input type="number" name="payment_amount" id="payment_amount_input" step="0.01" min="0" max="<%= (remaining.to_f/100.0).round(2) %>" style="width:200px" value="<%= (remaining.to_f/100.0).round(2) %>">
-              <div id="payment-amount-hint" style="font-size:12px;color:#666;margin-top:4px">Enter full or partial amount. Remaining will update after recording payment.</div>
-            </div>
-
-            <%# submit fixed tax rates as hidden fields so controller receives them %>
-            <input type="hidden" name="cgst_rate" id="cgst_rate_show" value="1.5">
-            <input type="hidden" name="igst_rate" id="igst_rate_show" value="1.5">
-            <%# hidden numeric discount (amount in rupees) sent to server %>
-            <input type="hidden" name="discount" id="discount_hidden" value="<%= @order.discount.to_f %>">
-          </div>
-
-          <div class="form-actions">
-            <button id="record-payment-btn" class="btn btn-primary">
-              Record Payment & Print Invoice
-            </button>
-          </div>
-        </form>
       </section>
-    <% end %>
 
-    <%# Payments history (moved below layout for full-width display) %>
+      <section class="atelier-form" style="margin-top:16px">
+        <div class="section">
+          <h2>Client</h2>
+          <p class="hint">As they should appear on the invoice.</p>
+          <% if client %>
+            <div class="client-chip">
+              <span class="avatar"><%= client.initials %></span>
+              <div>
+                <strong><%= client.full_name %></strong>
+                <span><%= [client.phone.presence, client.gst_number.present? ? "GST #{client.gst_number}" : nil].compact.join(' · ') %></span>
+              </div>
+              <%= link_to 'Client card', customer_path(client), class: 'atelier-back' %>
+            </div>
+            <dl class="piece-dl">
+              <div><dt>Phone</dt><dd><%= client.phone.presence || '—' %></dd></div>
+              <div><dt>Email</dt><dd><%= client.email.presence || '—' %></dd></div>
+              <div><dt>GSTIN</dt><dd><%= client.gst_number.presence || '—' %></dd></div>
+              <div><dt>Address</dt><dd><%= client.address.presence || '—' %></dd></div>
+            </dl>
+          <% else %>
+            <p class="hint" style="margin:0">Walk-in — no client on the book.</p>
+          <% end %>
+        </div>
+      </section>
 
-  </div>
-  </div>
-
-      <%# Payments history (show even when order paid) %>
       <% if @order.payments.any? %>
-        <style>
-          .payments-card.full-width-card{ width:100%; box-shadow:0 6px 18px rgba(16,24,40,0.06); border-radius:8px; padding:14px 18px; margin-top:16px; background:#fff; }
-          .payments-card.full-width-card h3{ margin:0 0 8px 0; font-size:1.05rem; color:#0f172a; }
-          .payments-card.full-width-card table.items-table{ width:100%; border-collapse:collapse; font-size:0.95rem; }
-          .payments-card.full-width-card table.items-table thead th{ background:#f8fafc; padding:10px 12px; text-align:left; color:#374151; font-weight:600; border-bottom:1px solid #e6eef8; }
-          .payments-card.full-width-card table.items-table tbody td{ padding:10px 12px; border-bottom:1px solid #f1f5f9; color:#111827; }
-          .payments-card.full-width-card table.items-table tbody tr:last-child td{ border-bottom:none; }
-          .payments-card.full-width-card .right{ text-align:right; }
-          .payments-card.full-width-card .muted{ color:#6b7280; font-size:0.9rem }
-        </style>
-        <section class="card payments-card full-width-card">
-          <h3>Payments History</h3>
-          <table class="items-table payments-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Method</th>
-                <th class="right">Amount (₹)</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% @order.payments.order(created_at: :asc).each do |pmnt| %>
+        <section class="atelier-form" style="margin-top:16px">
+          <div class="section">
+            <h2>Payments</h2>
+            <p class="hint">Receipts already taken against this bill.</p>
+            <table class="bill-table">
+              <thead>
                 <tr>
-                  <td><%= pmnt.created_at.strftime('%d %b %Y %I:%M %p') %></td>
-                  <td><%= pmnt.payment_method.presence || '-' %></td>
-                  <td class="right"><%= '%.2f' % (pmnt.amount_cents.to_f/100.0) %></td>
+                  <th>Date</th>
+                  <th>Via</th>
+                  <th>Receipt</th>
+                  <th class="num">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% @order.payments.sort_by(&:created_at).each do |pmnt| %>
+                  <tr>
+                    <td><%= pmnt.created_at.strftime('%d %b %Y, %I:%M %p') %></td>
+                    <td><%= pmnt.payment_method.presence || '—' %></td>
                     <td>
                       <% if pmnt.receipt_number.present? %>
-                        <%= link_to pmnt.receipt_number, invoice_payment_path(pmnt), target: '_blank' %>
+                        <%= link_to pmnt.receipt_number, invoice_payment_path(pmnt), data: { turbolinks: false } %>
                       <% else %>
-                        <%= pmnt.note.presence || '-' %>
+                        <%= pmnt.note.presence || '—' %>
                       <% end %>
                     </td>
-                </tr>
-              <% end %>
-            </tbody>
-          </table>
+                    <td class="num gold"><%= format_rupees(pmnt.amount_cents.to_f / 100.0) %></td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
         </section>
       <% end %>
 
-  <!-- JS UNCHANGED -->
-<script>
-  function money(v){ return '\u20B9' + v.toFixed(2); }
-  const subtotal = <%= subtotal_calc %>;
-  const charges = <%= @order.charges.to_f %>;
+      <% if pending %>
+        <section class="atelier-form" id="charge-form" style="margin-top:16px">
+          <div class="section">
+            <h2>Record payment</h2>
+            <p class="hint">Discount is taken before tax. Extra charges are added to the taxable amount. Payment cannot exceed remaining due. A full settlement opens the invoice.</p>
+            <%= form_tag record_payment_order_path(@order), method: :post, id: 'payment-form' do %>
+              <div class="row">
+                <div class="field">
+                  <label for="discount_input">Discount (₹)</label>
+                  <%= number_field_tag :discount, ('%.2f' % discount), step: 0.01, min: 0, class: 'form-control', id: 'discount_input' %>
+                </div>
+                <div class="field">
+                  <label for="charges_input">Extra charges (₹)</label>
+                  <%= number_field_tag :charges, ('%.2f' % charges), step: 0.01, min: 0, class: 'form-control', id: 'charges_input' %>
+                </div>
+              </div>
+              <div class="row" style="margin-top:12px">
+                <div class="field">
+                  <label for="cgst_rate">CGST (%)</label>
+                  <%= number_field_tag :cgst_rate, ('%.2f' % cgst_rate), step: 0.01, min: 0, class: 'form-control', id: 'cgst_rate' %>
+                </div>
+                <div class="field">
+                  <label for="igst_rate">CGST (%)</label>
+                  <%= number_field_tag :igst_rate, ('%.2f' % igst_rate), step: 0.01, min: 0, class: 'form-control', id: 'igst_rate' %>
+                </div>
+              </div>
+              <div class="row" style="margin-top:12px">
+                <div class="field">
+                  <label for="payment_method_input">Paid via <span class="req">*</span></label>
+                  <select name="payment_method" id="payment_method_input" class="form-control" required>
+                    <option value="">Select method</option>
+                    <% %w[Cash Card Online PhonePe Paytm GPay Gold Silver Others].each do |m| %>
+                      <option value="<%= m %>" <%= 'selected' if @order.payment_method.to_s == m %>><%= m %></option>
+                    <% end %>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="payment_amount_input">Amount (₹) <span class="req">*</span></label>
+                  <%= number_field_tag :payment_amount, ('%.2f' % remaining), step: 0.01, min: 0.01, class: 'form-control', id: 'payment_amount_input' %>
+                  <p class="hint" id="pay-hint" style="margin:8px 0 0">Remaining due updates as discount and tax change.</p>
+                </div>
+              </div>
+              <div class="actions" style="margin-top:16px">
+                <%= submit_tag 'Record payment', class: 'btn-gold', id: 'record-payment-btn', disabled: true %>
+              </div>
+            <% end %>
+          </div>
+        </section>
+      <% end %>
+    </div>
 
-  function update(){
-    const type = document.getElementById('discount-type').value;
-    let raw = parseFloat(document.getElementById('discount_input').value || 0) || 0;
-    let discountAmt = 0;
-    if(type === 'percent'){
-      discountAmt = subtotal * raw / 100.0;
-    } else {
-      discountAmt = raw;
-    }
-    // clamp discount to subtotal
-    const discountErrorEl = document.getElementById('discount-error');
-    if(discountAmt > subtotal){
-      if(discountErrorEl) discountErrorEl.style.display = 'block';
-      discountAmt = subtotal;
-    } else {
-      if(discountErrorEl) discountErrorEl.style.display = 'none';
-    }
-    document.getElementById('discount-display').textContent = money(discountAmt);
-    const taxable = subtotal - discountAmt + charges;
-    const cgstRate = 1.5;
-    const igstRate = 1.5;
-    const cgst = taxable * (cgstRate/100);
-    const igst = taxable * (igstRate/100);
-    document.getElementById('cgst-amount').textContent = money(cgst);
-    document.getElementById('igst-amount').textContent = money(igst);
-    document.getElementById('taxable-display').textContent = money(taxable);
-    document.getElementById('total-display').textContent = money(taxable + cgst + igst);
-    // update hidden discount in rupees for server submission
-    const discountHidden = document.getElementById('discount_hidden');
-    if(discountHidden) discountHidden.value = discountAmt.toFixed(2);
+    <aside class="preview" aria-live="polite">
+      <p class="preview-kicker">Bill card</p>
+      <div class="gem avatar-lg" aria-hidden="true"><%= client ? client.initials : '₹' %></div>
+      <h2><%= client ? client.full_name : 'Walk-in' %></h2>
+      <span class="sku-chip"><%= bill_no %></span>
+      <div class="preview-lines">
+        <% lines.each do |li| %>
+          <div class="preview-line-row">
+            <span><%= li.jewelry_item&.name || 'Piece' %> × <%= li.quantity %></span>
+            <strong><%= format_rupees(li.line_amount) %></strong>
+          </div>
+        <% end %>
+      </div>
+      <div class="preview-sum">
+        <div><span>Subtotal</span><strong id="sum-subtotal"><%= format_rupees(subtotal) %></strong></div>
+        <div><span>Discount</span><strong id="sum-discount"><%= format_rupees(discount) %></strong></div>
+        <div><span>Charges</span><strong id="sum-charges"><%= format_rupees(charges) %></strong></div>
+        <div><span>Taxable</span><strong id="sum-taxable"><%= format_rupees(taxable) %></strong></div>
+        <div><span>CGST <em id="sum-cgst-rate"><%= '%.2f' % cgst_rate %>%</em></span><strong id="sum-cgst"><%= format_rupees(cgst) %></strong></div>
+        <div><span>CGST <em id="sum-igst-rate"><%= '%.2f' % igst_rate %>%</em></span><strong id="sum-igst"><%= format_rupees(igst) %></strong></div>
+        <div><span>Paid</span><strong id="sum-paid"><%= format_rupees(paid) %></strong></div>
+        <div><span>Remaining</span><strong id="sum-remaining"><%= format_rupees(remaining) %></strong></div>
+      </div>
+      <div class="preview-price" id="sum-total"><%= format_rupees(total) %></div>
+      <div class="preview-desc">Amount payable</div>
+      <p class="preview-note" id="preview-note">
+        <% if pending %>
+          Taxable = subtotal − discount + extra charges. Total adds CGST on that taxable amount.
+        <% else %>
+          This bill is <%= @order.status %>. <%= paid.positive? ? 'Payments are on file.' : '' %>
+        <% end %>
+      </p>
+    </aside>
+  </div>
+
+  <div id="bill-popup" class="bill-popup" hidden>
+    <div class="bill-popup-card" role="alertdialog" aria-modal="true">
+      <p class="eyebrow">Bill</p>
+      <p id="bill-popup-msg"></p>
+      <button type="button" class="btn-gold" id="bill-popup-ok">OK</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .container:has(.bill-show) { max-width: 1240px; }
+  .bill-show .lead { max-width: 72ch; }
+  .bill-show .bill-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .bill-show a.btn-gold,
+  .bill-show .bill-hero-actions button.btn-gold {
+    text-decoration: none; display: inline-flex; align-items: center;
+    font-family: inherit; width: auto;
   }
-  // wire inputs so changes reflect on the summary card
-  const cgstInput = document.getElementById('cgst_rate_show');
-  const igstInput = document.getElementById('igst_rate_show');
-  const discountInput = document.getElementById('discount_input');
-  if(cgstInput) cgstInput.addEventListener('input', update);
-  if(igstInput) igstInput.addEventListener('input', update);
-  if(discountInput) discountInput.addEventListener('input', update);
-  const discountTypeEl = document.getElementById('discount-type');
-  if(discountTypeEl) discountTypeEl.addEventListener('change', update);
-  update();
+  .bill-show .client-link { color: #c9a227; text-decoration: none; font-weight: 600; }
+  .bill-show .status-pill {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700;
+    border: 1px solid rgba(201,162,39,0.35); color: #c9a227;
+  }
+  .bill-show .status-pill.is-paid { color: #3f5d3a; border-color: rgba(63,93,58,0.35); background: rgba(63,93,58,0.08); }
+  .bill-show .status-pill.is-pending { background: rgba(201,162,39,0.12); }
+  .bill-show .avatar-lg {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 700; letter-spacing: 0.08em; color: #e8d5a3;
+  }
+  .bill-show .piece-card {
+    border: 1px solid rgba(201,162,39,0.22); border-radius: 14px; padding: 14px;
+    background: #fff; margin-bottom: 12px;
+  }
+  .bill-show .piece-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .bill-show .piece-head strong {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.2rem; font-weight: 600;
+  }
+  .bill-show .piece-meta { margin: 4px 0 0; color: #6b6258; font-size: 12px; }
+  .bill-show .piece-line {
+    color: #c9a227; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .bill-show .piece-stats {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px;
+  }
+  .bill-show .piece-stats div {
+    background: #f7f1e8; border: 1px solid rgba(201,162,39,0.18); border-radius: 10px; padding: 8px 10px;
+  }
+  .bill-show .piece-stats span {
+    display: block; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6258; font-weight: 700;
+  }
+  .bill-show .piece-stats strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+  .bill-show .piece-formula {
+    margin: 10px 0 0; font-size: 12px; color: #6b6258; line-height: 1.5;
+  }
+  .bill-show .weight-row {
+    display: flex; justify-content: space-between; gap: 10px; padding-top: 4px;
+    font-size: 13px; color: #6b6258;
+  }
+  .bill-show .weight-row strong { color: #0b1220; }
+  .bill-show .client-chip {
+    margin-bottom: 12px; display: flex; align-items: center; gap: 12px;
+    background: #f7f1e8; border: 1px solid rgba(201,162,39,0.28); border-radius: 14px; padding: 10px 12px;
+  }
+  .bill-show .avatar {
+    width: 40px; height: 40px; border-radius: 12px; font-size: 13px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #0b1220; color: #e8d5a3; font-weight: 700; letter-spacing: 0.06em;
+  }
+  .bill-show .client-chip strong { display: block; font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.15rem; }
+  .bill-show .client-chip span { color: #6b6258; font-size: 13px; }
+  .bill-show .client-chip .atelier-back { margin-left: auto; }
+  .bill-show .piece-dl { margin: 0; }
+  .bill-show .piece-dl > div {
+    display: grid; grid-template-columns: 120px 1fr; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid rgba(201,162,39,0.16);
+  }
+  .bill-show .piece-dl dt {
+    color: #6b6258; font-size: 12px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .bill-show .piece-dl dd { margin: 0; color: #14110f; }
+  .bill-show .bill-table { width: 100%; border-collapse: collapse; }
+  .bill-show .bill-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6258; padding: 8px 8px 8px 0; border-bottom: 1px solid rgba(201,162,39,0.22);
+  }
+  .bill-show .bill-table td {
+    padding: 10px 8px 10px 0; border-bottom: 1px solid rgba(201,162,39,0.12);
+    font-size: 13px; vertical-align: top;
+  }
+  .bill-show .bill-table a { color: #0b1220; }
+  .bill-show .bill-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .bill-show .bill-table .gold { color: #c9a227; font-weight: 700; }
+  .bill-show .preview-lines { margin: 14px 0 8px; }
+  .bill-show .preview-line-row {
+    display: flex; justify-content: space-between; gap: 10px;
+    font-size: 13px; color: #d6cbb8; padding: 6px 0;
+    border-bottom: 1px solid rgba(232,213,163,0.12);
+  }
+  .bill-show .preview-line-row strong { color: #e8d5a3; font-weight: 600; white-space: nowrap; }
+  .bill-show .preview-sum { margin-top: 10px; }
+  .bill-show .preview-sum div {
+    display: flex; justify-content: space-between; font-size: 13px; color: #b7aa98; padding: 4px 0;
+  }
+  .bill-show .preview-sum strong { color: #f7f1e8; font-variant-numeric: tabular-nums; }
+  .bill-show .preview-sum em { font-style: normal; color: #8a8072; font-size: 11px; margin-left: 6px; }
+  .bill-show input[type=number]::-webkit-outer-spin-button,
+  .bill-show input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .bill-show input[type=number] { -moz-appearance: textfield; }
+  .bill-show .bill-popup {
+    position: fixed; inset: 0; z-index: 80;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(11,18,32,0.45); padding: 20px;
+  }
+  .bill-show .bill-popup[hidden] { display: none; }
+  .bill-show .bill-popup-card {
+    width: min(420px, 100%); background: #fffaf3;
+    border: 1px solid rgba(201,162,39,0.35); border-radius: 18px;
+    padding: 22px 22px 18px; box-shadow: 0 24px 50px rgba(11,18,32,0.28);
+  }
+  .bill-show .bill-popup-card p#bill-popup-msg { margin: 0 0 16px; color: #14110f; }
+  .bill-show .bill-popup-card .btn-gold { width: 100%; }
+  @media (max-width: 880px) {
+    .bill-show .bill-hero-actions { width: 100%; }
+    .bill-show .piece-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bill-show .piece-dl > div { grid-template-columns: 1fr; }
+    .bill-show .client-chip { flex-wrap: wrap; }
+  }
+</style>
 
-  // Disable payment submit unless a payment method is selected and amount > 0
+<script>
   (function(){
-    const pm = document.getElementById('payment_method_input');
-    const btn = document.getElementById('record-payment-btn');
-    const amt = document.getElementById('payment_amount_input');
-    if(!pm || !btn || !amt) return;
-    function toggle(){ 
-      const val = parseFloat(amt.value || 0);
-      const max = parseFloat(amt.getAttribute('max') || '0');
-      const over = (max > 0 && val > max);
-      btn.disabled = (pm.value === '' || pm.value == null) || (val <= 0) || over; 
-      // show hint when over
-      const hint = document.getElementById('payment-amount-hint');
-      if(hint) hint.style.color = over ? '#a00' : '#666';
+    var root = document.getElementById('bill-show');
+    if(!root) return;
+    var subtotal = parseFloat(root.getAttribute('data-subtotal') || '0') || 0;
+    var paid = parseFloat(root.getAttribute('data-paid') || '0') || 0;
+    var fallback = {
+      discount: parseFloat(root.getAttribute('data-discount') || '0') || 0,
+      charges: parseFloat(root.getAttribute('data-charges') || '0') || 0,
+      cgstRate: parseFloat(root.getAttribute('data-cgst-rate') || '0') || 0,
+      igstRate: parseFloat(root.getAttribute('data-igst-rate') || '0') || 0
+    };
+    var form = document.getElementById('payment-form');
+    var discEl = document.getElementById('discount_input');
+    var chgEl = document.getElementById('charges_input');
+    var cgstEl = document.getElementById('cgst_rate');
+    var igstEl = document.getElementById('igst_rate');
+    var amtEl = document.getElementById('payment_amount_input');
+    var pmEl = document.getElementById('payment_method_input');
+    var btn = document.getElementById('record-payment-btn');
+    var heroBtn = document.getElementById('record-payment-hero');
+    var hint = document.getElementById('pay-hint');
+    var popup = document.getElementById('bill-popup');
+    var popupMsg = document.getElementById('bill-popup-msg');
+    var popupOk = document.getElementById('bill-popup-ok');
+
+    function money(v){ return '\u20B9' + (isFinite(v) ? Number(v) : 0).toFixed(2); }
+    function num(el){ return parseFloat((el && el.value) || 0) || 0; }
+    function set(id, v){ var el = document.getElementById(id); if(el) el.textContent = money(v); }
+    function setText(id, v){ var el = document.getElementById(id); if(el) el.textContent = v; }
+
+    function totals(){
+      var discount = Math.max(0, discEl ? num(discEl) : fallback.discount);
+      var charges = Math.max(0, chgEl ? num(chgEl) : fallback.charges);
+      var overDiscount = discount > subtotal;
+      if(overDiscount) discount = subtotal;
+      var taxable = subtotal - discount + charges;
+      var cgstRate = Math.max(0, cgstEl ? num(cgstEl) : fallback.cgstRate);
+      var igstRate = Math.max(0, igstEl ? num(igstEl) : fallback.igstRate);
+      var cgst = taxable * (cgstRate / 100);
+      var igst = taxable * (igstRate / 100);
+      var total = taxable + cgst + igst;
+      var remaining = Math.max(0, total - paid);
+      return {
+        discount: discount, charges: charges, taxable: taxable,
+        cgstRate: cgstRate, igstRate: igstRate, cgst: cgst, igst: igst,
+        total: total, remaining: remaining, overDiscount: discEl && num(discEl) > subtotal
+      };
     }
-    pm.addEventListener('change', toggle);
-    amt.addEventListener('input', toggle);
-    // initial state
-    toggle();
+
+    function paint(){
+      var t = totals();
+      set('sum-subtotal', subtotal);
+      set('sum-discount', discEl ? num(discEl) : t.discount);
+      set('sum-charges', t.charges);
+      set('sum-taxable', t.taxable);
+      set('sum-cgst', t.cgst);
+      set('sum-igst', t.igst);
+      setText('sum-cgst-rate', t.cgstRate.toFixed(2) + '%');
+      setText('sum-igst-rate', t.igstRate.toFixed(2) + '%');
+      set('sum-paid', paid);
+      set('sum-remaining', t.remaining);
+      set('sum-total', t.total);
+      if(amtEl && document.activeElement !== amtEl){
+        var current = num(amtEl);
+        if(current <= 0 || current > t.remaining) amtEl.value = t.remaining.toFixed(2);
+      }
+      if(hint) hint.textContent = 'Remaining due ' + money(t.remaining) + '.';
+      syncBtn();
+    }
+
+    function syncBtn(){
+      var t = totals();
+      var amt = amtEl ? num(amtEl) : 0;
+      var methodOk = pmEl ? !!pmEl.value : true;
+      var off = !methodOk || amt <= 0 || amt > t.remaining + 0.001 || !!t.overDiscount;
+      if(btn) btn.disabled = off;
+      if(heroBtn) heroBtn.disabled = off;
+    }
+
+    function showPopup(msg){
+      if(!popup || !popupMsg){ window.alert(msg); return; }
+      popupMsg.textContent = msg;
+      popup.hidden = false;
+    }
+    function hidePopup(){ if(popup) popup.hidden = true; }
+
+    [discEl, chgEl, cgstEl, igstEl].forEach(function(el){
+      if(!el) return;
+      el.addEventListener('input', paint);
+    });
+    if(amtEl) amtEl.addEventListener('input', syncBtn);
+    if(pmEl) pmEl.addEventListener('change', syncBtn);
+    if(popupOk) popupOk.addEventListener('click', hidePopup);
+    if(popup) popup.addEventListener('click', function(e){ if(e.target === popup) hidePopup(); });
+
+    if(form){
+      form.addEventListener('submit', function(e){
+        var t = totals();
+        if(discEl && num(discEl) > subtotal){
+          e.preventDefault();
+          showPopup('Discount cannot exceed the bill subtotal (' + money(subtotal) + ').');
+          return;
+        }
+        if(!pmEl || !pmEl.value){
+          e.preventDefault();
+          showPopup('Choose how this payment was taken.');
+          return;
+        }
+        var amt = amtEl ? num(amtEl) : 0;
+        if(amt <= 0){
+          e.preventDefault();
+          showPopup('Payment amount must be greater than 0.');
+          return;
+        }
+        if(amt > t.remaining + 0.001){
+          e.preventDefault();
+          showPopup('Payment cannot exceed remaining due (' + money(t.remaining) + ').');
+        }
+      });
+    }
+
+    paint();
   })();
 </script>

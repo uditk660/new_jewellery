@@ -25,7 +25,7 @@
       <% if @payment.order %>
         <%= link_to "Order #"+@payment.order.id.to_s, order_path(@payment.order) %>
         &nbsp;•&nbsp;
-        <%= link_to "Invoice", invoice_order_path(@payment.order) %>
+        <%= link_to "Invoice", invoice_order_path(@payment.order), data: { turbolinks: false } %>
       <% else %>
         —
       <% end %>

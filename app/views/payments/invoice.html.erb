@@ -1,191 +1,381 @@
+<%
+  shop = @shop
+  house = shop&.shop_name.presence || current_user&.display_name || 'Jewellery House'
+  tagline = shop&.tagline.presence || 'Hallmarked gold · Trust in every gram'
+  owner = shop&.owner_name.presence
+  phone = shop&.phone.presence
+  email = shop&.email.presence
+  street = [shop&.address_line1, shop&.address_line2].reject(&:blank?).join(', ')
+  town = [shop&.city, shop&.pincode].reject(&:blank?).join(' ')
+  place = [street, town, shop&.state].reject(&:blank?).join(', ')
+  gstin = shop&.gstin.presence
+  pan = shop&.pan.presence
+  bis = shop&.bis_hallmark_licence.presence
+  bank = shop&.bank_name.presence
+  ac_name = shop&.account_holder.presence
+  ac_no = shop&.account_number.presence
+  ifsc = shop&.ifsc.presence
+  declaration = shop&.invoice_declaration.presence
+  city = shop&.city.presence || 'India'
+  state = shop&.state.presence
+  order = @payment.order
+  client = @payment.customer || order&.customer
+  receipt_no = @payment.receipt_number.presence || format('RCT-%04d', @payment.id)
+  this_amt = @payment.amount_cents.to_f / 100.0
+  bill = order&.bill_breakdown
+  lines = order ? order.line_items.to_a : []
+  initials = house.to_s.split(/\s+/).map { |w| w[0] }.compact.first(2).join.upcase
+  initials = 'JH' if initials.blank?
+  bill_no = order&.invoice_number.presence || (order ? format('INV-%03d', order.id) : nil)
+  qr_code = begin
+    RQRCode::QRCode.new((@qr_payload.presence || receipt_no).to_s)
+  rescue StandardError
+    RQRCode::QRCode.new(receipt_no.to_s)
+  end
+%>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Payment Invoice - <%= @payment.receipt_number || "Payment #{@payment.id}" %></title>
-  <style>
-    body{ font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial; color:#111827; padding:20px }
-    .no-print{ text-align:right; margin-bottom:12px }
-    .invoice-box { max-width:960px; margin:0 auto; background:#fff; border:1px solid #e6edf5; padding:18px; border-radius:6px; display:flex; flex-direction:column; min-height: calc(297mm - 40mm); }
-    .muted{ color:#6b7280 }
-    table{ width:100%; border-collapse:collapse }
-    table td, table th{ padding:8px; border:1px solid #e6edf5 }
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Receipt <%= receipt_no %> · <%= house %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="turbolinks-visit-control" content="reload">
+  <style data-invoice-sheet>
+    body.invoice-doc {
+      --navy: #0b1220;
+      --ink: #14110f;
+      --gold: #c9a227;
+      --gold-hi: #e8d5a3;
+      --ivory: #f7f1e8;
+      --cream: #fffaf3;
+      --muted: #6b6258;
+    }
+    body.invoice-doc * { box-sizing: border-box; }
+    body.invoice-doc {
+      margin: 0; padding: 0;
+      background:
+        radial-gradient(900px 420px at 50% -10%, rgba(201,162,39,0.22), transparent 55%),
+        linear-gradient(180deg, #16120e, #0b1220 42%, #14110f);
+      color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+    .toolbar {
+      width: min(210mm, calc(100% - 32px));
+      margin: 18px auto 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .toolbar a, .toolbar button {
+      font-family: inherit; font-size: 13px; font-weight: 700;
+      border-radius: 999px; padding: 10px 16px; cursor: pointer;
+      text-decoration: none; display: inline-flex; align-items: center;
+    }
+    .toolbar a { border: 1px solid rgba(232,213,163,0.4); color: var(--gold-hi); background: transparent; }
+    .toolbar button { border: 0; background: linear-gradient(90deg, #e8d5a3, #c9a227); color: var(--navy); }
+    .sheet {
+      position: relative; width: 210mm; min-height: 297mm;
+      margin: 16px auto 40px; background: var(--cream); color: var(--ink);
+      padding: 10mm 11mm 9mm;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.45), 0 0 0 1px rgba(201,162,39,0.35);
+      overflow: hidden;
+    }
+    .sheet::before, .sheet::after {
+      content: ""; pointer-events: none; position: absolute; inset: 7px;
+      border: 1px solid rgba(201,162,39,0.55);
+    }
+    .sheet::after { inset: 11px; border-color: rgba(11,18,32,0.16); }
+    .ornament { position: absolute; width: 26px; height: 26px; border-color: var(--gold); border-style: solid; z-index: 2; }
+    .ornament.tl { top: 16px; left: 16px; border-width: 2px 0 0 2px; }
+    .ornament.tr { top: 16px; right: 16px; border-width: 2px 2px 0 0; }
+    .ornament.bl { bottom: 16px; left: 16px; border-width: 0 0 2px 2px; }
+    .ornament.br { bottom: 16px; right: 16px; border-width: 0 2px 2px 0; }
+    .mark {
+      width: 48px; height: 48px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 35% 30%, #2a2218, var(--navy));
+      border: 1px solid var(--gold); color: var(--gold-hi);
+      font-family: "Cormorant Garamond", Georgia, serif; font-size: 18px; font-weight: 700; letter-spacing: 0.08em;
+    }
+    .head {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px;
+      align-items: center; padding-bottom: 8px; border-bottom: 1px solid rgba(201,162,39,0.35);
+    }
+    .brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .house-name {
+      font-family: "Cormorant Garamond", Georgia, serif; font-size: 28px; font-weight: 600;
+      letter-spacing: -0.02em; line-height: 1; margin: 0; color: var(--navy);
+    }
+    .house-tag {
+      margin: 3px 0 0; color: var(--gold); font-size: 9px; letter-spacing: 0.08em;
+      text-transform: uppercase; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .house-addr { margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+    .house-addr span { display: block; }
+    .head-side { text-align: center; }
+    .qr-wrap {
+      display: inline-block; background: #fff; border: 1px solid rgba(201,162,39,0.45);
+      padding: 4px; border-radius: 8px; line-height: 0;
+    }
+    .qr-table { border-collapse: collapse; }
+    .qr-table td { width: 1.5px; height: 1.5px; padding: 0; background: #fff; }
+    .qr-table td.on { background: #0b1220; }
+    .seal { margin-top: 3px; font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+    .kicker { display: flex; align-items: center; gap: 14px; margin: 10px 0; }
+    .kicker span {
+      font-family: "Cormorant Garamond", Georgia, serif; font-size: 22px;
+      letter-spacing: 0.28em; text-transform: uppercase; color: var(--navy); font-weight: 600;
+    }
+    .kicker::before, .kicker::after {
+      content: ""; flex: 1; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    }
+    .meta {
+      display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+      gap: 18px 24px; align-items: start; margin: 0 0 12px; padding: 8px 0 10px;
+      border-bottom: 1px solid rgba(201,162,39,0.28);
+    }
+    .meta-kicker {
+      display: block; margin: 0 0 3px; font-size: 9px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--gold); font-weight: 700;
+    }
+    .meta-to strong {
+      font-family: "Cormorant Garamond", Georgia, serif; font-size: 18px; font-weight: 600; color: var(--navy);
+    }
+    .meta-to p { margin: 2px 0 0; color: var(--muted); font-size: 11px; line-height: 1.35; }
+    .meta-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+    .meta-facts span { display: block; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+    .meta-facts b { font-size: 13px; font-weight: 600; color: var(--navy); }
+    table.pieces { width: 100%; border-collapse: collapse; }
+    table.pieces th {
+      text-align: left; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--navy); background: var(--ivory); padding: 7px 8px; border-bottom: 1.5px solid var(--gold);
+    }
+    table.pieces th.num, table.pieces td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.pieces td {
+      padding: 8px; border-bottom: 1px solid rgba(201,162,39,0.22); vertical-align: top; font-size: 12px;
+    }
+    table.pieces td .name {
+      font-family: "Cormorant Garamond", Georgia, serif; font-size: 15px; font-weight: 600; color: var(--navy);
+    }
+    table.pieces td .sub { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+    table.pieces td .gold { color: var(--gold); font-weight: 700; }
+    .hero-amt {
+      margin: 14px 0 12px; padding: 14px 16px;
+      border: 1px solid rgba(201,162,39,0.4); border-radius: 12px; background: var(--ivory);
+      display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+    }
+    .hero-amt span { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+    .hero-amt b {
+      font-family: "Cormorant Garamond", Georgia, serif; font-size: 32px; color: var(--gold); font-weight: 600;
+    }
+    .foot-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; align-items: start; margin-top: 14px; }
+    .words { font-size: 12px; line-height: 1.55; color: var(--muted); }
+    .words b { color: var(--navy); display: block; margin-top: 4px; font-size: 12px; }
+    .bank { margin-top: 12px; font-size: 11px; color: var(--muted); line-height: 1.55; }
+    .bill-link { color: var(--gold); font-weight: 700; text-decoration: none; }
+    .sum {
+      background: var(--cream); color: var(--ink); border-radius: 12px;
+      padding: 6px 4px 4px 10px; border: 1px solid rgba(201,162,39,0.4);
+    }
+    .sum div {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+      font-size: 13px; color: var(--muted); padding: 8px 8px 8px 0;
+      border-bottom: 1px solid rgba(201,162,39,0.18);
+    }
+    .sum div b { color: var(--navy); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; }
+    .sum .grand {
+      margin-top: 2px; padding: 12px 8px 8px 0; border-bottom: 0; border-top: 1.5px solid var(--gold);
+    }
+    .sum .grand span { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+    .sum .grand b { font-family: "Cormorant Garamond", Georgia, serif; font-size: 24px; color: var(--gold); font-weight: 600; }
+    .sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 22px; }
+    .sign div { width: 42%; }
+    .sign p { margin: 0 0 28px; font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .sign .line { border-top: 1px solid var(--navy); padding-top: 6px; font-size: 11px; color: var(--navy); }
+    .thanks {
+      text-align: center; margin-top: 10px;
+      font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 15px; color: var(--navy);
+    }
+    .legal {
+      margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(201,162,39,0.28);
+      font-size: 10px; color: var(--muted); line-height: 1.5;
+    }
     @media print {
-      @page { size: A4; margin: 10mm }
-      .no-print{ display:none }
-      body{ padding:0 }
+      body.invoice-doc { background: #fff !important; }
+      .toolbar { display: none !important; }
+      .sheet {
+        margin: 0; box-shadow: none; width: auto; min-height: 0; max-height: 285mm;
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+      }
+      @page { size: A4 portrait; margin: 6mm; }
+      .head { grid-template-columns: minmax(0, 1fr) auto !important; }
+      .meta { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) !important; }
+      .foot-grid { grid-template-columns: 1.1fr 0.9fr !important; }
+      .sum, .hero-amt { background: #fff !important; }
     }
   </style>
 </head>
-<body>
-
-  <div class="no-print">
-    <button onclick="window.print()" style="padding:8px 16px">Print Invoice</button>
+<body class="invoice-doc">
+  <div class="toolbar">
+    <% if !@public_invoice && order %>
+      <%= link_to '← Bill', order_path(order), data: { turbolinks: false } %>
+    <% elsif !@public_invoice %>
+      <%= link_to '← Bills', orders_path, data: { turbolinks: false } %>
+    <% else %>
+      <span></span>
+    <% end %>
+    <button type="button" onclick="window.print()">Print receipt</button>
   </div>
 
-  <div class="invoice-box" id="print-area">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-weight:800;font-size:18px">Payment Invoice</div>
-        <div class="muted" style="margin-top:6px">Receipt No: <strong><%= @payment.receipt_number.presence || "R-#{@payment.id}" %></strong></div>
-        <div class="muted">Date: <%= @payment.created_at.strftime('%d %b %Y %I:%M %p') %></div>
-      </div>
-      <div style="text-align:right">
-        <% app_name = "Rajesh Alankar Mandir" %>
-        <div style="font-weight:900;font-size:20px;color:#b30000"><%= app_name %></div>
-        <div class="muted" style="font-size:12px">Sadar Bazar, Jagdishpur, Bhojpur</div>
-      </div>
-    </div>
+  <article class="sheet" id="print-area">
+    <span class="ornament tl"></span>
+    <span class="ornament tr"></span>
+    <span class="ornament bl"></span>
+    <span class="ornament br"></span>
 
-    <hr style="margin:12px 0">
-
-    <div style="display:flex;justify-content:space-between;gap:12px">
+    <header class="head">
       <div>
-        <div class="muted">Bill To</div>
-        <% if @payment.customer.present? %>
-          <div style="font-weight:700"><%= [@payment.customer.first_name, @payment.customer.last_name].compact.join(' ') %></div>
-          <div class="muted"><%= @payment.customer.address %></div>
-          <div class="muted">Phone: <%= @payment.customer.phone %></div>
-        <% elsif @payment.order && @payment.order.customer.present? %>
-          <div style="font-weight:700"><%= [@payment.order.customer.first_name, @payment.order.customer.last_name].compact.join(' ') %></div>
-          <div class="muted"><%= @payment.order.customer.address %></div>
-          <div class="muted">Phone: <%= @payment.order.customer.phone %></div>
+        <div class="brand-row">
+          <div class="mark" aria-hidden="true"><%= initials %></div>
+          <div>
+            <h1 class="house-name"><%= house %></h1>
+            <p class="house-tag"><%= tagline %></p>
+          </div>
+        </div>
+        <p class="house-addr">
+          <% if place.present? %><span><%= place %></span><% end %>
+          <% contact = [phone, email].compact.join(' · ') %>
+          <% papers = [gstin.present? ? "GSTIN #{gstin}" : nil, pan.present? ? "PAN #{pan}" : nil, bis.present? ? "BIS #{bis}" : nil].compact.join(' · ') %>
+          <% if contact.present? %><span><%= contact %></span><% end %>
+          <% if papers.present? %><span><%= papers %></span><% end %>
+        </p>
+      </div>
+      <div class="head-side">
+        <div class="qr-wrap" title="Scan this receipt">
+          <table class="qr-table" role="img" aria-label="Receipt QR code">
+            <% (qr_code.qrcode.modules rescue qr_code.modules).each do |row| %>
+              <tr>
+                <% row.each do |dark| %>
+                  <td class="<%= 'on' if dark %>"></td>
+                <% end %>
+              </tr>
+            <% end %>
+          </table>
+        </div>
+        <div class="seal">Receipt</div>
+      </div>
+    </header>
+
+    <div class="kicker"><span>Payment receipt</span></div>
+
+    <div class="meta">
+      <div class="meta-to">
+        <span class="meta-kicker">Received from</span>
+        <% if client %>
+          <strong><%= client.full_name %></strong>
+          <p><%= [client.address.presence, client.phone.presence, client.gst_number.present? ? "GSTIN #{client.gst_number}" : nil].compact.join(' · ') %></p>
         <% else %>
-          <div style="font-weight:700">Walk-in Customer</div>
+          <strong>Walk-in</strong>
+          <p>No client on the book for this receipt.</p>
         <% end %>
       </div>
-
-      <div style="text-align:right">
-        <% if @payment.order %>
-          <div class="muted">Order # <strong><%= @payment.order.id %></strong></div>
-          <div class="muted">Order Invoice: <%= @payment.order.invoice_number %></div>
-        <% end %>
+      <div class="meta-facts">
+        <div><span>Receipt</span><b><%= receipt_no %></b></div>
+        <div><span>Date</span><b><%= @payment.created_at.strftime('%d %b %Y') %></b></div>
+        <div><span>Paid via</span><b><%= @payment.payment_method.presence || '—' %></b></div>
+        <div>
+          <span>Tax invoice</span>
+          <b>
+            <% if bill_no && @tax_invoice_url %>
+              <%= link_to bill_no, @tax_invoice_url, class: 'bill-link', data: { turbolinks: false } %>
+            <% else %>
+              <%= bill_no || '—' %>
+            <% end %>
+          </b>
+        </div>
       </div>
     </div>
 
-    <div style="margin-top:12px">
-      <table>
+    <div class="hero-amt">
+      <span>This receipt</span>
+      <b><%= format_rupees(this_amt) %></b>
+    </div>
+
+    <% if lines.any? %>
+      <table class="pieces">
         <thead>
-          <tr style="background:#f3f3f3">
-            <th style="width:40px">Sr</th>
-            <th>Description</th>
-            <th style="width:180px;text-align:right">Amount (₹)</th>
+          <tr>
+            <th>Towards catalogue pieces</th>
+            <th class="num">Qty</th>
+            <th class="num">Line</th>
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td style="text-align:center">1</td>
-            <td>
-              <strong>Payment received</strong>
-              <% if @payment.order %>
-                towards Order #<%= link_to @payment.order.id, order_path(@payment.order) %> (<%= link_to 'View Invoice', invoice_order_path(@payment.order) %>)
-              <% end %>
-            </td>
-            <td style="text-align:right">₹<%= '%.2f' % (@payment.amount_cents.to_f/100.0) %></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div style="display:flex;justify-content:flex-end;margin-top:12px">
-      <div style="width:360px">
-        <table>
-          <% if @payment.order.present? %>
-            <% order = @payment.order %>
-            <% subtotal = order.line_items.to_a.sum do |li|
-                 (li.respond_to?(:line_amount) ? li.line_amount.to_f : (li.net_weight.to_f * li.quantity.to_i * (li.price_cents.to_f/100.0) + li.making_charge.to_f))
-               end %>
-            <% taxable_amount = subtotal - (order.discount.to_f || 0.0) + (order.charges.to_f || 0.0) %>
-            <% if order.respond_to?(:cgst_cents) && order.cgst_cents.to_i > 0 %>
-              <% cgst_amt = order.cgst_cents.to_f/100.0 %>
-            <% else %>
-              <% cgst_amt = taxable_amount * (order.respond_to?(:cgst_rate) ? order.cgst_rate.to_f/100.0 : 0.015) %>
-            <% end %>
-            <% if order.respond_to?(:igst_cents) && order.igst_cents.to_i > 0 %>
-              <% igst_amt = order.igst_cents.to_f/100.0 %>
-            <% else %>
-              <% igst_amt = taxable_amount * (order.respond_to?(:igst_rate) ? order.igst_rate.to_f/100.0 : 0.015) %>
-            <% end %>
-            <% total = taxable_amount + cgst_amt + igst_amt %>
-            <% rounded_total = total.round(0) %>
-            <% paid_total = order.payments.sum(:amount_cents).to_f/100.0 %>
-            <% remaining = [0, (rounded_total - paid_total)].max %>
-
+          <% lines.each do |li| %>
             <tr>
-              <td style="padding:6px">Gross Total</td>
-              <td style="text-align:right">₹<%= '%.2f' % subtotal %></td>
-            </tr>
-            <tr>
-              <td style="padding:6px">Discount</td>
-              <td style="text-align:right">₹<%= '%.2f' % order.discount.to_f %></td>
-            </tr>
-            <tr>
-              <td style="padding:6px">Taxable Amount</td>
-              <td style="text-align:right">₹<%= '%.2f' % taxable_amount %></td>
-            </tr>
-            <tr>
-              <td style="padding:6px">CGST</td>
-              <td style="text-align:right">₹<%= '%.2f' % cgst_amt %></td>
-            </tr>
-            <tr>
-              <td style="padding:6px">SGST</td>
-              <td style="text-align:right">₹<%= '%.2f' % igst_amt %></td>
-            </tr>
-            <tr>
-              <td style="padding:6px;font-weight:700">Total</td>
-              <td style="text-align:right;font-weight:700">₹<%= '%.2f' % total %></td>
-            </tr>
-            <tr>
-              <td style="padding:6px">Round Off</td>
-              <td style="text-align:right">₹<%= '%.2f' % (rounded_total - total) %></td>
-            </tr>
-            <tr>
-              <td style="padding:7px;font-weight:800">Net Amount</td>
-              <td style="text-align:right;font-weight:800">₹<%= '%.2f' % rounded_total %></td>
-            </tr>
-            <tr>
-              <td style="padding:7px">Paid Amount (all payments)</td>
-              <td style="text-align:right">₹<%= '%.2f' % paid_total %></td>
-            </tr>
-            <tr>
-              <td style="padding:7px">Remaining Amount</td>
-              <td style="text-align:right">₹<%= '%.2f' % remaining %></td>
-            </tr>
-            <tr>
-              <td style="padding:7px;font-weight:700">This Receipt</td>
-              <td style="text-align:right;font-weight:700">₹<%= '%.2f' % (@payment.amount_cents.to_f/100.0) %></td>
-            </tr>
-          <% else %>
-            <tr>
-              <td style="padding:6px">Amount</td>
-              <td style="text-align:right">₹<%= '%.2f' % (@payment.amount_cents.to_f/100.0) %></td>
+              <td>
+                <span class="name"><%= li.jewelry_item&.name || 'Piece' %></span>
+                <span class="sub"><%= [li.jewelry_item&.metal&.name, li.jewelry_item&.purity&.name, li.huid.presence || li.jewelry_item&.sku].compact.join(' · ') %></span>
+              </td>
+              <td class="num"><%= li.quantity %></td>
+              <td class="num gold"><%= format_rupees(li.line_amount) %></td>
             </tr>
           <% end %>
-        </table>
+        </tbody>
+      </table>
+    <% end %>
+
+    <div class="foot-grid">
+      <div>
+        <div class="words">
+          Amount received in words
+          <b><%= rupees_in_words(this_amt) %></b>
+        </div>
+        <% if bank || ac_no || ifsc %>
+          <p class="bank">
+            <strong style="color:#14110f">Bank</strong><br>
+            <%= [bank, ac_name].compact.join(' · ') %><br>
+            <%= ['A/c ' + ac_no.to_s, ifsc.present? ? "IFSC #{ifsc}" : nil].compact.join(' · ') %>
+          </p>
+        <% end %>
+      </div>
+
+      <aside class="sum">
+        <% if bill %>
+          <div><span>Bill total</span><b><%= format_rupees(bill[:total]) %></b></div>
+          <div><span>Paid on the bill</span><b><%= format_rupees(bill[:paid]) %></b></div>
+          <div><span>Remaining</span><b><%= format_rupees(bill[:remaining]) %></b></div>
+        <% end %>
+        <div class="grand"><span>This receipt</span><b><%= format_rupees(this_amt) %></b></div>
+      </aside>
+    </div>
+
+    <div class="sign">
+      <div>
+        <p>Client</p>
+        <div class="line">Signature</div>
+      </div>
+      <div style="text-align:right">
+        <p>For <%= house %></p>
+        <div class="line"><%= owner.presence || 'Authorised signatory' %></div>
       </div>
     </div>
 
-    <!-- FOOTER: signatures + governing law (anchored to bottom of page when printed) -->
-    <div style="margin-top:auto;padding-top:18px;border-top:1px solid #e6edf5;font-size:12px;color:#111827">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          Customer Signature
-          <div style="margin-top:30px;border-top:1px solid #000;width:220px"></div>
-        </div>
-        <div style="text-align:right">
-          For Rajesh Alankar Mandir
-          <div style="margin-top:30px;border-top:1px solid #000;width:220px;margin-left:auto"></div>
-          Authorized Signatory
-        </div>
-      </div>
-
-      <div style="font-size:11px;color:#4b5563;line-height:1.4;margin-top:6px">
-        <strong>Governing Law & Jurisdiction:</strong>
-        This invoice shall be governed by and construed in accordance with the laws of India. Any dispute, claim or proceeding arising out of or in connection with this invoice shall be subject to the exclusive jurisdiction of the courts at Jagdishpur, Bihar, India.
-      </div>
+    <p class="thanks">With thanks — this receipt acknowledges gold taken in trust.</p>
+    <div class="legal">
+      <% if declaration.present? %>
+        <%= simple_format(declaration) %>
+      <% else %>
+        This is a receipt for payment against the tax invoice named above. It is not a tax invoice. Hallmark and metal values follow the stored bill.
+      <% end %>
+      Governed by the laws of India. Courts at <%= [city, state].compact.join(', ') %>.
     </div>
-
-  </div>
-
+  </article>
 </body>
 </html>

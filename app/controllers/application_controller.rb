@@ -14,7 +14,10 @@ class ApplicationController < ActionController::Base
   end
 
   def public_controller?
-    controller_name == 'pages' || (controller_name == 'home' && action_name == 'dashboard')
+    controller_name == 'pages' ||
+      (controller_name == 'home' && action_name == 'dashboard') ||
+      (controller_name == 'orders' && action_name == 'shared_invoice') ||
+      (controller_name == 'payments' && action_name == 'shared_invoice')
   end
 
   def staff_controller?

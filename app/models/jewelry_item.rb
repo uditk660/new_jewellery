@@ -140,6 +140,17 @@ class JewelryItem < ActiveRecord::Base
     (weight_grams.to_d.round(2) * [quantity.to_i, 0].max).round(2)
   end
 
+  # Put a sold piece back on the tray. This is the inverse of a sale, not a new
+  # catalogue registration — hallmark bulk weight must not be consumed again.
+  def restore_to_tray!(qty)
+    add = qty.to_i
+    return quantity.to_i if add <= 0
+
+    self.class.where(id: id).update_all(['quantity = COALESCE(quantity, 0) + ?', add])
+    reload
+    quantity.to_i
+  end
+
   private
 
   def previous_consumed_grams

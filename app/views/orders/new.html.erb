@@ -122,7 +122,7 @@
         <section class="atelier-form" style="margin-top:16px">
           <div class="section">
             <h2>Charges &amp; tax</h2>
-            <p class="hint">Discount is taken before tax. Default CGST and IGST follow the house rates of <%= Order::DEFAULT_CGST_RATE %>% each.</p>
+            <p class="hint">Discount is taken before tax. Default CGST follows the house rates of <%= Order::DEFAULT_CGST_RATE %>% each.</p>
             <div class="row">
               <div class="field">
                 <label for="discount">Discount (₹)</label>
@@ -139,7 +139,7 @@
                 <%= number_field_tag :cgst_rate, ('%.2f' % (@order.cgst_rate.presence || Order::DEFAULT_CGST_RATE)), step: 0.01, min: 0, class: 'form-control', id: 'cgst_rate' %>
               </div>
               <div class="field">
-                <label for="igst_rate">IGST (%)</label>
+                <label for="igst_rate">CGST (%)</label>
                 <%= number_field_tag :igst_rate, ('%.2f' % (@order.igst_rate.presence || Order::DEFAULT_IGST_RATE)), step: 0.01, min: 0, class: 'form-control', id: 'igst_rate' %>
               </div>
             </div>
@@ -163,7 +163,7 @@
           <div><span>Charges</span><strong id="sum-charges">₹0.00</strong></div>
           <div><span>Taxable</span><strong id="sum-taxable">₹0.00</strong></div>
           <div><span>CGST</span><strong id="sum-cgst">₹0.00</strong></div>
-          <div><span>IGST</span><strong id="sum-igst">₹0.00</strong></div>
+          <div><span>CGST</span><strong id="sum-igst">₹0.00</strong></div>
         </div>
         <div class="preview-price" id="sum-total">₹0.00</div>
         <div class="preview-desc">Amount payable</div>

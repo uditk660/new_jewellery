@@ -68,7 +68,7 @@
                     <td>
                       <%= link_to "##{o.id}", order_path(o) %>
                       <% if o.invoice_number.present? %>
-                        <span class="sub"><%= link_to o.invoice_number, invoice_order_path(o) %></span>
+                        <span class="sub"><%= link_to o.invoice_number, invoice_order_path(o), data: { turbolinks: false } %></span>
                       <% end %>
                     </td>
                     <td><%= (o.try(:sale_date) || o.created_at.to_date).strftime('%d %b %Y') %></td>

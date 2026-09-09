@@ -4,6 +4,7 @@ class Order < ActiveRecord::Base
   belongs_to :customer, optional: true
   validates :status, presence: true
 
+  before_validation :assign_share_token, on: :create
   before_create :set_invoice_and_date
 
   after_update :decrement_inventory_on_payment
@@ -20,12 +21,12 @@ class Order < ActiveRecord::Base
 
   # Return the CGST rate for this order, falling back to the default if not set
   def cgst_rate_or_default
-    (self.cgst_rate.present? && self.cgst_rate.to_f > 0) ? self.cgst_rate.to_f : DEFAULT_CGST_RATE
+    cgst_rate.nil? ? DEFAULT_CGST_RATE : cgst_rate.to_f
   end
 
-  # Return the IGST rate for this order, falling back to the default if not set
+  # Return the second CGST rate for this order, falling back to the default if not set
   def igst_rate_or_default
-    (self.igst_rate.present? && self.igst_rate.to_f > 0) ? self.igst_rate.to_f : DEFAULT_IGST_RATE
+    igst_rate.nil? ? DEFAULT_IGST_RATE : igst_rate.to_f
   end
 
   def total
@@ -47,7 +48,55 @@ class Order < ActiveRecord::Base
   end
 
   def remaining_cents
-    [total_cents_with_taxes_cached - paid_cents, 0].max
+    [(bill_breakdown[:total] * 100).round - paid_cents, 0].max
+  end
+
+  def paid_amount
+    paid_cents / 100.0
+  end
+
+  def remaining_amount
+    remaining_cents / 100.0
+  end
+
+  # Float totals used on the bill card and payment desk.
+  # Metal comes from each line's stored rate (the board at raise), not today's rates.
+  def bill_breakdown
+    sub = line_items.to_a.sum { |li| li.line_amount }
+    disc = discount.to_f
+    chg = charges.to_f
+    taxable = sub - disc + chg
+    cgst_r = cgst_rate_or_default
+    igst_r = igst_rate_or_default
+    cgst = taxable * cgst_r / 100.0
+    igst = taxable * igst_r / 100.0
+    tot = taxable + cgst + igst
+    paid = paid_amount
+    {
+      subtotal: sub,
+      discount: disc,
+      charges: chg,
+      taxable: taxable,
+      cgst_rate: cgst_r,
+      igst_rate: igst_r,
+      cgst: cgst,
+      igst: igst,
+      total: tot,
+      paid: paid,
+      remaining: [tot - paid, 0].max
+    }
+  end
+
+  def displayed_cgst
+    stored_tax? ? (cgst_cents.to_i / 100.0) : (cgst_amount_cents(cgst_rate_or_default) / 100.0)
+  end
+
+  def displayed_igst
+    stored_tax? ? (igst_cents.to_i / 100.0) : (igst_amount_cents(igst_rate_or_default) / 100.0)
+  end
+
+  def stored_tax?
+    cgst_cents.to_i.positive? || igst_cents.to_i.positive?
   end
 
   def add_item(jewelry_item, quantity = 1)
@@ -111,7 +160,28 @@ class Order < ActiveRecord::Base
     computed_total_cents.to_f / 100.0
   end
 
+  def ensure_share_token!
+    return share_token if share_token.present?
+
+    assign_share_token
+    update_column(:share_token, share_token) if persisted?
+    share_token
+  end
+
   private
+
+  def assign_share_token
+    return if share_token.present?
+
+    8.times do
+      candidate = SecureRandom.hex(16)
+      unless self.class.exists?(share_token: candidate)
+        self.share_token = candidate
+        return
+      end
+    end
+    self.share_token = SecureRandom.hex(24)
+  end
 
   def set_invoice_and_date
   self.sale_date ||= Time.zone.today

@@ -32,6 +32,18 @@ class LineItem < ActiveRecord::Base
     total_cents.to_f / 100.0
   end
 
+  # Metal value stored on the bill (₹/g × net g × qty at the time it was raised).
+  def metal_amount
+    return rate.to_f if rate.to_f.positive?
+
+    (per_gram_price.to_f * net_weight.to_f * quantity.to_i)
+  end
+
+  def rate_per_gram_used
+    den = net_weight.to_f * quantity.to_i
+    den.positive? ? (metal_amount / den) : per_gram_price.to_f
+  end
+
   # Price per gram to be used for calculations. Prefer jewelry_item.effective_price_per_gram
   # (set by JewelryItem model) and fall back to stored price_cents.
   def per_gram_price
@@ -42,14 +54,14 @@ class LineItem < ActiveRecord::Base
     end
   end
 
-  # Compute the line amount as: per_gram_price * net_weight * quantity + making_charge
+  def making_percent
+    metal = metal_amount
+    metal.positive? ? (making_charge.to_f / metal * 100.0) : 0.0
+  end
+
+  # Compute the line amount as: metal + making + additional per piece × qty
   def line_amount
-    per_gram = per_gram_price || 0.0
-    net = self.net_weight.to_f || 0.0
-    qty = self.quantity.to_i || 0
-    making = self.making_charge.to_f || 0.0
-    additional = (self.additional_charge.to_f || 0.0) * qty
-    (per_gram * net * qty) + making + additional
+    metal_amount + making_charge.to_f + additional_charge.to_f * quantity.to_i
   end
 
   def line_amount_cents

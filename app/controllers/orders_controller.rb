@@ -3,6 +3,8 @@ class OrdersController < ApplicationController
 
   def index
     @q = params[:q].to_s.strip
+    eager = [:customer, :payments, { line_items: :jewelry_item }]
+
     if @q.present?
       q = @q.strip
       parsed_date = nil
@@ -12,132 +14,128 @@ class OrdersController < ApplicationController
         parsed_date = nil
       end
 
-      orders = Order.left_joins(line_items: :jewelry_item).distinct
-
+      orders = Order.left_joins(:customer, line_items: :jewelry_item).distinct
       clauses = []
       args = {}
+      args[:qtxt] = "%#{q.downcase}%"
 
-      # order id exact match when numeric
       if q =~ /\A\d+\z/
         clauses << 'orders.id = :oid'
         args[:oid] = q.to_i
       end
 
-      # status exact match
       if Order::STATUSES.map(&:downcase).include?(q.downcase)
         clauses << 'lower(orders.status) = :status'
         args[:status] = q.downcase
       end
 
-      # date exact match (YYYY-MM-DD)
       if parsed_date
         clauses << 'orders.created_at BETWEEN :dstart AND :dend'
         args[:dstart] = parsed_date.beginning_of_day
         args[:dend] = parsed_date.end_of_day
       end
 
-      # item name partial match (case-insensitive)
-      clauses << 'lower(jewelry_items.name) LIKE :iname'
-      args[:iname] = "%#{q.downcase}%"
+      clauses << 'lower(jewelry_items.name) LIKE :qtxt'
+      clauses << 'lower(orders.invoice_number) LIKE :qtxt'
+      clauses << 'lower(customers.first_name) LIKE :qtxt'
+      clauses << 'lower(customers.last_name) LIKE :qtxt'
 
-      @orders = orders.where(clauses.join(' OR '), args).order(created_at: :desc)
+      @orders = orders.where(clauses.join(' OR '), args).includes(eager).order(created_at: :desc)
     else
-      @orders = Order.order(created_at: :desc)
+      @orders = Order.includes(eager).order(created_at: :desc)
     end
 
-    # total sales today (paid orders)
-    # use Time.zone.today and the order's sale_date (set at creation) to avoid created_at timezone mismatches
-    today = Time.zone.today
-    paid_today = Order.where(status: 'paid', sale_date: today)
-    # sum using the model helper to include taxes (uses stored cgst/igst cents if present)
-    @today_total = paid_today.to_a.sum do |o|
-      # prefer stored cents if available, else compute using rates
-      if o.respond_to?(:cgst_cents) && o.respond_to?(:igst_cents)
-        cents = o.subtotal_cents - (o.discount.to_f * 100).to_i + (o.charges.to_f * 100).to_i + (o.cgst_cents.to_i) + (o.igst_cents.to_i)
-        cents.to_f / 100.0
-      else
-        o.total_with_taxes(cgst_rate: o.cgst_rate.to_f, igst_rate: o.igst_rate.to_f)
-      end
-    end
+    paid_today = Order.where(status: 'paid', sale_date: Time.zone.today)
+                      .includes(:line_items, :payments)
+    @today_total = paid_today.sum { |o| o.bill_breakdown[:total] }
     render template: 'orders/index'
   end
 
   def show
-    @order = Order.find(params[:id])
-    render template: 'orders/show'
+    load_order
   end
 
   # POST /orders/:id/record_payment
   def record_payment
-    @order = Order.find(params[:id])
-    # accept either rates or explicit cents
-    cgst_rate = params[:cgst_rate].to_f
-    igst_rate = params[:igst_rate].to_f
-    update_attrs = { discount: params[:discount].to_f, charges: params[:charges].to_f, cgst_rate: cgst_rate, igst_rate: igst_rate }
-    pm = params[:payment_method].to_s
-    if @order.respond_to?(:payment_method=)
-      if pm.blank?
-        @order.errors.add(:payment_method, 'must be selected')
-        @order.assign_attributes(update_attrs)
-        return render :show
-      end
-      update_attrs[:payment_method] = pm
+    load_order
+    if @order.status != 'pending'
+      redirect_to @order, alert: 'This bill is already settled.'
+      return
     end
 
-    @order.update(update_attrs)
-    # compute and persist tax cents (use provided rates)
-    @order.update_columns(cgst_cents: @order.cgst_amount_cents(cgst_rate), igst_cents: @order.igst_amount_cents(igst_rate))
+    pm = params[:payment_method].to_s.strip
+    pay_amt = params[:payment_amount].to_f
+    cgst_rate = params[:cgst_rate].present? ? params[:cgst_rate].to_f : @order.cgst_rate_or_default
+    igst_rate = params[:igst_rate].present? ? params[:igst_rate].to_f : @order.igst_rate_or_default
+    discount = params[:discount].to_f
+    charges = params[:charges].present? ? params[:charges].to_f : @order.charges.to_f
 
-    # parse payment amount
-    pay_amt = (params[:payment_amount].to_f || 0.0)
+    @order.assign_attributes(
+      discount: discount,
+      charges: charges,
+      cgst_rate: cgst_rate,
+      igst_rate: igst_rate
+    )
+    @order.payment_method = pm if @order.respond_to?(:payment_method=)
+
+    if pm.blank?
+      @order.errors.add(:payment_method, 'must be selected')
+      return render :show
+    end
+    if discount.negative? || charges.negative? || cgst_rate.negative? || igst_rate.negative?
+      @order.errors.add(:base, 'Discount, charges and tax cannot be negative.')
+      return render :show
+    end
+    if discount > @order.bill_breakdown[:subtotal]
+      @order.errors.add(:base, 'Discount cannot exceed the bill subtotal.')
+      return render :show
+    end
     if pay_amt <= 0
-      @order.errors.add(:base, 'Payment amount must be greater than 0')
+      @order.errors.add(:base, 'Payment amount must be greater than 0.')
       return render :show
     end
 
-    # compute remaining before adding this payment
-    remaining_cents = @order.remaining_cents.to_i
-    pay_cents = (pay_amt * 100).to_i
-    if pay_cents > remaining_cents
-      @order.errors.add(:base, "Payment cannot exceed remaining amount (₹#{'%.2f' % (remaining_cents.to_f/100.0)})")
+    bill = @order.bill_breakdown
+    due_cents = (bill[:remaining] * 100).round
+    pay_cents = (pay_amt * 100).round
+    if pay_cents > [due_cents, 0].max
+      @order.errors.add(:base, "Payment cannot exceed remaining amount (₹#{'%.2f' % ([due_cents, 0].max / 100.0)}).")
       return render :show
     end
 
     Payment.transaction do
+      @order.save!
+      @order.update_columns(cgst_cents: (bill[:cgst] * 100).round, igst_cents: (bill[:igst] * 100).round)
       p = Payment.create!(order_id: @order.id, customer_id: @order.customer_id, amount_cents: pay_cents, payment_method: pm)
-      # generate a receipt number and persist it on the payment (unique)
-      rn = "RCT-#{Time.zone.today.strftime('%Y%m%d')}-#{p.id.to_s.rjust(4,'0')}"
+      rn = "RCT-#{Time.zone.today.strftime('%Y%m%d')}-#{p.id.to_s.rjust(4, '0')}"
       p.update_columns(receipt_number: rn)
-      # decide if fully paid
       paid = @order.payments.sum(:amount_cents).to_i
-      total = @order.total_cents_with_taxes(cgst_rate: (@order.cgst_rate || @order.cgst_rate_or_default), igst_rate: (@order.igst_rate || @order.igst_rate_or_default))
-      # If stored cgst_cents/igst_cents present, prefer order.total_cents_with_taxes_cached
-      total = @order.total_cents_with_taxes_cached if @order.respond_to?(:total_cents_with_taxes_cached)
-
-      if paid >= total
-        @order.update(status: 'paid')
-      else
-        # leave as pending (partial payment recorded)
-        @order.update(status: 'pending')
-      end
-
-      # recompute customer outstanding balance
-      if @order.customer
-        @order.customer.recompute_balance!
-      end
+      total_cents = (bill[:total] * 100).round
+      @order.update(status: (paid >= total_cents ? 'paid' : 'pending'))
+      @order.customer.recompute_balance! if @order.customer.respond_to?(:recompute_balance!)
     end
 
-    # redirect: if fully paid, show invoice; otherwise back to order with notice
     if @order.status == 'paid'
       redirect_to invoice_order_path(@order)
     else
-      redirect_to @order, notice: 'Partial payment recorded. Receipt generated and linked in payments history.'
+      redirect_to @order, notice: 'Partial payment recorded. Receipt is in the payments list.'
     end
   end
 
   def invoice
-    @order = Order.find(params[:id])
-  render template: 'orders/invoice', layout: 'application'
+    load_order
+    prepare_invoice(public_view: false)
+    render template: 'orders/invoice', layout: false
+  end
+
+  def shared_invoice
+    token = params[:token].to_s
+    raise ActiveRecord::RecordNotFound if token.blank?
+
+    @order = Order.includes(:customer, :payments, line_items: { jewelry_item: [:metal, :purity, :jewellery_category] })
+                  .find_by!(share_token: token)
+    prepare_invoice(public_view: true)
+    render template: 'orders/invoice', layout: false
   end
 
   def new
@@ -181,6 +179,18 @@ class OrdersController < ApplicationController
   end
 
   private
+
+  def load_order
+    @order = Order.includes(:customer, :payments, line_items: { jewelry_item: [:metal, :purity, :jewellery_category] }).find(params[:id])
+  end
+
+  def prepare_invoice(public_view:)
+    @public_invoice = public_view
+    @shop = current_user.try(:shop_profile) unless public_view
+    @shop ||= ShopProfile.first if defined?(ShopProfile)
+    token = @order.ensure_share_token!
+    @qr_payload = shared_invoice_url(token)
+  end
 
   def load_bill_form
     @items = JewelryItem.available_for_sale.includes(:metal, :purity, :jewellery_category).order(:name)

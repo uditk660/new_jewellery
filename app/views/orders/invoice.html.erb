@@ -1,364 +1,650 @@
+<%
+  shop = @shop
+  house = shop&.shop_name.presence || current_user&.display_name || 'Jewellery House'
+  legal = shop&.legal_name.presence
+  tagline = shop&.tagline.presence || 'Hallmarked gold · Trust in every gram'
+  owner = shop&.owner_name.presence
+  phone = shop&.phone.presence
+  email = shop&.email.presence
+  street = [shop&.address_line1, shop&.address_line2].reject(&:blank?).join(', ')
+  town = [shop&.city, shop&.pincode].reject(&:blank?).join(' ')
+  place = [street, town, shop&.state].reject(&:blank?).join(', ')
+  gstin = shop&.gstin.presence
+  pan = shop&.pan.presence
+  bis = shop&.bis_hallmark_licence.presence
+  bank = shop&.bank_name.presence
+  ac_name = shop&.account_holder.presence
+  ac_no = shop&.account_number.presence
+  ifsc = shop&.ifsc.presence
+  declaration = shop&.invoice_declaration.presence
+  city = shop&.city.presence || 'India'
+  state = shop&.state.presence
+  established = shop&.established_year.presence
+  client = @order.customer
+  bill_no = @order.invoice_number.presence || format('INV-%03d', @order.id)
+  bill = @order.bill_breakdown
+  lines = @order.line_items.to_a
+  gross_total = lines.sum { |li| li.gross_weight.to_f }
+  net_total = lines.sum { |li| li.net_weight.to_f }
+  initials = house.to_s.split(/\s+/).map { |w| w[0] }.compact.first(2).join.upcase
+  initials = 'JH' if initials.blank?
+  packed = lines.size >= 4
+  qr_code = begin
+    RQRCode::QRCode.new((@qr_payload.presence || bill_no).to_s)
+  rescue StandardError
+    RQRCode::QRCode.new(bill_no.to_s)
+  end
+%>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Tax Invoice</title>
-
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #f5f5f5;
-      font-family: Arial, Helvetica, sans-serif;
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tax Invoice <%= bill_no %> · <%= house %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="turbolinks-visit-control" content="reload">
+  <style data-invoice-sheet>
+    body.invoice-doc {
+      --navy: #0b1220;
+      --ink: #14110f;
+      --gold: #c9a227;
+      --gold-hi: #e8d5a3;
+      --ivory: #f7f1e8;
+      --cream: #fffaf3;
+      --muted: #6b6258;
     }
-
-    .invoice-box {
-      min-height: calc(297mm - 24mm);
+    body.invoice-doc * { box-sizing: border-box; }
+    body.invoice-doc {
+      margin: 0; padding: 0;
+      background:
+        radial-gradient(900px 420px at 50% -10%, rgba(201,162,39,0.22), transparent 55%),
+        linear-gradient(180deg, #16120e, #0b1220 42%, #14110f);
+      color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+    .toolbar {
+      width: min(210mm, calc(100% - 32px));
+      margin: 18px auto 0;
       display: flex;
-      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
     }
-
-    .invoice-body {
+    .toolbar a, .toolbar button {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 10px 16px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+    .toolbar a {
+      border: 1px solid rgba(232,213,163,0.4);
+      color: var(--gold-hi);
+      background: transparent;
+    }
+    .toolbar button {
+      border: 0;
+      background: linear-gradient(90deg, #e8d5a3, #c9a227);
+      color: var(--navy);
+    }
+    .sheet {
+      position: relative;
+      width: 210mm;
+      min-height: 297mm;
+      margin: 16px auto 40px;
+      background: var(--cream);
+      color: var(--ink);
+      padding: 10mm 11mm 9mm;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.45), 0 0 0 1px rgba(201,162,39,0.35);
+      overflow: hidden;
+    }
+    .sheet.is-packed { padding: 8mm 9mm 7mm; }
+    .sheet::before, .sheet::after {
+      content: "";
+      pointer-events: none;
+      position: absolute;
+      inset: 7px;
+      border: 1px solid rgba(201,162,39,0.55);
+    }
+    .sheet::after {
+      inset: 11px;
+      border-color: rgba(11,18,32,0.16);
+    }
+    .ornament {
+      position: absolute;
+      width: 26px; height: 26px;
+      border-color: var(--gold);
+      border-style: solid;
+      z-index: 2;
+    }
+    .ornament.tl { top: 16px; left: 16px; border-width: 2px 0 0 2px; }
+    .ornament.tr { top: 16px; right: 16px; border-width: 2px 2px 0 0; }
+    .ornament.bl { bottom: 16px; left: 16px; border-width: 0 0 2px 2px; }
+    .ornament.br { bottom: 16px; right: 16px; border-width: 0 2px 2px 0; }
+    .mark {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 35% 30%, #2a2218, var(--navy));
+      border: 1px solid var(--gold);
+      color: var(--gold-hi);
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      box-shadow: inset 0 0 0 3px rgba(201,162,39,0.25);
+    }
+    .head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(201,162,39,0.35);
+    }
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .brand-row > div { min-width: 0; }
+    .sheet.is-packed .head { gap: 10px; padding-bottom: 6px; }
+    .house-name {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin: 0;
+      color: var(--navy);
+    }
+    .sheet.is-packed .house-name { font-size: 24px; }
+    .house-tag {
+      margin: 3px 0 0;
+      color: var(--gold);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .house-addr {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.35;
+    }
+    .house-addr span { display: block; }
+    .head-side {
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .qr-wrap {
+      display: inline-block;
+      background: #fff;
+      border: 1px solid rgba(201,162,39,0.45);
+      padding: 4px;
+      border-radius: 8px;
+      line-height: 0;
+    }
+    .qr-wrap svg {
+      width: 56px !important;
+      height: 56px !important;
+      display: block;
+    }
+    .qr-table { border-collapse: collapse; border-spacing: 0; }
+    .qr-table td { width: 1.5px; height: 1.5px; padding: 0; margin: 0; background: #fff; }
+    .qr-table td.on { background: #0b1220; }
+    .seal {
+      margin-top: 3px;
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .kicker {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 10px 0 10px;
+    }
+    .sheet.is-packed .kicker { margin: 8px 0; }
+    .kicker span {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 22px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--navy);
+      font-weight: 600;
+    }
+    .kicker::before, .kicker::after {
+      content: "";
       flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
     }
-
+    .meta {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+      gap: 18px 24px;
+      align-items: start;
+      margin: 0 0 12px;
+      padding: 8px 0 10px;
+      border-bottom: 1px solid rgba(201,162,39,0.28);
+    }
+    .sheet.is-packed .meta { margin-bottom: 8px; padding-bottom: 8px; gap: 12px 18px; }
+    .meta-kicker {
+      display: block;
+      margin: 0 0 3px;
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+    }
+    .meta-to strong {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--navy);
+    }
+    .meta-to p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .meta-facts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 16px;
+    }
+    .meta-facts span {
+      display: block;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+    }
+    .meta-facts b { font-size: 13px; font-weight: 600; color: var(--navy); }
+    table.pieces { width: 100%; border-collapse: collapse; }
+    table.pieces th {
+      text-align: left;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--navy);
+      background: var(--ivory);
+      padding: 7px 8px;
+      border-bottom: 1.5px solid var(--gold);
+    }
+    table.pieces th.num, table.pieces td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    table.pieces td {
+      padding: 10px 8px;
+      border-bottom: 1px solid rgba(201,162,39,0.22);
+      vertical-align: top;
+      font-size: 12px;
+    }
+    .sheet.is-packed table.pieces th { padding: 5px 6px; }
+    .sheet.is-packed table.pieces td { padding: 5px 6px; font-size: 11px; }
+    table.pieces td .name {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--navy);
+    }
+    .sheet.is-packed table.pieces td .name { font-size: 13px; }
+    .sheet.is-packed .formula { display: none; }
+    table.pieces td .sub { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+    table.pieces td .gold { color: var(--gold); font-weight: 700; }
+    .weights {
+      display: flex;
+      justify-content: space-between;
+      margin: 6px 0 10px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    .sheet.is-packed .weights { margin: 4px 0 8px; }
+    .foot-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .words {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+    .words b { color: var(--navy); display: block; margin-top: 4px; font-size: 12px; letter-spacing: 0.02em; }
+    .pay-list { margin-top: 12px; width: 100%; border-collapse: collapse; font-size: 11px; }
+    .pay-list th, .pay-list td { padding: 6px 0; text-align: left; border-bottom: 1px solid rgba(201,162,39,0.18); }
+    .pay-list .num { text-align: right; }
+    .receipt-link { color: #c9a227; font-weight: 700; text-decoration: none; }
+    .receipt-link:hover { text-decoration: underline; }
+    .sum {
+      background: var(--cream);
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 6px 4px 4px 10px;
+      border: 1px solid rgba(201,162,39,0.4);
+    }
+    .sheet.is-packed .sum { padding: 4px 2px 2px 8px; }
+    .sum div {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      padding: 8px 8px 8px 0;
+      border-bottom: 1px solid rgba(201,162,39,0.18);
+    }
+    .sheet.is-packed .sum div { padding: 6px 6px 6px 0; font-size: 12px; }
+    .sum div b {
+      color: var(--navy);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.01em;
+    }
+    .sum .grand {
+      margin-top: 2px;
+      padding: 12px 8px 8px 0;
+      border-bottom: 0;
+      border-top: 1.5px solid var(--gold);
+    }
+    .sheet.is-packed .sum .grand { padding: 10px 6px 6px 0; }
+    .sum .grand span {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--gold);
+      font-weight: 700;
+    }
+    .sum .grand b {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 24px;
+      color: var(--gold);
+      font-weight: 600;
+    }
+    .sheet.is-packed .sum .grand b { font-size: 20px; }
+    .bank {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .sign {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      margin-top: 18px;
+    }
+    .sheet.is-packed .sign { margin-top: 10px; }
+    .sign div { width: 42%; }
+    .sign p { margin: 0 0 28px; font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .sheet.is-packed .sign p { margin-bottom: 16px; }
+    .sign .line { border-top: 1px solid var(--navy); padding-top: 6px; font-size: 11px; color: var(--navy); }
+    .legal {
+      margin-top: 16px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(201,162,39,0.28);
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .thanks {
+      text-align: center;
+      margin-top: 8px;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-style: italic;
+      font-size: 15px;
+      color: var(--navy);
+    }
+    .sheet.is-packed .thanks { display: none; }
+    .legal { margin-top: 10px; padding-top: 8px; }
+    .sheet.is-packed .legal { font-size: 9px; margin-top: 8px; }
     @media print {
-      @page {
-        size: A4;
+      body.invoice-doc { background: #fff !important; }
+      .toolbar { display: none !important; }
+      .sheet {
         margin: 0;
+        box-shadow: none;
+        width: auto;
+        min-height: 0;
+        max-height: 285mm;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
       }
-
-      .invoice-box {
-        border: none !important;
-      }
-
-      body {
-        background: #fff !important;
-      }
-
-      body * {
-        visibility: hidden;
-      }
-
-      #print-area,
-      #print-area * {
-        visibility: visible;
-      }
-
-      #print-area {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-      }
-
-      .no-print {
-        display: none !important;
-      }
-
-      table, tr, td, th {
-        page-break-inside: avoid !important;
-      }
+      @page { size: A4 portrait; margin: 6mm; }
+      .head { grid-template-columns: minmax(0, 1fr) auto !important; }
+      .head-side { text-align: center !important; }
+      .meta { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) !important; }
+      .foot-grid { grid-template-columns: 1.1fr 0.9fr !important; }
+      .sum { background: #fff !important; }
+      table.pieces th { background: #fff !important; color: #0b1220 !important; }
+      a.receipt-link { color: #0b1220; text-decoration: underline; font-weight: 700; }
+    }
+    @media (max-width: 900px) {
+      .sheet { width: calc(100% - 20px); min-height: 0; padding: 22px 16px; }
     }
   </style>
 </head>
-
-<body>
-
-<!-- PRINT BUTTON -->
-<div class="no-print" style="width:960px;margin:12px auto 0;text-align:right">
-  <button onclick="window.print()"
-    style="padding:8px 20px;border:1px solid #000;background:#fff;cursor:pointer;font-size:13px">
-    Print Invoice
-  </button>
-</div>
-
-<div id="print-area">
-
-<div class="invoice-box"
-  style="width:960px;margin:12px auto;background:#fff;border:1.5px solid #000;padding:20px 14px;font-size:13px;color:#000;display:flex;flex-direction:column;min-height:calc(297mm - 40mm)">
-
-<div class="invoice-body">
-
-<!-- ================= HEADER ================= -->
-<div style="display:grid;
-            grid-template-columns:220px 1fr 160px;
-            align-items:center;
-            border-bottom:1.8px solid #000;
-            padding-bottom:12px">
-
-  <!-- GST -->
-  <div style="font-size:12px;line-height:1.7">
-    <strong>GSTIN:</strong><br>
-    10CMOPK8720K1ZV<br>
-   <strong>A/C:</strong> 32606206871<br>
-   <strong>IFSC:</strong> SBIN0010769<br>
-   <strong>B Name:</strong> SUDHIR KUMAR
-  </div>
-
-  <!-- CENTER BRAND -->
-  <div style="text-align:center">
-    <% app_name = "Rajesh Alankar Mandir" %>
-    <div style="font-size:28px;font-weight:900;color:#b30000;letter-spacing:1.2px">
-      <%= app_name %>
-    </div>
-    <div style="font-size:14px;font-weight:700;color:#003f8f;margin-top:2px">
-      Sadar Bazar, Jagdishpur, Bhojpur
-    </div>
-    <div style="font-size:12px;margin-top:3px">
-      Phone: +91-98358-07332 | Email: sudhirkumar6355@gmail.com
-    </div>
-  </div>
-
-  <!-- QR + CERT -->
-  <div style="text-align:right;font-size:12px">
-    <% begin %>
-      <% qr_text = request.original_url rescue order_url(@order) %>
-      <% q = RQRCode::QRCode.new(qr_text) %>
-      <div style="display:inline-block;padding:4px;border:1px solid #000;margin-bottom:6px">
-        <%= raw q.as_svg(module_size: 2, standalone: true) %>
-      </div>
-    <% rescue %>
-    <% end %>
-    <div style="line-height:1.4">
-      BIS Certified<br>
-      100% Hallmarked
-    </div>
-  </div>
-</div>
-
-<!-- TITLE -->
-<div style="text-align:center;font-weight:800;font-size:16px;margin:12px 0;text-decoration:underline">
-  TAX INVOICE
-</div>
-
-<!-- BILL + INVOICE INFO -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px;font-size:12.5px">
-
-  <div style="line-height:1.7">
-    <strong>Bill To:</strong><br>
-    <% if @order.customer.present? %>
-      <strong><%= [@order.customer.first_name, @order.customer.last_name].join(' ') %></strong><br>
-      <%= @order.customer.address %><br>
-      Phone: <%= @order.customer.phone %>
+<body class="invoice-doc">
+  <div class="toolbar">
+    <% unless @public_invoice %>
+      <%= link_to '← Bill', order_path(@order), data: { turbolinks: false } %>
     <% else %>
-      Walk-in Customer
+      <span></span>
     <% end %>
+    <button type="button" onclick="window.print()">Print invoice</button>
   </div>
 
-  <div style="line-height:1.7;text-align:right">
-    <strong>Invoice No:</strong> <%= @order.invoice_number %><br>
-    <strong>Date:</strong> <%= (@order.sale_date || Date.today).strftime('%d %b %Y') %><br>
-    <strong>Order #:</strong> <%= @order.id %><br>
-    <strong>Status:</strong> <%= @order.status.capitalize %>
-  </div>
-</div>
+  <article class="sheet<%= ' is-packed' if packed %>" id="print-area">
+    <span class="ornament tl"></span>
+    <span class="ornament tr"></span>
+    <span class="ornament bl"></span>
+    <span class="ornament br"></span>
 
-<!-- ITEMS TABLE -->
-<table style="width:100%;border-collapse:collapse;table-layout:fixed">
-<thead>
-<tr style="background:#f3f3f3">
-  <th style="border:1px solid #000;width:34px">Sr</th>
-  <th style="border:1px solid #000;width:170px;text-align:left">Item</th>
-  <th style="border:1px solid #000;width:70px">HUID</th>
-  <th style="border:1px solid #000;width:60px">HSN</th>
-  <th style="border:1px solid #000;width:45px">Qty</th>
-  <th style="border:1px solid #000;width:45px">Gross</th>
-  <th style="border:1px solid #000;width:45px">Net</th>
-  <th style="border:1px solid #000;width:90px">Rate</th>
-  <th style="border:1px solid #000;width:90px">Making</th>
-  <th style="border:1px solid #000;width:90px">Addl</th>
-  <th style="border:1px solid #000;width:95px">Total</th>
-</tr>
-</thead>
+    <header class="head">
+      <div>
+        <div class="brand-row">
+          <div class="mark" aria-hidden="true"><%= initials %></div>
+          <div>
+            <h1 class="house-name"><%= house %></h1>
+            <p class="house-tag"><%= tagline %></p>
+          </div>
+        </div>
+        <p class="house-addr">
+          <% if place.present? %><span><%= place %></span><% end %>
+          <% contact = [phone, email].compact.join(' · ') %>
+          <% papers = [gstin.present? ? "GSTIN #{gstin}" : nil, pan.present? ? "PAN #{pan}" : nil, bis.present? ? "BIS #{bis}" : nil].compact.join(' · ') %>
+          <% if contact.present? %><span><%= contact %></span><% end %>
+          <% if papers.present? %><span><%= papers %></span><% end %>
+        </p>
+      </div>
+      <div class="head-side">
+        <div class="qr-wrap" title="Scan to open this invoice">
+          <table class="qr-table" role="img" aria-label="Invoice QR code">
+            <% (qr_code.qrcode.modules rescue qr_code.modules).each do |row| %>
+              <tr>
+                <% row.each do |dark| %>
+                  <td class="<%= 'on' if dark %>"></td>
+                <% end %>
+              </tr>
+            <% end %>
+          </table>
+        </div>
+        <div class="seal">Hallmarked</div>
+      </div>
+    </header>
 
-<tbody>
-<% subtotal = 0 %>
+    <div class="kicker"><span>Tax Invoice</span></div>
 
-<% @order.line_items.each_with_index do |li, i| %>
-  <%# prefer model helper line_amount (per_gram * net * qty + making), fall back to previous formula if absent %>
-  <% line = if li.respond_to?(:line_amount)
-               li.line_amount.to_f
-             else
-               (li.net_weight.to_f * li.quantity.to_i * (li.price_cents.to_f / 100.0)) + li.making_charge.to_f
-             end %>
-  <% subtotal += line %>
-<tr>
-  <td style="border:1px solid #000;text-align:center"><%= i+1 %></td>
-  <td style="border:1px solid #000;padding-left:6px"><strong><%= li.jewelry_item&.name %></strong></td>
-  <% huid_val = li.huid.present? ? li.huid : (li.jewelry_item.try(:sku).present? ? li.jewelry_item.try(:sku) : '-') %>
-  <% hsn_val = li.hsn.present? ? li.hsn : (li.jewelry_item.try(:hsn).present? ? li.jewelry_item.try(:hsn) : '-') %>
-  <td style="border:1px solid #000;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px">
-    <span title="<%= h(huid_val) %>" style="font-size:8px;line-height:1.1"><%= huid_val %></span>
-  </td>
-  <td style="border:1px solid #000;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60px">
-    <span title="<%= h(hsn_val) %>"><%= hsn_val %></span>
-  </td>
-  <td style="border:1px solid #000;text-align:center"><%= li.quantity %></td>
-  <td style="border:1px solid #000;text-align:center"><%= li.gross_weight %></td>
-  <td style="border:1px solid #000;text-align:center"><%= li.net_weight %></td>
-  <%# show rate as per-gram price (model exposes per_gram_price) %>
-  <td style="border:1px solid #000;text-align:right;padding-right:6px">₹<%= '%.2f' % (li.respond_to?(:per_gram_price) ? li.per_gram_price.to_f : (li.price_cents.to_f/100.0)) %></td>
-  <td style="border:1px solid #000;text-align:right;padding-right:6px">₹<%= '%.2f' % li.making_charge %></td>
-  <td style="border:1px solid #000;text-align:right;padding-right:6px">₹<%= '%.2f' % (li.additional_charge.to_f) %></td>
-  <td style="border:1px solid #000;text-align:right;padding-right:6px;font-weight:700">₹<%= '%.2f' % line %></td>
-</tr>
-<% end %>
-</tbody>
-</table>
-
-<!-- Paid via / payment method (styled) -->
-<div style="display:flex;justify-content:flex-start;margin-top:8px;font-size:13px">
-  <div style="border:none;padding:6px 10px;min-width:200px;text-align:left;background:#fafafa">
-    <div style="font-size:11px;color:#555;line-height:1">Paid via</div>
-    <div style="font-weight:700;font-size:14px;line-height:1.1;color:#000">
-      <% if @order.respond_to?(:payment_method) && @order.payment_method.present? %>
-        <%= @order.payment_method %>
-      <% else %>
-        Not specified
-      <% end %>
+    <div class="meta">
+      <div class="meta-to">
+        <span class="meta-kicker">Bill to</span>
+        <% if client %>
+          <strong><%= client.full_name %></strong>
+          <p><%= [client.address.presence, client.phone.presence, client.gst_number.present? ? "GSTIN #{client.gst_number}" : nil].compact.join(' · ') %></p>
+        <% else %>
+          <strong>Walk-in</strong>
+          <p>No client on the book for this bill.</p>
+        <% end %>
+      </div>
+      <div class="meta-facts">
+        <div><span>Invoice</span><b><%= bill_no %></b></div>
+        <div><span>Date</span><b><%= (@order.sale_date || @order.created_at).strftime('%d %b %Y') %></b></div>
+        <div><span>Bill</span><b>#<%= @order.id %></b></div>
+        <div><span>Status</span><b><%= @order.status.to_s.titleize %></b></div>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- Payments list (invoices per payment) -->
-<% if @order.payments.any? %>
-  <div style="margin-top:18px;border-top:1px dashed #ddd;padding-top:12px;font-size:13px">
-    <div style="font-weight:700;margin-bottom:8px">Payments & Receipts</div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <table class="pieces">
       <thead>
-        <tr style="background:#fafafa"><th style="text-align:left;padding:8px">Date</th><th style="text-align:left">Method</th><th style="text-align:right;padding-right:8px">Amount</th><th style="text-align:left;padding-left:8px">Receipt</th></tr>
+        <tr>
+          <th style="width:28px">#</th>
+          <th>Catalogue piece</th>
+          <th class="num">Qty</th>
+          <th class="num">Net g</th>
+          <th class="num">₹ / g</th>
+          <th class="num">Line</th>
+        </tr>
       </thead>
       <tbody>
-        <% @order.payments.order(created_at: :asc).each do |pm| %>
+        <% lines.each_with_index do |li, i| %>
+          <%
+            item = li.jewelry_item
+            add_total = li.additional_charge.to_f * li.quantity.to_i
+            meta = [
+              item&.metal&.name,
+              item&.purity&.name,
+              item&.jewellery_category&.try(:display_name).presence || item&.jewellery_category&.name,
+              (li.huid.presence || item&.sku).present? ? "HUID #{li.huid.presence || item&.sku}" : nil,
+              li.hsn.present? ? "HSN #{li.hsn}" : nil
+            ].compact
+          %>
           <tr>
-            <td style="padding:8px"><%= pm.created_at.strftime('%d %b %Y %I:%M %p') %></td>
-            <td><%= pm.payment_method.presence || '-' %></td>
-            <td style="text-align:right;padding-right:8px">₹<%= '%.2f' % (pm.amount_cents.to_f/100.0) %></td>
-            <td style="padding-left:8px">
-              <% if pm.receipt_number.present? %>
-                <%= link_to pm.receipt_number, invoice_payment_path(pm), target: '_blank' %>
-              <% else %>
-                <%= link_to "Receipt ##{pm.id}", invoice_payment_path(pm), target: '_blank' %>
-              <% end %>
+            <td><%= i + 1 %></td>
+            <td>
+              <span class="name"><%= item&.name || 'Piece' %></span>
+              <span class="sub"><%= meta.join(' · ') %></span>
+              <span class="sub formula">
+                Gross <%= '%.2f' % li.gross_weight.to_f %> g
+                · Metal <%= format_rupees(li.metal_amount) %>
+                · <%= '%.1f' % li.making_percent %>% making <%= format_rupees(li.making_charge.to_f) %>
+                <% if add_total.positive? %> · Extra <%= format_rupees(add_total) %><% end %>
+              </span>
             </td>
+            <td class="num"><%= li.quantity %></td>
+            <td class="num"><%= '%.2f' % li.net_weight.to_f %></td>
+            <td class="num"><%= format_rupees(li.rate_per_gram_used) %></td>
+            <td class="num gold"><%= format_rupees(li.line_amount) %></td>
           </tr>
         <% end %>
       </tbody>
     </table>
-  </div>
-<% end %>
-
-</div>
-
-<!-- ================= SUMMARY ================= -->
-<%# Precompute totals so we can show paid/remaining on the left without changing layout %>
-<% gross_total = subtotal %>
-<% taxable_amount = gross_total - (@order.discount.to_f || 0.0) + (@order.charges.to_f || 0.0) %>
-<% if @order.respond_to?(:cgst_cents) && @order.cgst_cents.to_i > 0 %>
-  <% cgst_amt = (@order.cgst_cents.to_f / 100.0) %>
-  <% cgst_rate = @order.respond_to?(:cgst_rate) ? @order.cgst_rate.to_f : (@order.respond_to?(:cgst_rate_or_default) ? @order.cgst_rate_or_default : 1.5) %>
-<% else %>
-  <% cgst_rate = @order.respond_to?(:cgst_rate_or_default) ? @order.cgst_rate_or_default : 1.5 %>
-  <% cgst_amt = taxable_amount * (cgst_rate / 100.0) %>
-<% end %>
-<% if @order.respond_to?(:igst_cents) && @order.igst_cents.to_i > 0 %>
-  <% igst_amt = (@order.igst_cents.to_f / 100.0) %>
-  <% igst_rate = @order.respond_to?(:igst_rate) ? @order.igst_rate.to_f : (@order.respond_to?(:igst_rate_or_default) ? @order.igst_rate_or_default : 1.5) %>
-<% else %>
-  <% igst_rate = @order.respond_to?(:igst_rate_or_default) ? @order.igst_rate_or_default : 1.5 %>
-  <% igst_amt = taxable_amount * (igst_rate / 100.0) %>
-<% end %>
-<% total = taxable_amount + cgst_amt + igst_amt %>
-<% rounded_total = total.round(0) %>
-<% paid_total = @order.payments.sum(:amount_cents).to_f/100.0 %>
-<% remaining = [0, (rounded_total - paid_total)].max %>
-
-<div style="display:grid;grid-template-columns:1fr 360px;gap:16px;margin-top:16px;font-size:12.5px">
-
-  <!-- Left: show Paid / Remaining (left aligned) -->
-  <div style="font-size:13px;line-height:1.4;margin-top:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <div><strong>Total Paid</strong></div>
-      <div style="font-weight:700;text-align:right">₹<%= '%.2f' % paid_total %></div>
+    <div class="weights">
+      <span>House weights on this bill</span>
+      <span>Gross <%= '%.2f' % gross_total %> g · Net <%= '%.2f' % net_total %> g</span>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-      <div><strong>Remaining Amount</strong></div>
-      <div style="font-weight:700;text-align:right;color:#b91c1c">₹<%= '%.2f' % remaining %></div>
-    </div>
-  </div>
 
-  <!-- Amount Summary -->
-  <div>
-    <table style="width:100%;border-collapse:collapse">
-      <tr>
-        <td style="border:1px solid #000;padding:6px">Gross Total</td>
-        <td style="border:1px solid #000;padding:6px;text-align:right">₹<%= '%.2f' % gross_total %></td>
-      </tr>
-
-      <tr>
-        <td style="border:1px solid #000;padding:6px">Discount</td>
-        <td style="border:1px solid #000;padding:6px;text-align:right">₹<%= '%.2f' % (@order.discount.to_f || 0.0) %></td>
-      </tr>
-
-      <tr>
-        <td style="border:1px solid #000;padding:6px">Taxable Amount</td>
-        <td style="border:1px solid #000;padding:6px;text-align:right">₹<%= '%.2f' % taxable_amount %></td>
-      </tr>
-
-      <tr>
-        <td style="border:1px solid #000;padding:6px">CGST <%= cgst_rate %>%</td>
-        <td style="border:1px solid #000;padding:6px;text-align:right">₹<%= '%.2f' % cgst_amt %></td>
-      </tr>
-
-      <tr>
-        <td style="border:1px solid #000;padding:6px">SGST <%= igst_rate %>%</td>
-        <td style="border:1px solid #000;padding:6px;text-align:right">₹<%= '%.2f' % igst_amt %></td>
-      </tr>
-
-      <tr>
-        <td style="border:1px solid #000;padding:6px;font-weight:700">Total</td>
-        <td style="border:1px solid #000;padding:6px;text-align:right;font-weight:700">₹<%= '%.2f' % total %></td>
-      </tr>
-
-      <tr>
-        <td style="border:1px solid #000;padding:6px">Round Off</td>
-        <td style="border:1px solid #000;padding:6px;text-align:right">₹<%= '%.2f' % (rounded_total - total) %></td>
-      </tr>
-
-      <tr>
-        <td style="border:1px solid #000;padding:7px;font-size:14px;font-weight:800">Net Amount</td>
-        <td style="border:1px solid #000;padding:7px;text-align:right;font-size:14px;font-weight:800">₹<%= '%.2f' % rounded_total %></td>
-      </tr>
-    </table>
-  </div>
-</div>
-
-
-
-<!-- FOOTER: signatures + governing law (anchored to bottom of invoice) -->
-    <div style="margin-top:auto;padding-top:18px;border-top:1px solid #e6edf5;font-size:12px;color:#111827">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          Customer Signature
-          <div style="margin-top:30px;border-top:1px solid #000;width:220px"></div>
+    <div class="foot-grid">
+      <div>
+        <div class="words">
+          Amount in words
+          <b><%= rupees_in_words(bill[:total]) %></b>
         </div>
-        <div style="text-align:right">
-          For <%= app_name %>
-          <div style="margin-top:30px;border-top:1px solid #000;width:220px;margin-left:auto"></div>
-          Authorized Signatory
-        </div>
+        <% if bank || ac_no || ifsc %>
+          <p class="bank">
+            <strong style="color:#14110f">Bank</strong><br>
+            <%= [bank, ac_name].compact.join(' · ') %><br>
+            <%= ['A/c ' + ac_no.to_s, ifsc.present? ? "IFSC #{ifsc}" : nil].compact.join(' · ') %>
+          </p>
+        <% end %>
+        <% if @order.payments.any? %>
+          <table class="pay-list">
+            <thead>
+              <tr>
+                <th>Receipts</th>
+                <th>Via</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% @order.payments.sort_by(&:created_at).each do |pmnt| %>
+                <tr>
+                  <td>
+                    <% receipt_label = pmnt.receipt_number.presence || "Receipt ##{pmnt.id}" %>
+                    <% if @public_invoice %>
+                      <%= receipt_label %>
+                    <% else %>
+                      <%= link_to receipt_label, invoice_payment_path(pmnt), target: '_blank', class: 'receipt-link' %>
+                    <% end %>
+                  </td>
+                  <td><%= pmnt.payment_method.presence || '—' %></td>
+                  <td class="num"><%= format_rupees(pmnt.amount_cents.to_f / 100.0) %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        <% else %>
+          <p class="bank">Paid via <%= @order.try(:payment_method).presence || 'not yet recorded' %>.</p>
+        <% end %>
       </div>
 
-      <div style="font-size:11px;color:#4b5563;line-height:1.4;margin-top:6px">
-        <strong>Governing Law & Jurisdiction:</strong>
-        This invoice shall be governed by and construed in accordance with the laws of India. Any dispute, claim or proceeding arising out of or in connection with this invoice shall be subject to the exclusive jurisdiction of the courts at Jagdishpur, Bihar, India.
+      <aside class="sum">
+        <div><span>Subtotal</span><b><%= format_rupees(bill[:subtotal]) %></b></div>
+        <div><span>Discount</span><b><%= format_rupees(bill[:discount]) %></b></div>
+        <div><span>Extra charges</span><b><%= format_rupees(bill[:charges]) %></b></div>
+        <div><span>Taxable</span><b><%= format_rupees(bill[:taxable]) %></b></div>
+        <div><span>CGST <%= '%.2f' % bill[:cgst_rate] %>%</span><b><%= format_rupees(bill[:cgst]) %></b></div>
+        <div><span>CGST <%= '%.2f' % bill[:igst_rate] %>%</span><b><%= format_rupees(bill[:igst]) %></b></div>
+        <div><span>Paid</span><b><%= format_rupees(bill[:paid]) %></b></div>
+        <div><span>Remaining</span><b><%= format_rupees(bill[:remaining]) %></b></div>
+        <div class="grand"><span>Net payable</span><b><%= format_rupees(bill[:total]) %></b></div>
+      </aside>
+    </div>
+
+    <div class="sign">
+      <div>
+        <p>Client</p>
+        <div class="line">Signature</div>
+      </div>
+      <div style="text-align:right">
+        <p>For <%= house %></p>
+        <div class="line"><%= owner.presence || 'Authorised signatory' %></div>
       </div>
     </div>
 
-  </div> <!-- .invoice-box -->
-
-</div> <!-- #print-area -->
-
+    <p class="thanks">With our compliments — may this piece be worn in light.</p>
+    <div class="legal">
+      <% if declaration.present? %>
+        <%= simple_format(declaration) %>
+      <% else %>
+        Metal is billed at the ₹ per gram, net weight and quantity stored when this bill was raised. Making and extras follow that metal value. Pieces are BIS hallmarked as declared by the house.
+      <% end %>
+      This invoice is governed by the laws of India. Disputes are subject to the courts at <%= [city, state].compact.join(', ') %>.
+    </div>
+  </article>
 </body>
 </html>

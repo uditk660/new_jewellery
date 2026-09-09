@@ -1,72 +1,201 @@
-<style>
-/* Returns index — compact professional UI (page-scoped) */
-:root{--bg:#f6f8fb;--card:#fff;--border:#e6edf5;--muted:#6b7280;--text:#0f1724;--accent:#eef4ff;--primary:#2563eb}
-.returns-page{max-width:1200px;margin:22px auto;padding:0 16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
-.returns-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:0 6px 20px rgba(16,24,40,0.04)}
-.returns-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.returns-title{font-size:1.25rem;font-weight:700;color:var(--text)}
-.returns-sub{color:var(--muted);font-size:13px}
-.returns-actions{display:flex;gap:10px;align-items:center}
-.search-input{border:1px solid var(--border);padding:8px 10px;border-radius:8px;background:#fbfdff}
-.btn.small{padding:6px 10px;font-size:13px}
-.table-wrap{margin-top:14px;overflow:auto}
-.returns-table{width:100%;border-collapse:collapse;font-size:13px}
-.returns-table th,.returns-table td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left}
-.returns-table th{background:#fbfdff;color:#374151;font-weight:600}
-.muted{color:var(--muted)}
-.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#f3f7ff;color:#2563eb;font-weight:600;font-size:12px}
-.note{color:var(--muted);font-size:13px}
-@media (max-width:800px){.returns-head{flex-direction:column;align-items:flex-start}.returns-actions{width:100%;justify-content:space-between}}
-</style>
+<%= render 'shared/atelier_styles' %>
 
-<div class="returns-page">
-  <div class="returns-card">
-    <div class="returns-head">
-      <div>
-        <div class="returns-title">Returns & Exchanges</div>
-        <div class="returns-sub">Record refunds or exchanges and keep inventory in sync</div>
-      </div>
+<%
+  rows = @records || []
+%>
 
-      <div class="returns-actions">
-        <%= link_to 'New Return / Exchange', new_return_path, class: 'btn primary' %>
-        <input type="search" id="returns_search" class="search-input" placeholder="Search by customer, order, invoice or item" />
-      </div>
+<div class="atelier-page returns-book" id="returns-book">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">After sales</p>
+      <h1>Returns &amp; exchanges</h1>
+      <p class="lead">Pieces coming back to the tray — cash refund or exchange, with hallmarked weight restored to stock.</p>
     </div>
+    <%= link_to 'Record a return', new_return_path, class: 'btn-gold' %>
+  </header>
 
-    <div class="table-wrap">
-      <% if @records.any? %>
-        <table class="returns-table">
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Customer</th>
-              <th>Order</th>
-              <th>Item (returned)</th>
-              <th>Qty</th>
-              <th>Action</th>
-              <th class="muted">Amount</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <% @records.each_with_index do |r, i| %>
-              <% item = (r['jewelry_item_id'].present? && JewelryItem.exists?(r['jewelry_item_id'])) ? JewelryItem.find(r['jewelry_item_id']) : nil %>
-              <tr>
-                <td class="muted"><%= r['created_at'].to_s(:db) rescue r['created_at'].to_s %></td>
-                <td><%= r['customer_id'].presence || '—' %></td>
-                <td><%= r['order_id'].presence || '—' %></td>
-                <td><%= item ? (item.name + ' — ' + item.sku.to_s) : (r['jewelry_item_id'].presence || '—') %></td>
-                <td><%= r['quantity'].presence || '—' %></td>
-                <td><span class="tag"><%= r['action'].to_s.titleize %></span></td>
-                <td class="muted"> <%= r['amount'].presence || '—' %></td>
-                <td><%= link_to 'View', return_path(i), class: 'btn small' %></td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
-      <% else %>
-        <div class="note">No return records yet. Use "New Return / Exchange" to register a refund or exchange.</div>
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag returns_path, method: :get, class: 'returns-search' do %>
+      <%= text_field_tag :q, @q, class: 'form-control', placeholder: 'Search client, bill, piece or SKU' %>
+      <button type="submit" class="atelier-back">Search</button>
+      <% if @q.present? %>
+        <%= link_to 'Clear', returns_path, class: 'atelier-back' %>
       <% end %>
+    <% end %>
+    <div class="returns-stats">
+      <div>
+        <span>On the book</span>
+        <strong><%= rows.size %></strong>
+      </div>
+      <div>
+        <span>Refunds</span>
+        <strong><%= @cash_count.to_i %></strong>
+      </div>
+      <div>
+        <span>Exchanges</span>
+        <strong><%= @exchange_count.to_i %></strong>
+      </div>
     </div>
   </div>
+
+  <% if rows.any? %>
+    <div class="returns-table-wrap">
+      <table class="returns-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Client</th>
+            <th>Piece</th>
+            <th class="num">Qty</th>
+            <th>Settlement</th>
+            <th class="num">Amount</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.each do |r| %>
+            <%
+              client = r['_customer']
+              item = r['_item']
+              order = r['_order']
+              bill_no = order&.invoice_number.presence || (r['order_id'].present? ? "Bill ##{r['order_id']}" : nil)
+              when_at = begin
+                Time.zone.parse(r['created_at'].to_s)
+              rescue StandardError
+                nil
+              end
+              amt = r['amount'].to_s.strip
+              action = r['action'].to_s
+            %>
+            <tr>
+              <td>
+                <%= link_to return_path(r['id']), class: 'when-link' do %>
+                  <strong><%= when_at ? when_at.strftime('%d %b %Y') : '—' %></strong>
+                  <span class="sub"><%= when_at ? when_at.strftime('%I:%M %p') : '' %></span>
+                <% end %>
+              </td>
+              <td>
+                <% if client %>
+                  <%= link_to client.full_name, customer_path(client), class: 'client-link' %>
+                  <span class="sub"><%= client.phone.presence || 'No phone' %></span>
+                <% elsif r['walk_in_name'].present? || r['walk_in_phone'].present? %>
+                  <strong class="piece"><%= r['walk_in_name'].presence || 'Walk-in' %></strong>
+                  <span class="sub"><%= r['walk_in_phone'].presence || 'No mobile' %></span>
+                <% else %>
+                  <span class="muted">Walk-in</span>
+                <% end %>
+                <% if bill_no %>
+                  <span class="sub"><%= bill_no %></span>
+                <% end %>
+              </td>
+              <td>
+                <% if item %>
+                  <strong class="piece"><%= item.name %></strong>
+                  <span class="sub"><%= item.sku %></span>
+                <% else %>
+                  <span class="muted">No piece named</span>
+                <% end %>
+              </td>
+              <td class="num"><%= r['quantity'].presence || '—' %></td>
+              <td>
+                <span class="status-pill is-<%= action %>"><%= action == 'exchange' ? 'Exchange' : 'Cash refund' %></span>
+              </td>
+              <td class="num gold">
+                <% if amt.present? && amt != 'N/A' %>
+                  <%= format_rupees(amt.to_f) %>
+                <% else %>
+                  <span class="muted">—</span>
+                <% end %>
+              </td>
+              <td class="actions">
+                <%= link_to 'Open', return_path(r['id']), class: 'atelier-back' %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="atelier-form empty">
+      <p class="eyebrow">After sales</p>
+      <h2><%= @q.present? ? 'No matching returns' : 'No returns yet' %></h2>
+      <p class="hint">
+        <% if @q.present? %>
+          Nothing matches “<%= @q %>”. Try a client, bill number or SKU.
+        <% else %>
+          When a piece comes back to the house, record a cash refund or an exchange so tray stock stays true.
+        <% end %>
+      </p>
+      <div class="actions" style="margin-top:16px">
+        <% if @q.present? %>
+          <%= link_to 'Clear search', returns_path, class: 'atelier-back' %>
+        <% else %>
+          <%= link_to 'Record a return', new_return_path, class: 'btn-gold' %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
 </div>
+
+<style>
+  .container:has(.returns-book) { max-width: 1240px; }
+  .returns-book a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .returns-book .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .returns-book .returns-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .returns-book .returns-search .form-control { max-width: 420px; }
+  .returns-book .returns-stats {
+    display: flex; gap: 22px; flex-wrap: wrap; color: #6b6258;
+    font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .returns-book .returns-stats strong {
+    display: block; font-size: 1.2rem; color: #0b1220;
+    letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums;
+  }
+  .returns-book .returns-table-wrap {
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 18px;
+    overflow: auto; box-shadow: 0 12px 28px rgba(20,17,15,0.05);
+  }
+  .returns-book .returns-table { width: 100%; border-collapse: collapse; min-width: 820px; }
+  .returns-book .returns-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6258; font-weight: 700; padding: 14px 16px;
+    border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .returns-book .returns-table td {
+    padding: 14px 16px; border-bottom: 1px solid rgba(201,162,39,0.12);
+    vertical-align: middle; font-size: 14px; color: #14110f;
+  }
+  .returns-book .returns-table tbody tr:last-child td { border-bottom: 0; }
+  .returns-book .returns-table tbody tr:hover { background: rgba(232,213,163,0.22); }
+  .returns-book .when-link { text-decoration: none; color: inherit; display: inline-block; }
+  .returns-book .when-link strong {
+    display: block; font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.15rem; font-weight: 600; color: #0b1220;
+  }
+  .returns-book .sub { display: block; margin-top: 2px; font-size: 12px; color: #6b6258; }
+  .returns-book .client-link { color: #0b1220; font-weight: 600; text-decoration: none; }
+  .returns-book .client-link:hover { color: #c9a227; }
+  .returns-book .piece {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.1rem; font-weight: 600;
+  }
+  .returns-book .muted { color: #6b6258; font-weight: 500; }
+  .returns-book .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .returns-book .num.gold { color: #c9a227; font-weight: 700; }
+  .returns-book .status-pill {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700;
+    border: 1px solid rgba(201,162,39,0.35); color: #c9a227; background: rgba(201,162,39,0.12);
+  }
+  .returns-book .status-pill.is-exchange { color: #3f5d3a; border-color: rgba(63,93,58,0.35); background: rgba(63,93,58,0.08); }
+  .returns-book td.actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .returns-book .empty h2 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.6rem; margin: 6px 0 8px; font-weight: 600;
+  }
+  @media (max-width: 800px) {
+    .returns-book .returns-table th:nth-child(4),
+    .returns-book .returns-table td:nth-child(4) { display: none; }
+  }
+</style>
