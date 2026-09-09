@@ -20,6 +20,10 @@
     </div>
   </div>
   <div class="row" style="margin-top:10px">
+    <div class="field narrow">
+      <%= f.label :available_grams, 'Weight (g)' %>
+      <%= f.number_field :available_grams, class: 'form-control', step: '0.01', min: 0, placeholder: '0.00' %>
+    </div>
     <div class="field">
       <%= f.label :updated_price, 'Rate ₹ / g' %>
       <%= f.number_field :updated_price, class: 'form-control', step: '0.01', min: 0, placeholder: '0.00' %>
@@ -32,15 +36,15 @@
       <%= f.label :making_charge_percent, 'Making %' %>
       <%= f.number_field :making_charge_percent, class: 'form-control', step: '0.01', min: 0, placeholder: '0' %>
     </div>
-    <div class="field narrow">
-      <%= f.label :position, 'Order' %>
-      <%= f.number_field :position, class: 'form-control', min: 0, step: 1 %>
-    </div>
   </div>
   <div class="row" style="margin-top:10px">
     <div class="field">
       <%= f.label :remarks, 'Remarks' %>
       <%= f.text_field :remarks, class: 'form-control', placeholder: 'Touch, BIS note, or shop shorthand' %>
+    </div>
+    <div class="field narrow">
+      <%= f.label :position, 'Order' %>
+      <%= f.number_field :position, class: 'form-control', min: 0, step: 1 %>
     </div>
     <div class="field narrow nested-flags">
       <label><%= f.check_box :active %> Active</label>

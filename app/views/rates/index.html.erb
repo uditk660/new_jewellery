@@ -1,335 +1,244 @@
-<style>
-/* Decorative rates list */
-.rates-wrap { display:block; margin-top:8px }
-.rates-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px }
-.rate-card { padding:14px; border-radius:10px; background:linear-gradient(180deg,#fff,#fbfbff); box-shadow:0 8px 20px rgba(10,20,40,0.04); border:1px solid rgba(2,6,23,0.04) }
-.rate-card h3 { margin:0 0 6px 0; font-size:18px }
-.rate-list { margin-top:8px }
-.rate-row { display:flex; align-items:center; justify-content:space-between; padding:8px 6px; border-radius:8px }
-.rate-row + .rate-row { margin-top:6px }
-.purity-badge { display:inline-block; background:#eef2ff; color:#1e3a8a; padding:6px 10px; border-radius:999px; font-weight:700 }
-.price-chip { background:linear-gradient(90deg,#fff7ed,#fff1e6); border:1px solid #ffedd5; padding:6px 10px; border-radius:999px; font-weight:700 }
-.muted.small { color:#64748b; font-size:12px; margin-left:8px }
-.btn.small { margin-left:8px; font-size:12px; padding:4px 8px; border-radius:6px; background:#0ea5a4; color:#fff; text-decoration:none }
-@media(max-width:900px){ .rates-grid{ grid-template-columns:repeat(1,1fr) } }
+<%= render 'shared/atelier_styles' %>
 
-/* Modern modal styles for Set Rate */
-.rate-modal { display:none; position:fixed; inset:0; z-index:1200; align-items:center; justify-content:center; }
-.rate-modal.open { display:flex; }
-.rate-modal-backdrop { position:absolute; inset:0; background:rgba(2,6,23,0.5); backdrop-filter: blur(4px); opacity:0; transition:opacity .25s ease; }
-.rate-modal.open .rate-modal-backdrop { opacity:1; }
-.rate-modal-panel { position:relative; z-index:1300; width:min(720px,94%); max-height:85vh; overflow:auto; background:linear-gradient(180deg,#fff,#fbfbff); border-radius:12px; box-shadow:0 20px 50px rgba(2,6,23,0.18); border:1px solid rgba(2,6,23,0.06); transform:translateY(12px) scale(.98); opacity:0; transition:transform .28s ease, opacity .28s ease; padding-top:48px; }
-.rate-modal.open .rate-modal-panel { transform:translateY(0) scale(1); opacity:1; }
-.rate-modal-close { position:absolute; top:12px; right:12px; background:#ef4444; color:#fff; border:none; width:32px; height:32px; border-radius:8px; font-size:18px; line-height:1; cursor:pointer; box-shadow:0 6px 18px rgba(14,20,36,0.12); }
-.rate-modal-body { padding:20px 20px 28px 20px; }
-.rate-modal-body { padding:20px; }
-/* Ensure modal action buttons sit on one row */
-.modal-actions { display:flex !important; gap:8px !important; justify-content:flex-end !important; align-items:center !important; flex-wrap:nowrap !important; margin-top:12px !important; }
-.modal-actions a, .modal-actions button, .modal-actions input { display:inline-flex !important; align-items:center !important; }
-/* Make modal action buttons equal width */
-.modal-actions > * { flex: 1 1 0 !important; min-width:100px; max-width:320px; text-align:center; justify-content:center; }
-.modal-actions > a, .modal-actions > button, .modal-actions > input { padding:8px 12px !important; }
-/* Button variants inside modal actions */
-.modal-btn-primary { background:#0ea5a4 !important; color:#fff !important; border:1px solid rgba(0,0,0,0.06) !important; }
-.modal-btn-cancel { background:#dc2626 !important; color:#fff !important; border:1px solid rgba(0,0,0,0.06) !important; }
-/* Modal title and price highlight */
-.rate-modal-title { padding:12px 14px 8px 14px; font-size:16px; font-weight:700; color:#0f172a; border-bottom:1px solid rgba(2,6,23,0.06); }
-.focused-price { border:2px solid #f59e0b !important; box-shadow:0 6px 20px rgba(245,158,11,0.14) !important; background:#fffaf0 !important; }
-</style>
+<%
+  today = @today || Time.zone.today
+%>
 
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-  <h1 style="margin:0">Today Rates</h1>
-  <% total_value = 0.0 %>
-  <% if defined?(@grouped_rates) && @grouped_rates.present? %>
-    <% total_value = @grouped_rates.values.flatten.map do |e|
-         p = e[:purity]
-         if p.respond_to?(:updated_price) && p.updated_price.present?
-           p.updated_price.to_f
-         elsif e[:rate]
-           e[:rate].price_per_gram.to_f
-         else
-           0.0
-         end
-       end.sum %>
-  <% end %>
-  <div style="text-align:right">
-    <div class="muted small" style="margin-bottom:4px">Current stock value (sum of purity prices)</div>
-    <div style="font-weight:700;font-size:18px">₹<%= sprintf('%.2f', total_value) %></div>
-  </div>
-</div>
-<div class="rates-wrap">
-  <% if @grouped_rates.present? %>
-    <div class="rates-grid">
-      <% @grouped_rates.each do |metal_name, entries| %>
-        <div class="rate-card card" data-metal="<%= metal_name.parameterize %>">
-          <h3 class="rate-header" style="cursor:pointer"><%= metal_name %></h3>
-          <div class="rate-list">
-            <% if entries.any? %>
-              <% entries.each do |e| %>
-                <% purity = e[:purity] %>
-                <div class="rate-row" data-purity-id="<%= purity.id %>">
-                  <div class="purity">
-                    <span class="purity-badge">
-                        <%= purity.name %> 
-                      <% if purity.respond_to?(:purity_percent) && purity.purity_percent.present? %>
-                        &nbsp;•&nbsp;<%= purity.purity_percent %>%
-                      <% end %>
-                    </span>
-                  </div>
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <% purity = e[:purity] %>
-                    <%# Prefer purity.updated_price for display; fall back to rate if purity has no updated_price %>
-                    <% display_price = if purity.respond_to?(:updated_price) && purity.updated_price.present?
-                                         purity.updated_price.to_f
-                                       elsif e[:rate]
-                                         e[:rate].price_per_gram
-                                       else
-                                         nil
-                                       end %>
-                    <% if !display_price.nil? %>
-                      <span class="price-chip">₹<%= sprintf('%.2f', display_price) %>/g</span>
-                      <% if purity.respond_to?(:updated_price) && purity.updated_price.present? %>
-                        <span class="muted small">(from purity)</span>
-                      <% elsif e[:rate] %>
-                        <span class="muted small"><%= e[:rate].date %></span>
-                      <% end %>
-                    <% else %>
-                      <span class="muted">— no rate set</span>
-                    <% end %>
+<div class="atelier-page rates-board is-cards" id="rates-view">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Rates</p>
+      <h1>Today’s board</h1>
+      <p class="lead">Set ₹ per gram for each hallmark. Catalogue valuation uses these rates the moment they are saved.</p>
+    </div>
+    <div class="rates-hero-actions">
+      <div class="view-toggle" role="group" aria-label="Layout">
+        <button type="button" class="view-btn is-active" data-view="cards" aria-pressed="true">Cards</button>
+        <button type="button" class="view-btn" data-view="list" aria-pressed="false">List</button>
+      </div>
+      <%= link_to 'Set a rate', new_rate_path, class: 'atelier-back' %>
+    </div>
+  </header>
 
-                    <div class="rate-actions" style="display:flex;align-items:center;gap:8px">
-                      <%= link_to 'Set Rate', edit_purity_path(purity), class: 'btn small set-rate-link', style: 'background:#ef4444', data: { metal_id: purity.metal_id, purity_id: purity.id } %>
-                    </div>
-                  </div>
-                </div>
-              <% end %>
-            <% else %>
-              <div class="muted">No purities defined for this metal.</div>
-            <% end %>
+  <p class="hint" style="margin:0 0 16px">Board date: <%= today.strftime('%d %b %Y') %>.</p>
+
+  <% if @metals.any? %>
+    <div class="rate-cards" data-layout="cards">
+      <% @metals.each do |metal| %>
+        <section class="rate-card">
+          <div class="rate-card-top">
+            <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
+            <div>
+              <h2><%= metal.name %></h2>
+              <p><%= metal.code.presence || metal.base_unit.presence || 'gram' %></p>
+            </div>
           </div>
-        </div>
+          <% purities = metal.purities.ordered %>
+          <% if purities.any? %>
+            <ul class="rate-rows">
+              <% purities.each do |purity| %>
+                <li class="rate-row">
+                  <div class="hallmark">
+                    <strong><%= purity.name %></strong>
+                    <span><%= [purity.trimmed_percent && "#{purity.trimmed_percent}%", purity.fineness.presence, purity.available_weight_label].compact.join(' · ') %></span>
+                  </div>
+                  <%= form_tag rates_path, method: :post, class: 'rate-inline' do %>
+                    <%= hidden_field_tag :metal_id, metal.id %>
+                    <%= hidden_field_tag :purity_id, purity.id %>
+                    <%= hidden_field_tag 'rate[date]', today %>
+                    <label class="sr-only" for="price_<%= purity.id %>">₹ / g</label>
+                    <span class="rupee">₹</span>
+                    <%= number_field_tag :price_per_gram, (purity.updated_price.present? ? ('%.2f' % purity.updated_price) : nil), id: "price_#{purity.id}", step: '0.01', min: 0, class: 'form-control', placeholder: '0.00' %>
+                    <span class="per">/g</span>
+                    <%= submit_tag 'Save', class: 'btn-gold' %>
+                  <% end %>
+                </li>
+              <% end %>
+            </ul>
+          <% else %>
+            <p class="hint" style="margin:0">No hallmarks on this metal yet. <%= link_to 'Add them', metal_path(metal), class: 'atelier-back', style: 'margin-left:8px' %></p>
+          <% end %>
+        </section>
       <% end %>
     </div>
+
+    <div class="rate-list-wrap" data-layout="list">
+      <table class="rate-list">
+        <thead>
+          <tr>
+            <th>Metal</th>
+            <th>Hallmark</th>
+            <th>Weight</th>
+            <th>₹ / g</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @metals.each do |metal| %>
+            <% metal.purities.ordered.each do |purity| %>
+              <tr>
+                <td>
+                  <span class="metal-cell">
+                    <span class="swatch small" style="background:<%= metal.chip_colour %>"></span>
+                    <%= metal.name %>
+                  </span>
+                </td>
+                <td>
+                  <strong><%= purity.name %></strong>
+                  <span class="sub"><%= [purity.trimmed_percent && "#{purity.trimmed_percent}%", purity.fineness.presence].compact.join(' · ') %></span>
+                </td>
+                <td class="num"><%= purity.available_weight_label %></td>
+                <td>
+                  <%= form_tag rates_path, method: :post, class: 'rate-inline' do %>
+                    <%= hidden_field_tag :metal_id, metal.id %>
+                    <%= hidden_field_tag :purity_id, purity.id %>
+                    <%= hidden_field_tag 'rate[date]', today %>
+                    <span class="rupee">₹</span>
+                    <%= number_field_tag :price_per_gram, (purity.updated_price.present? ? ('%.2f' % purity.updated_price) : nil), step: '0.01', min: 0, class: 'form-control', placeholder: '0.00' %>
+                    <%= submit_tag 'Save', class: 'btn-gold' %>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+            <% if metal.purities.empty? %>
+              <tr>
+                <td>
+                  <span class="metal-cell">
+                    <span class="swatch small" style="background:<%= metal.chip_colour %>"></span>
+                    <%= metal.name %>
+                  </span>
+                </td>
+                <td colspan="3" class="hint" style="margin:0">No hallmarks yet</td>
+              </tr>
+            <% end %>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
   <% else %>
-    <div class="muted">No rates available.</div>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">No metals yet. Add Gold with 18K, 20K and 22K, then set today’s rates here.</p>
+      <div class="actions" style="margin-top:16px"><%= link_to 'Add a metal', new_metal_path, class: 'btn-gold' %></div>
+    </div>
   <% end %>
 </div>
 
-  <script>
-  (function(){
-    // simple toggle: clicking a header toggles its list, do not auto-close others
-    document.querySelectorAll('.rate-header').forEach(function(h){
-      h.addEventListener('click', function(){
-        var card = h.closest('.rate-card');
-        var list = card.querySelector('.rate-list');
-        var isHidden = (list.style.display === 'none' || list.style.display === '');
-        list.style.display = isHidden ? 'block' : 'none';
-        if(isHidden) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    });
-    // ensure all lists are visible by default
-    document.querySelectorAll('.rate-card .rate-list').forEach(function(el){ el.style.display = 'block'; });
-
-    // If URL contains open_metal/open_purity, expand and highlight that purity
-    function queryParam(name){
-      var m = window.location.search.match(new RegExp('[?&]'+name+'=([^&]+)'));
-      return m ? decodeURIComponent(m[1]) : null;
-    }
-    var wantMetal = queryParam('open_metal');
-    var wantPurity = queryParam('open_purity');
-    if(wantMetal || wantPurity){
-      // expand matching metal
-      if(wantMetal){
-        var sel = '.rate-card[data-metal="' + wantMetal + '"]';
-        var card = document.querySelector(sel);
-        if(card){ var list = card.querySelector('.rate-list'); if(list) list.style.display='block'; card.scrollIntoView({behavior:'smooth', block:'center'}); }
-      }
-      // highlight purity row
-      if(wantPurity){
-        var prow = document.querySelector('.rate-row[data-purity-id="' + wantPurity + '"]');
-        if(prow){ prow.style.transition='background 300ms'; prow.style.background='rgba(253, 230, 138, 0.4)'; setTimeout(function(){ prow.style.background='transparent'; }, 2600); }
-      }
-      // remove query params from URL without reloading
-      try{ var url = new URL(window.location); url.searchParams.delete('open_metal'); url.searchParams.delete('open_purity'); window.history.replaceState({}, '', url.pathname + url.search); }catch(e){}
-    }
-
-    // Modal handling: ensure modal returns to page with target params
-    window.RatesModalTarget = null;
-    document.addEventListener('click', function(e){
-      var a = e.target.closest && e.target.closest('a.set-rate-link');
-      if(!a) return;
-      // capture target info
-      var metalId = a.dataset.metalId || '';
-      var purityId = a.dataset.purityId || '';
-      var card = a.closest('.rate-card');
-      var metalSlug = card && card.dataset && card.dataset.metal ? card.dataset.metal : '';
-      window.RatesModalTarget = { metal: metalSlug, purity: purityId };
-      // allow other handler to open modal (existing code listens for clicks)
-    });
-
-    // When modal code redirects on save, it will use window.RatesModalTarget to append params.
-    // Patch the global redirect used by modal (if present) by wrapping location assignment.
-    // (Modal code will set window.location.href = '<%= j rates_path %>' )
-    var originalReplace = window._rates_redirect_replace || function(url){ window.location.href = url; };
-    window._rates_redirect_replace = function(baseUrl){
-      var targ = window.RatesModalTarget;
-      if(targ && (targ.metal || targ.purity)){
-        var u = baseUrl + '?';
-        var parts = [];
-        if(targ.metal) parts.push('open_metal=' + encodeURIComponent(targ.metal));
-        if(targ.purity) parts.push('open_purity=' + encodeURIComponent(targ.purity));
-        u += parts.join('&');
-        window.location.href = u;
-      } else {
-        window.location.href = baseUrl;
-      }
-    };
-
-  })();
-  </script>
-
-<!-- Modal container for Set Rate form -->
-<div class="rate-modal" aria-hidden="true">
-  <div class="rate-modal-backdrop"></div>
-  <div class="rate-modal-panel" role="dialog" aria-modal="true">
-    <button type="button" class="rate-modal-close" aria-label="Close">×</button>
-    <div class="rate-modal-title">Update Price</div>
-    <div class="rate-modal-body"></div>
-  </div>
-</div>
+<style>
+  .rates-board .rates-hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .rates-board .view-toggle {
+    display: inline-flex;
+    padding: 3px;
+    border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.4);
+    background: #fffaf3;
+  }
+  .rates-board .view-btn {
+    appearance: none; border: 0; background: transparent; color: #6b6258;
+    font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.04em;
+    padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  }
+  .rates-board .view-btn.is-active {
+    background: linear-gradient(90deg, #e8d5a3, #c9a227);
+    color: #0b1220;
+  }
+  .rates-board .rate-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+  .rates-board .rate-card {
+    background: #fffaf3;
+    border: 1px solid rgba(201,162,39,0.28);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 12px 28px rgba(20,17,15,0.05);
+  }
+  .rates-board .rate-card-top { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+  .rates-board .swatch { width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(201,162,39,0.35); flex-shrink: 0; }
+  .rates-board .swatch.small { width: 22px; height: 22px; border-radius: 6px; }
+  .rates-board .rate-card h2 {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.45rem; margin: 0; font-weight: 600; color: #0b1220;
+  }
+  .rates-board .rate-card-top p { margin: 2px 0 0; color: #6b6258; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .rates-board .rate-rows { list-style: none; margin: 0; padding: 0; }
+  .rates-board .rate-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-top: 1px solid rgba(201,162,39,0.16);
+  }
+  .rates-board .hallmark strong { display: block; color: #0b1220; }
+  .rates-board .hallmark span { color: #6b6258; font-size: 12px; }
+  .rates-board .rate-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .rates-board .rate-inline .form-control { width: 120px; }
+  .rates-board .rate-inline .btn-gold { padding: 10px 14px; font-size: 13px; }
+  .rates-board .rupee { color: #c9a227; font-weight: 700; }
+  .rates-board .per { color: #6b6258; font-size: 12px; }
+  .rates-board .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); border: 0;
+  }
+  .rates-board .rate-list-wrap {
+    background: #fffaf3;
+    border: 1px solid rgba(201,162,39,0.28);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 12px 28px rgba(20,17,15,0.05);
+  }
+  .rates-board .rate-list { width: 100%; border-collapse: collapse; }
+  .rates-board .rate-list th {
+    text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6258; font-weight: 700; padding: 14px 16px;
+    border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .rates-board .rate-list td {
+    padding: 12px 16px; border-bottom: 1px solid rgba(201,162,39,0.12);
+    vertical-align: middle; font-size: 14px; color: #14110f;
+  }
+  .rates-board .rate-list tbody tr:last-child td { border-bottom: 0; }
+  .rates-board .metal-cell { display: inline-flex; align-items: center; gap: 8px; }
+  .rates-board .sub { display: block; margin-top: 2px; font-size: 12px; color: #6b6258; }
+  .rates-board .num { white-space: nowrap; color: #6b6258; font-variant-numeric: tabular-nums; }
+  .rates-board.is-list [data-layout="cards"] { display: none; }
+  .rates-board.is-list [data-layout="list"] { display: block; }
+  .rates-board.is-cards [data-layout="list"] { display: none; }
+  .rates-board.is-cards [data-layout="cards"] { display: grid; }
+  @media (max-width: 800px) {
+    .rates-board .rates-hero-actions { width: 100%; }
+    .rates-board .rate-list th:nth-child(3),
+    .rates-board .rate-list td:nth-child(3) { display: none; }
+  }
+</style>
 
 <script>
-(function(){
-  function openModalWithUrl(url){
-    var modal = document.querySelector('.rate-modal');
-    var panel = modal.querySelector('.rate-modal-panel');
-    var body = modal.querySelector('.rate-modal-body');
-    modal.classList.add('open');
-    modal.setAttribute('aria-hidden', 'false');
-    body.innerHTML = '<div style="padding:28px;text-align:center">Loading…</div>';
-    fetch(url, { credentials: 'same-origin' }).then(function(resp){ return resp.text(); }).then(function(html){
-      // extract the form from the returned HTML
-      var tmp = document.createElement('div'); tmp.innerHTML = html;
-      var form = tmp.querySelector('form');
-      if(!form){ body.innerHTML = '<div style="padding:20px;border-radius:8px">Unable to load form.</div>'; return; }
-      // remove the submit back link if present
-      body.innerHTML = '';
-      // Ensure form action buttons (Save/Cancel) are grouped and aligned
-      (function(){
-        var submit = form.querySelector('input[type=submit], button[type=submit]');
-        var cancel = null;
-        var candidates = form.querySelectorAll('button, input[type=button], a');
-        Array.prototype.forEach.call(candidates, function(node){
-          var txt = ((node.textContent || node.value) || '').trim().toLowerCase();
-          var cls = (node.className || '').toLowerCase();
-          if(!cancel && (txt === 'cancel' || txt === 'close' || cls.indexOf('cancel') !== -1)){
-            cancel = node;
-          }
-        });
-        var actions = form.querySelector('.modal-actions') || document.createElement('div');
-        actions.className = 'modal-actions';
-        actions.style.display = 'flex';
-        actions.style.justifyContent = 'flex-end';
-        actions.style.gap = '8px';
-        actions.style.marginTop = '12px';
-        // Append submit first (left), then cancel (right)
-        if(submit && !actions.contains(submit)){
-          submit.style.display = 'inline-flex';
-          submit.classList.add('modal-btn-primary');
-          actions.appendChild(submit);
-        }
-        if(cancel && !actions.contains(cancel)){
-          // normalize display and style for inline layout
-          cancel.style.display = 'inline-flex';
-          cancel.classList.add('modal-btn-cancel');
-          if(cancel.tagName.toLowerCase() === 'a') cancel.classList.add('btn','small');
-          // intercept cancel to close modal and prevent navigation (stay on current page)
-          try{
-            cancel.addEventListener('click', function(ev){ ev.preventDefault(); var m=document.querySelector('.rate-modal'); if(m){ m.classList.remove('open'); m.setAttribute('aria-hidden','true'); } });
-          }catch(e){}
-          actions.appendChild(cancel);
-        }
-        if(!form.querySelector('.modal-actions')){
-          form.appendChild(actions);
-        }
-      })();
-
-      // Lock all form controls except the price-related textbox so users can only update price
-      (function(){
-        var allowRegex = /price|updated_price|price_per_gram|price_per_g/i;
-        Array.prototype.forEach.call(form.querySelectorAll('input, select, textarea'), function(el){
-          if(!el) return;
-          var t = (el.type || '').toLowerCase();
-          if(t === 'hidden') return; // keep hidden fields (auth token, ids)
-          // keep submit/button and any inputs that match price pattern
-          var name = (el.name || '');
-          var id = (el.id || '');
-          var cls = (el.className || '');
-          if(t === 'submit' || t === 'button' || allowRegex.test(name) || allowRegex.test(id) || allowRegex.test(cls)){
-            el.disabled = false;
-            if(el.tagName.toLowerCase() === 'input' && (t === 'text' || t === 'number')) el.readOnly = false;
-          } else {
-            el.disabled = true;
-            try{ el.setAttribute('aria-disabled','true'); }catch(e){}
-          }
-        });
-      })();
-
-      body.appendChild(form);
-
-      // focus and strongly highlight the price textbox if present (multiple attempts for animations/keyboard)
-      (function(){
-        var priceSelector = 'input[name*="price" i], input[id*="price" i], input[class*="price" i], input[name*="updated_price" i], input[name*="price_per_gram" i]';
-        var priceInput = form.querySelector(priceSelector);
-        if(priceInput){
-          priceInput.classList.add('focused-price');
-          priceInput.disabled = false;
-          try{ priceInput.readOnly = false; }catch(e){}
-          priceInput.setAttribute('tabindex','0');
-          priceInput.setAttribute('autofocus','autofocus');
-          var focusOnce = function(){
-            try{ priceInput.focus({ preventScroll:false }); }catch(e){ try{ priceInput.focus(); }catch(e){} }
-            try{ if(typeof priceInput.select === 'function') priceInput.select(); }catch(e){}
-          };
-          setTimeout(focusOnce, 50);
-          setTimeout(focusOnce, 300);
-          try{ priceInput.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){}
-        }
-      })();
-
-      // intercept form submit and protect against double submits
-      var submitting = false;
-      form.addEventListener('submit', function(ev){
-        ev.preventDefault();
-        if(submitting) return;
-        submitting = true;
-        var submitButtons = form.querySelectorAll('input[type=submit], button[type=submit]');
-        submitButtons.forEach(function(b){ b.disabled = true; });
-        var action = form.getAttribute('action') || window.location.pathname;
-        var method = (form.getAttribute('method') || 'post').toUpperCase();
-        var fd = new FormData(form);
-        fetch(action, { method: method, body: fd, credentials: 'same-origin' }).then(function(r){
-          if(window._rates_redirect_replace) window._rates_redirect_replace('<%= j rates_path %>');
-          else window.location.href = '<%= j rates_path %>';
-        }).catch(function(err){
-          submitting = false;
-          submitButtons.forEach(function(b){ b.disabled = false; });
-          alert('Save failed');
-        });
+  (function(){
+    var wrap = document.getElementById('rates-view');
+    if(!wrap) return;
+    var buttons = wrap.querySelectorAll('.view-btn');
+    var key = 'rates-view';
+    function apply(view){
+      var mode = view === 'list' ? 'list' : 'cards';
+      wrap.classList.remove('is-list', 'is-cards');
+      wrap.classList.add(mode === 'list' ? 'is-list' : 'is-cards');
+      buttons.forEach(function(btn){
+        var on = btn.getAttribute('data-view') === mode;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
-    }).catch(function(){
-      body.innerHTML = '<div style="padding:20px;border-radius:8px">Failed to load.</div>';
-    });
-  }
-
-  document.addEventListener('click', function(e){
-    var a = e.target.closest && e.target.closest('a.set-rate-link');
-    if(a){ e.preventDefault(); openModalWithUrl(a.href); return; }
-    // close when clicking backdrop or close button
-    if(e.target.classList && (e.target.classList.contains('rate-modal-backdrop') || e.target.classList.contains('rate-modal-close'))){
-      var m = document.querySelector('.rate-modal'); if(m){ m.classList.remove('open'); m.setAttribute('aria-hidden','true'); }
+      try { localStorage.setItem(key, mode); } catch(e){}
     }
-  });
-  document.addEventListener('keydown', function(e){ if(e.key === 'Escape'){ var m=document.querySelector('.rate-modal'); if(m){ m.classList.remove('open'); m.setAttribute('aria-hidden','true'); } } });
-})();
+    buttons.forEach(function(btn){
+      btn.addEventListener('click', function(){ apply(btn.getAttribute('data-view')); });
+    });
+    var saved = 'cards';
+    try { saved = localStorage.getItem(key) || 'cards'; } catch(e){}
+    apply(saved);
+  })();
 </script>

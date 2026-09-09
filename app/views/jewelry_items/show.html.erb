@@ -1,67 +1,186 @@
-<div class="container">
-	<div class="product-hero card">
-		<div class="product-grid">
-			<div class="product-media">
-				<%# placeholder avatar / image - replace with real uploads later %>
-				<div class="product-image">💍</div>
-						<div class="product-actions">
-							<%= button_tag 'Edit Item', type: 'button', class: 'btn btn-outline btn-sm', onclick: "window.location='#{edit_jewelry_item_path(@item)}'", aria: { label: "Edit #{@item.name}" } %>
-							<%= button_tag 'Back to Catalog', type: 'button', class: 'btn btn-sm', onclick: "window.location='#{jewelry_items_path}'", aria: { label: 'Back to catalog' } %>
-						</div>
-			</div>
+<%= render 'shared/atelier_styles' %>
 
-			<div class="product-details">
-				<h1 class="product-title"><%= @item.name %></h1>
-				<div class="product-meta small muted">SKU: <%= @item.sku %> • Category: <%= @item.jewellery_category.try(:name) || '—' %></div>
-				<p class="product-desc"><%= simple_format(@item.description.to_s) %></p>
+<%
+  per_gram = @item.effective_price_per_gram
+  weight = @item.weight_grams.to_f
+  qty = @item.valuation_quantity
+  unit = @item.unit_amount
+  total = @item.catalogue_amount
+  in_stock = @item.quantity.to_i > 0
+  stocks = @item.metal ? Array(@item.metal.metal_stocks) : []
+  rate_source = if @item.purity_price_per_gram.present?
+    @item.purity.try(:name)
+  elsif per_gram.present?
+    'Metal stock'
+  end
+%>
 
-								<div class="product-pricing">
-									<% per_gram = @item.effective_price_per_gram %>
-									<% weight = (@item.weight_grams || 0).to_f %>
-									<% qty = (@item.quantity.present? && @item.quantity.to_i > 0) ? @item.quantity.to_i : 1 %>
-									<% unit_price = per_gram ? (per_gram * weight) : @item.price.to_f %>
-									<% total_price = unit_price * qty %>
+<div class="atelier-page piece-show">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Catalogue piece</p>
+      <h1><%= @item.name.presence || 'Untitled piece' %></h1>
+      <p class="lead">
+        <% if @item.metal || @item.purity %>
+          <%= [@item.metal.try(:name), @item.purity.try(:hallmark_label)].compact.join(' · ') %>
+        <% else %>
+          Hallmark, weight and valuation for this showroom piece.
+        <% end %>
+      </p>
+    </div>
+    <div class="piece-hero-actions">
+      <%= link_to '← Catalogue', jewelry_items_path, class: 'atelier-back' %>
+      <%= link_to 'Amend piece', edit_jewelry_item_path(@item), class: 'btn-gold' %>
+    </div>
+  </header>
 
-									<div class="price-large">
-										<%= number_to_currency(unit_price, unit: '₹', precision: 2, delimiter: ',') %>
-										<% if qty > 1 %>
-											<div class="small muted">(each) — total: <strong><%= number_to_currency(total_price, unit: '₹', precision: 2, delimiter: ',') %></strong></div>
-										<% end %>
-									</div>
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>Metal &amp; hallmark</h2>
+          <p class="hint">The metal and purity that set the rate for this piece.</p>
+          <dl class="piece-dl">
+            <div><dt>Metal</dt><dd><%= @item.metal.try(:name) || '—' %></dd></div>
+            <div><dt>Purity</dt><dd><%= @item.purity.try(:hallmark_label) || '—' %></dd></div>
+            <div><dt>Fineness</dt><dd><%= @item.purity.try(:fineness).presence || '—' %></dd></div>
+            <div><dt>Standard</dt><dd><%= @item.purity.try(:hallmark_standard).presence || '—' %></dd></div>
+            <div><dt>Category</dt><dd><%= @item.jewellery_category.try(:display_name) || '—' %></dd></div>
+          </dl>
+        </div>
 
-									<% if per_gram.present? %>
-										<% if @item.purity && @item.purity.updated_price.present? %>
-											<div class="small muted">(calc: <%= number_to_currency(per_gram, unit: '₹', precision: 2) %> /g × <%= weight %> g × <%= qty %> = <%= number_to_currency(total_price, unit: '₹', precision: 2) %>) source: <%= @item.purity.name %></div>
-										<% else %>
-											<div class="small muted">(calc: <%= number_to_currency(per_gram, unit: '₹', precision: 2) %> /g × <%= weight %> g × <%= qty %> = <%= number_to_currency(total_price, unit: '₹', precision: 2) %>) source: metal stock</div>
-										<% end %>
-									<% end %>
-					<div class="availability small muted">
-						<% if @item.quantity.present? && @item.quantity > 0 %>
-							In stock: <strong><%= @item.quantity %> pcs</strong>
-						<% elsif @item.metal %>
-							Metal stock available — check stores below
-						<% else %>
-							Out of stock
-						<% end %>
-					</div>
-				</div>
+        <div class="section">
+          <h2>Piece details</h2>
+          <dl class="piece-dl">
+            <div><dt>SKU</dt><dd><%= @item.sku.presence || '—' %></dd></div>
+            <div><dt>Quantity</dt><dd><%= in_stock ? "#{@item.quantity} pcs" : 'Out of stock' %></dd></div>
+          </dl>
+          <% if @item.description.present? %>
+            <p class="hint" style="margin-top:12px; white-space:pre-line"><%= @item.description %></p>
+          <% else %>
+            <p class="hint" style="margin-top:12px">No description noted for this piece.</p>
+          <% end %>
+        </div>
 
-				<div class="product-attributes">
-					<dl>
-						<dt>Metal</dt><dd><%= @item.metal.try(:name) || '—' %></dd>
-						<dt>Purity</dt><dd><%= @item.purity.try(:name) || '—' %></dd>
-						<dt>Weight (g)</dt><dd><%= @item.weight_grams.to_f %> g</dd>
-					</dl>
-				</div>
-			</div>
-		</div>
+        <div class="section">
+          <h2>Weight &amp; valuation</h2>
+          <p class="hint">Price is purity rate × weight × quantity.</p>
+          <dl class="piece-dl">
+            <div><dt>Weight</dt><dd><%= '%.2f' % weight %> g</dd></div>
+            <div>
+              <dt>Hallmark stock</dt>
+              <dd>
+                <% if @item.purity %>
+                  <%= '%.2f' % @item.consumed_grams.to_f %> g taken · <%= @item.purity.available_weight_label %> remain
+                <% else %>
+                  —
+                <% end %>
+              </dd>
+            </div>
+            <div>
+              <dt>Rate</dt>
+              <dd>
+                <% if per_gram.present? %>
+                  <%= format_rupees(per_gram) %>/g
+                  <span class="muted-inline"><%= rate_source %></span>
+                <% else %>
+                  No rate set
+                <% end %>
+              </dd>
+            </div>
+            <div><dt>Per piece</dt><dd class="price-dd"><%= format_rupees(unit) %></dd></div>
+            <div><dt>Catalogue</dt><dd class="price-dd"><%= format_rupees(total) %></dd></div>
+          </dl>
+          <% if per_gram.present? %>
+            <p class="formula">
+              <%= format_rupees(per_gram) %>/g × <%= '%.2f' % weight %> g × <%= qty %> pcs = <%= format_rupees(total) %>
+            </p>
+          <% end %>
+        </div>
 
-		<% if @item.metal %>
-			<div class="stock-breakdown muted small" style="margin-top:12px">
-				<% stocks = MetalStock.where(metal: @item.metal) %>
-				<strong>Store stock:</strong> <%= stocks.map{|s| "#{s.store.name}: #{s.available_grams}g"}.join(' | ').html_safe %>
-			</div>
-		<% end %>
-	</div>
+        <% if stocks.any? %>
+          <div class="section">
+            <h2>Showroom metal stock</h2>
+            <p class="hint">Available <%= @item.metal.name.downcase %> across stores — not this piece’s own count.</p>
+            <ul class="stock-list">
+              <% stocks.each do |stock| %>
+                <li>
+                  <span><%= stock.store.try(:name) || 'Store' %></span>
+                  <strong><%= stock.available_grams.to_i %> g</strong>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+      </section>
+    </div>
+
+    <aside class="preview" aria-label="Showroom card">
+      <p class="preview-kicker">Showroom card</p>
+      <div class="gem" aria-hidden="true">💍</div>
+      <h2><%= @item.name.presence || 'Catalogue piece' %></h2>
+      <span class="sku-chip">SKU <%= @item.sku.presence || '—' %></span>
+      <div class="chips">
+        <span class="chip">Metal <strong><%= @item.metal.try(:name) || '—' %></strong></span>
+        <span class="chip">Purity <strong><%= @item.purity.try(:name) || '—' %></strong></span>
+        <span class="chip">Category <strong><%= @item.jewellery_category.try(:name) || '—' %></strong></span>
+        <span class="chip">Wt <strong><%= '%.2f' % weight %> g</strong></span>
+      </div>
+      <div class="preview-price"><%= format_rupees(total) %></div>
+      <div class="preview-desc">
+        <% if qty > 1 && unit.positive? %>
+          <%= format_rupees(unit) %> each · <%= qty %> pcs
+        <% elsif in_stock %>
+          <%= @item.quantity %> in the tray
+        <% else %>
+          Not currently in the tray
+        <% end %>
+      </div>
+      <p class="preview-note"><%= in_stock ? 'Ready for the counter.' : 'Mark quantity when this piece returns to stock.' %></p>
+    </aside>
+  </div>
 </div>
+
+<style>
+  .piece-show .piece-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .piece-show a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .piece-show .piece-dl { margin: 0; }
+  .piece-show .piece-dl > div {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(201,162,39,0.16);
+  }
+  .piece-show .piece-dl dt {
+    color: #6b6258;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .piece-show .piece-dl dd { margin: 0; color: #14110f; }
+  .piece-show .price-dd { color: #c9a227; font-weight: 700; }
+  .piece-show .muted-inline { color: #6b6258; font-weight: 500; font-size: 12px; margin-left: 6px; }
+  .piece-show .formula {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid rgba(201,162,39,0.22);
+    border-radius: 10px;
+    color: #6b6258;
+    font-size: 13px;
+  }
+  .piece-show .stock-list { list-style: none; margin: 0; padding: 0; }
+  .piece-show .stock-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(201,162,39,0.16);
+    font-size: 14px;
+  }
+  @media (max-width: 880px) {
+    .piece-show .piece-dl > div { grid-template-columns: 1fr; }
+    .piece-show .piece-hero-actions { width: 100%; }
+  }
+</style>

@@ -10,10 +10,11 @@
       html, body { margin: 0; min-height: 100%; }
       body.auth-page {
         min-height: 100vh;
+        position: relative;
         background:
-          radial-gradient(1200px 500px at 10% -10%, rgba(212, 175, 55, 0.18), transparent 55%),
-          radial-gradient(900px 420px at 100% 110%, rgba(37, 99, 235, 0.16), transparent 50%),
-          linear-gradient(180deg, #0b1220 0%, #111827 55%, #0b1220 100%);
+          radial-gradient(1200px 500px at 10% -10%, rgba(201, 162, 39, 0.2), transparent 55%),
+          radial-gradient(900px 420px at 100% 110%, rgba(232, 213, 163, 0.12), transparent 50%),
+          linear-gradient(180deg, #0b1220 0%, #14110f 55%, #0b1220 100%);
         color: #0f172a;
         font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -24,6 +25,7 @@
         align-items: center;
         justify-content: center;
         padding: 32px 16px;
+        position: relative;
       }
       .auth-card {
         width: 100%;
@@ -131,6 +133,25 @@
         font-size: 13px;
         text-align: center;
       }
+      .house-link {
+        position: absolute;
+        top: 22px;
+        left: 22px;
+        color: #e8d5a3;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .powered {
+        margin-top: 16px;
+        color: #94a3b8;
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      .powered strong { color: #e8d5a3; }
       .error-box {
         background: #fff1f2;
         border: 1px solid #fecaca;
@@ -148,6 +169,8 @@
     </style>
   </head>
   <body class="auth-page">
+    <a class="house-link" href="<%= root_path %>">← Maison Atelier</a>
     <%= yield %>
+    <p class="powered" style="position:fixed;bottom:16px;left:0;right:0;text-align:center;margin:0">Powered by <strong>Strucxil PVT LTD</strong></p>
   </body>
 </html>

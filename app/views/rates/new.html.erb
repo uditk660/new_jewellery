@@ -1,95 +1,114 @@
-<style>
-/* Rates new form styling */
-.rate-form { max-width:820px; margin:28px auto; padding:0 16px; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial }
-.rate-card { background:#fff; padding:18px; border-radius:12px; box-shadow:0 10px 30px rgba(2,6,23,0.06); border:1px solid rgba(2,6,23,0.03) }
-.field { margin-bottom:12px }
-.label { display:block; font-size:13px; color:#374151; margin-bottom:6px }
-.input, select { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf5 }
-.row { display:flex; gap:12px }
-.col { flex:1 }
-.muted { color:#64748b }
-.btn { padding:10px 14px; background:#0ea5a4; color:#fff; border-radius:8px; border:none }
-.btn.secondary { background:#f3f4f6; color:#0b1220 }
-.form-actions { display:flex; gap:10px; justify-content:flex-end; align-items:center; margin-top:12px }
-/* modal panel styles when loaded into the rates modal */
-.modal-panel .rate-card { padding:22px; box-shadow:0 20px 40px rgba(2,6,23,0.12) }
-.modal-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:8px }
-.modal-close { background:transparent;border:0;font-size:20px;cursor:pointer }
-@media(max-width:700px){ .row{flex-direction:column} }
-</style>
+<%= render 'shared/atelier_styles' %>
 
-<div class="rate-form">
-  <div class="rate-card">
-    <h2 style="margin-top:0">Set Daily Metal Price</h2>
-    <p class="muted">Choose metal and purity, enter price per gram (₹), and save.</p>
+<div class="atelier-page rates-board">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Rates</p>
+      <h1>Set a rate</h1>
+      <p class="lead">Choose the metal and hallmark, then enter today’s rupees per gram. This feeds catalogue valuation.</p>
+    </div>
+    <%= link_to '← Today’s board', rates_path, class: 'atelier-back' %>
+  </header>
 
-    <%= form_for @rate, url: rates_path do |f| %>
-      <div class="row">
-        <div class="col field">
-          <label class="label">Date</label>
-          <%= f.date_field :date, class: 'input' %>
-        </div>
-        <div class="col field">
-          <label class="label">Metal</label>
-          <select id="metal-select" name="metal_id" class="input">
-            <% @metals.each do |m| %>
-              <option value="<%= m.id %>" <%= 'selected' if m.id == @selected_metal_id %>><%= m.name %></option>
-            <% end %>
-          </select>
-        </div>
-      </div>
+  <div class="atelier-form" style="max-width:640px">
+    <% if flash[:alert].present? %>
+      <div class="errors"><%= flash[:alert] %></div>
+    <% end %>
+    <% if @rate && @rate.errors.any? %>
+      <div class="errors"><%= @rate.errors.full_messages.to_sentence %></div>
+    <% end %>
 
-      <div class="row" style="margin-top:8px">
-        <div class="col field">
-          <label class="label">Purity</label>
-          <select id="purity-select" name="purity_id" class="input">
-            <% @purities_for_metal.each do |p| %>
-              <option value="<%= p.id %>" <%= 'selected' if defined?(@selected_purity_id) && @selected_purity_id && p.id == @selected_purity_id %>><%= p.name %> (<%= p.purity_percent %>%)</option>
-            <% end %>
-          </select>
+    <%= form_tag rates_path, method: :post do %>
+      <section class="section">
+        <h2>Hallmark &amp; rate</h2>
+        <p class="hint">One rate per hallmark for the day. Saving again today overwrites the earlier figure.</p>
+        <div class="row">
+          <div class="field">
+            <label for="rate_date">Date</label>
+            <%= date_field_tag 'rate[date]', (@rate&.date || Time.zone.today), class: 'form-control', id: 'rate_date' %>
+          </div>
+          <div class="field">
+            <label for="metal-select">Metal <span class="req">*</span></label>
+            <select id="metal-select" name="metal_id" class="form-control">
+              <option value="">Select metal</option>
+              <% (@metals || []).each do |m| %>
+                <option value="<%= m.id %>" <%= 'selected' if m.id == @selected_metal_id %>><%= m.name %></option>
+              <% end %>
+            </select>
+          </div>
         </div>
-        <div class="col field">
-          <label class="label">Price per gram (₹)</label>
-          <input type="text" name="price_per_gram" id="price_per_gram" class="input" placeholder="e.g. 4200.50" value="<%= @prefill_price.present? ? sprintf('%.2f', @prefill_price) : '' %>" />
+        <div class="row" style="margin-top:12px">
+          <div class="field">
+            <label for="purity-select">Purity / hallmark <span class="req">*</span></label>
+            <select id="purity-select" name="purity_id" class="form-control">
+              <option value="">Select hallmark</option>
+              <% (@purities_for_metal || []).each do |p| %>
+                <option value="<%= p.id %>" <%= 'selected' if p.id == @selected_purity_id %>><%= p.hallmark_label %></option>
+              <% end %>
+            </select>
+          </div>
+          <div class="field">
+            <label for="price_per_gram">Rate ₹ / g <span class="req">*</span></label>
+            <%= number_field_tag :price_per_gram, (@prefill_price.present? ? ('%.2f' % @prefill_price) : nil), id: 'price_per_gram', class: 'form-control', step: '0.01', min: 0, placeholder: '0.00' %>
+          </div>
         </div>
-      </div>
-
-      <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center">
-        <a href="<%= rates_path %>" class="muted">Back to rates</a>
-        <div class="form-actions">
-          <button type="button" class="btn secondary" onclick="(function(){var m=document.getElementById('rate-modal'); if(m) m.style.display='none'; else window.location.href='<%= j rates_path %>'; })()">Cancel</button>
-          <button class="btn" type="submit">Update</button>
-        </div>
+      </section>
+      <div class="actions">
+        <%= submit_tag 'Save rate', class: 'btn-gold', id: 'rate-submit' %>
+        <%= link_to 'Cancel', rates_path, class: 'atelier-back' %>
       </div>
     <% end %>
   </div>
 </div>
 
 <script>
-// dynamic purity loading (no extra endpoint: preloaded via data attribute or could be added)
-document.addEventListener('DOMContentLoaded', function(){
-  var metalSelect = document.getElementById('metal-select');
-  var puritySelect = document.getElementById('purity-select');
-  var purities = {};
-  <% @metals.each do |m| %>
-    purities['<%= m.id %>'] = [
-      <% m.purities.order(:purity_percent).each do |p| %>
-        { id: '<%= p.id %>', label: '<%= p.name %> (<%= p.purity_percent %>%)' },
-      <% end %>
-    ];
-  <% end %>
-
-  function rebuildPurities(mid){
-    var list = purities[mid] || [];
-    puritySelect.innerHTML = '';
-    list.forEach(function(item){
-      var opt = document.createElement('option'); opt.value = item.id; opt.textContent = item.label; puritySelect.appendChild(opt);
-    });
-  }
-
-  metalSelect.addEventListener('change', function(){ rebuildPurities(this.value); });
-  // focus price input if preselected purity provided
-  var priceInput = document.getElementById('price_per_gram');
-  if(priceInput){ priceInput.focus(); }
-});
+  (function(){
+    var metalSelect = document.getElementById('metal-select');
+    var puritySelect = document.getElementById('purity-select');
+    var priceEl = document.getElementById('price_per_gram');
+    var submitEl = document.getElementById('rate-submit');
+    var purities = {};
+    <% (@metals || []).each do |m| %>
+      purities['<%= m.id %>'] = <%= m.purities.ordered.map { |p| { id: p.id, label: p.hallmark_label, price: p.updated_price.to_f } }.to_json.html_safe %>;
+    <% end %>
+    function rebuild(mid, keep){
+      var list = purities[mid] || [];
+      var prev = keep || (puritySelect && puritySelect.value);
+      puritySelect.innerHTML = '';
+      var blank = document.createElement('option');
+      blank.value = ''; blank.text = 'Select hallmark';
+      puritySelect.appendChild(blank);
+      list.forEach(function(item){
+        var opt = document.createElement('option');
+        opt.value = item.id; opt.text = item.label;
+        puritySelect.appendChild(opt);
+      });
+      if(prev){
+        var still = Array.prototype.slice.call(puritySelect.options).some(function(o){ return String(o.value) === String(prev); });
+        if(still) puritySelect.value = prev;
+      }
+    }
+    function sync(){
+      var ready = metalSelect.value && puritySelect.value && parseFloat(priceEl.value) > 0;
+      if(submitEl) submitEl.disabled = !ready;
+    }
+    if(metalSelect){
+      metalSelect.addEventListener('change', function(){
+        rebuild(this.value, '');
+        var first = (purities[this.value] || [])[0];
+        if(first && priceEl && !priceEl.value) priceEl.value = first.price > 0 ? first.price.toFixed(2) : '';
+        sync();
+      });
+    }
+    if(puritySelect){
+      puritySelect.addEventListener('change', function(){
+        var list = purities[metalSelect.value] || [];
+        var hit = list.filter(function(p){ return String(p.id) === String(puritySelect.value); })[0];
+        if(hit && priceEl) priceEl.value = hit.price > 0 ? hit.price.toFixed(2) : '';
+        sync();
+      });
+    }
+    if(priceEl) priceEl.addEventListener('input', sync);
+    sync();
+  })();
 </script>

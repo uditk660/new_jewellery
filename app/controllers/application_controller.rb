@@ -10,7 +10,11 @@ class ApplicationController < ActionController::Base
   private
 
   def skip_user_auth?
-    devise_controller? || staff_controller?
+    devise_controller? || staff_controller? || public_controller?
+  end
+
+  def public_controller?
+    controller_name == 'pages' || (controller_name == 'home' && action_name == 'dashboard')
   end
 
   def staff_controller?
@@ -75,7 +79,7 @@ class ApplicationController < ActionController::Base
     if resource_or_scope == :employee || resource_or_scope.is_a?(Employee)
       new_employee_session_path
     else
-      new_user_session_path
+      root_path
     end
   end
 end

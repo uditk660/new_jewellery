@@ -1,0 +1,163 @@
+<%= render 'shared/atelier_styles' %>
+
+<%
+  editing = @customer.persisted?
+  preview_name = @customer.full_name.presence || 'New client'
+  preview_phone = @customer.phone.presence || 'Phone will appear here'
+  preview_gst = @customer.gst_number.presence || 'No GST yet'
+  preview_papers = @customer.aadhaar_or_pan.presence || 'No Aadhaar / PAN yet'
+%>
+
+<div class="atelier-page people-form">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">People</p>
+      <h1><%= editing ? 'Amend client' : 'Register a client' %></h1>
+      <p class="lead">
+        <% if editing %>
+          Update how this client appears on invoices and the house book. Phone must stay unique.
+        <% else %>
+          Name and phone open the book. Papers and address help the invoice later.
+        <% end %>
+      </p>
+    </div>
+    <%= link_to editing ? '← Client' : '← Clients', editing ? customer_path(@customer) : customers_path, class: 'atelier-back' %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Name</span>
+    <span class="step"><b>2</b> Contact</span>
+    <span class="step"><b>3</b> Papers</span>
+  </div>
+
+  <div class="atelier-grid">
+    <div class="atelier-form">
+      <% if @customer.errors.any? %>
+        <div class="errors"><%= @customer.errors.full_messages.to_sentence %></div>
+      <% end %>
+
+      <%= form_for @customer do |f| %>
+        <section class="section">
+          <h2>Name</h2>
+          <p class="hint">How the client should appear on invoices.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :first_name do %>First name <span class="req">*</span><% end %>
+              <%= f.text_field :first_name, class: 'form-control', placeholder: 'Given name' %>
+            </div>
+            <div class="field">
+              <%= f.label :last_name, 'Last name' %>
+              <%= f.text_field :last_name, class: 'form-control', placeholder: 'Family name' %>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Contact</h2>
+          <p class="hint">Phone is the unique key for this client in the house.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :phone do %>Phone <span class="req">*</span><% end %>
+              <%= f.text_field :phone, class: 'form-control', placeholder: '+91 98765 43210' %>
+            </div>
+            <div class="field">
+              <%= f.label :email, 'Email' %>
+              <%= f.email_field :email, class: 'form-control', placeholder: 'name@example.com' %>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>Papers</h2>
+          <p class="hint">Aadhaar, PAN and GST when the bill requires them. Address for delivery and invoice.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :aadhaar_or_pan, 'Aadhaar / PAN' %>
+              <%= f.text_field :aadhaar_or_pan, class: 'form-control', placeholder: 'Aadhaar or PAN' %>
+            </div>
+            <div class="field">
+              <%= f.label :gst_number, 'GSTIN' %>
+              <%= f.text_field :gst_number, class: 'form-control', placeholder: 'GSTIN if applicable' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :address, 'Address' %>
+              <%= f.text_area :address, rows: 4, class: 'form-control', placeholder: 'Street, city, state, postal code' %>
+            </div>
+          </div>
+        </section>
+
+        <div class="actions">
+          <%= f.submit editing ? 'Save client' : 'Add to the book', class: 'btn-gold', id: 'client-submit' %>
+          <%= link_to 'Cancel', editing ? customer_path(@customer) : customers_path, class: 'atelier-back' %>
+        </div>
+      <% end %>
+    </div>
+
+    <aside class="preview" aria-live="polite">
+      <p class="preview-kicker">Client card</p>
+      <div class="gem avatar-lg" id="preview-initials" aria-hidden="true"><%= @customer.initials.presence || '—' %></div>
+      <h2 id="preview-name"><%= preview_name %></h2>
+      <span class="sku-chip" id="preview-phone"><%= preview_phone %></span>
+      <div class="chips">
+        <span class="chip">GST <strong id="preview-gst"><%= preview_gst %></strong></span>
+        <span class="chip">Papers <strong id="preview-papers"><%= preview_papers %></strong></span>
+      </div>
+      <div class="preview-price"><%= format_rupees(editing ? @customer.outstanding : 0) %></div>
+      <div class="preview-desc">Outstanding on the book</div>
+      <p class="preview-note" id="preview-note">This card is how the client reads on the house book before you save.</p>
+    </aside>
+  </div>
+</div>
+
+<style>
+  .people-form .avatar-lg {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 700; letter-spacing: 0.08em; color: #e8d5a3;
+  }
+</style>
+
+<script>
+  (function(){
+    var form = document.querySelector('.people-form form');
+    if(!form) return;
+    var first = form.querySelector('input[name="customer[first_name]"]');
+    var last = form.querySelector('input[name="customer[last_name]"]');
+    var phone = form.querySelector('input[name="customer[phone]"]');
+    var gst = form.querySelector('input[name="customer[gst_number]"]');
+    var papers = form.querySelector('input[name="customer[aadhaar_or_pan]"]');
+    var submit = document.getElementById('client-submit');
+    var nameEl = document.getElementById('preview-name');
+    var phoneEl = document.getElementById('preview-phone');
+    var gstEl = document.getElementById('preview-gst');
+    var papersEl = document.getElementById('preview-papers');
+    var initialsEl = document.getElementById('preview-initials');
+    var noteEl = document.getElementById('preview-note');
+
+    function val(el){ return el ? el.value.trim() : ''; }
+    function ready(){ return !!(val(first) && val(phone)); }
+    function initials(){
+      var a = val(first);
+      var b = val(last);
+      var letters = ((a[0] || '') + (b[0] || '')) || a.slice(0, 2);
+      return letters.toUpperCase() || '—';
+    }
+    function sync(){
+      if(submit) submit.disabled = !ready();
+      if(nameEl) nameEl.textContent = [val(first), val(last)].filter(Boolean).join(' ') || 'New client';
+      if(phoneEl) phoneEl.textContent = val(phone) || 'Phone will appear here';
+      if(gstEl) gstEl.textContent = val(gst) || 'No GST yet';
+      if(papersEl) papersEl.textContent = val(papers) || 'No Aadhaar / PAN yet';
+      if(initialsEl) initialsEl.textContent = initials();
+      if(noteEl) noteEl.textContent = ready() ? 'Ready to save to the house book.' : 'Name and phone open the book.';
+    }
+    [first, last, phone, gst, papers].forEach(function(el){
+      if(!el) return;
+      el.addEventListener('input', sync);
+      el.addEventListener('change', sync);
+    });
+    form.addEventListener('submit', function(e){ if(!ready()) e.preventDefault(); });
+    sync();
+  })();
+</script>

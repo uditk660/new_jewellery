@@ -25,21 +25,22 @@
 
         <section class="section">
           <h2>Metal &amp; hallmark</h2>
-          <p class="hint">Purity and category lists belong to the metal you pick. Gold can offer 18K, 20K and 22K.</p>
+          <p class="hint">Purity and category lists belong to the metal you pick. Gold can offer 18K, 20K and 22K. Each hallmark carries its own remaining weight.</p>
           <div class="row">
             <div class="field">
-              <%= f.label :metal_id, 'Metal' %>
+              <%= f.label :metal_id do %>Metal <span class="req">*</span><% end %>
               <%= f.collection_select :metal_id, (@metals || []), :id, :name, { include_blank: 'Select metal' }, { class: 'form-control' } %>
             </div>
             <div class="field">
-              <%= f.label :purity_id, 'Purity / hallmark' %>
-              <%= f.collection_select :purity_id, (@purities || []), :id, :hallmark_label, { include_blank: 'Select purity' }, { class: 'form-control' } %>
+              <%= f.label :purity_id do %>Purity / hallmark <span class="req">*</span><% end %>
+              <%= f.collection_select :purity_id, (@purities || []), :id, :catalogue_option_label, { include_blank: 'Select purity' }, { class: 'form-control' } %>
             </div>
             <div class="field">
-              <%= f.label :jewellery_category_id, 'Category' %>
+              <%= f.label :jewellery_category_id do %>Category <span class="req">*</span><% end %>
               <%= f.collection_select :jewellery_category_id, (@categories || []), :id, :display_name, { include_blank: 'Select category' }, { class: 'form-control' } %>
             </div>
           </div>
+          <p class="hint" id="purity-weight-hint" style="margin:10px 0 0">Choose a hallmark to see remaining house weight.</p>
         </section>
 
         <section class="section">
@@ -47,7 +48,7 @@
           <p class="hint">Name how it should appear on invoices and the showroom catalogue.</p>
           <div class="row">
             <div class="field">
-              <%= f.label :name, 'Piece name' %>
+              <%= f.label :name do %>Piece name <span class="req">*</span><% end %>
               <%= f.text_field :name, class: 'form-control', placeholder: 'e.g. 22K temple necklace' %>
             </div>
           </div>
@@ -63,30 +64,32 @@
               <%= f.text_field :sku, class: 'form-control', readonly: true %>
             </div>
             <div class="field narrow">
-              <%= f.label :quantity, 'Quantity (pcs)' %>
-              <%= f.number_field :quantity, step: 1, min: 0, class: 'form-control' %>
+              <%= f.label :quantity do %>Quantity (pcs) <span class="req">*</span><% end %>
+              <%= f.number_field :quantity, step: 1, min: 1, class: 'form-control' %>
             </div>
           </div>
         </section>
 
         <section class="section">
           <h2>Weight &amp; valuation</h2>
-          <p class="hint">Price is calculated as purity rate × weight × quantity. It cannot be typed by hand.</p>
+          <p class="hint">Price is calculated as purity rate × weight × quantity. The piece weight is taken from the selected hallmark’s remaining stock.</p>
           <div class="row">
-            <div class="field narrow">
-              <%= f.label :weight_grams, 'Weight (g)' %>
-              <%= f.number_field :weight_grams, step: 0.01, class: 'form-control', placeholder: '0.00' %>
+            <div class="field">
+              <%= f.label :weight_grams do %>Weight (g) <span class="req">*</span><% end %>
+              <%= f.number_field :weight_grams, step: 0.01, min: 0.01, class: 'form-control', placeholder: '0.00' %>
+              <p class="hint" id="weight-available-hint" style="margin:8px 0 0">Select a hallmark to see how many grams are available.</p>
             </div>
             <div class="field">
               <%= f.label :price_cents, 'Catalogue price (₹)' %>
-              <%= text_field_tag 'price_rupees', (@item.price.present? ? ('%.2f' % @item.price) : ''), class: 'form-control', id: 'price_rupees', placeholder: 'Calculated', readonly: true %>
-              <%= f.hidden_field :price_cents, id: 'price_cents_hidden' %>
+              <%= text_field_tag 'price_rupees', '', class: 'form-control', id: 'price_rupees', placeholder: 'Calculated', readonly: true, tabindex: -1 %>
+              <%= f.hidden_field :price_cents, id: 'price_cents_hidden', value: 0 %>
+              <p class="hint" id="price-formula" style="margin:8px 0 0">Select a hallmark, then enter weight.</p>
             </div>
           </div>
         </section>
 
         <div class="actions">
-          <%= f.submit 'Add to catalogue', class: 'btn-gold' %>
+          <%= f.submit 'Add to catalogue', class: 'btn-gold', id: 'catalogue-submit', disabled: true %>
         </div>
       <% end %>
     </div>
@@ -158,10 +161,9 @@
           els.forEach(function(el){
             if(el === metalEl) { el.disabled = false; return; }
             if(el === purityEl || el === categoryEl) { el.disabled = !metalEl.value; return; }
+            if(el.id === 'price_rupees') { el.disabled = false; el.readOnly = true; return; }
             el.disabled = disabled;
           });
-          const submit = form.querySelector('input[type="submit"], button[type="submit"]');
-          if(submit) submit.disabled = disabled || !metalEl.value || !purityEl.value;
         }
 
         purityEl.disabled = !metalEl.value;
@@ -184,9 +186,16 @@
         if(categoryEl) categoryEl.addEventListener('change', syncChips);
 
         form.addEventListener('submit', function(e){
-          if(!metalEl.value || !purityEl.value){
+          const nameEl = form.querySelector('input[name="jewelry_item[name]"]');
+          const weightEl = form.querySelector('input[name="jewelry_item[weight_grams]"]');
+          const qtyEl = form.querySelector('input[name="jewelry_item[quantity]"]');
+          const nameOk = !!(nameEl && nameEl.value.trim());
+          const weight = parseFloat(weightEl && weightEl.value);
+          const qty = parseInt(qtyEl && qtyEl.value, 10);
+          const ready = metalEl.value && purityEl.value && categoryEl && categoryEl.value &&
+            nameOk && !isNaN(weight) && weight > 0 && !isNaN(qty) && qty >= 1;
+          if(!ready){
             e.preventDefault();
-            alert('Please select both metal and purity before adding this piece.');
           }
         });
       });
@@ -247,7 +256,14 @@
         ms = p.metal&.metal_stocks&.order(created_at: :desc)&.first
         (ms && ms.price_cents_per_gram.present?) ? (ms.price_cents_per_gram.to_f / 100.0) : 0.0
       end
-      { id: p.id, per_gram_price: per_gram, name: p.hallmark_label, metal_id: p.metal_id }
+      {
+        id: p.id,
+        per_gram_price: per_gram,
+        name: p.hallmark_label,
+        label: p.catalogue_option_label,
+        metal_id: p.metal_id,
+        available_grams: p.available_grams.to_f
+      }
     end.to_json.html_safe %>;
     const CATEGORIES = <%= (@categories || []).map { |c| { id: c.id, name: c.display_name, metal_id: c.metal_id } }.to_json.html_safe %>;
     function findPurity(id){ return PURITIES.find(x=>String(x.id) === String(id)); }
@@ -260,17 +276,110 @@
       const priceRupeesEl = document.getElementById('price_rupees');
       const priceHiddenEl = document.getElementById('price_cents_hidden');
 
+      const nameEl = document.querySelector('input[name="jewelry_item[name]"]');
+      const categoryEl = document.querySelector('select[name="jewelry_item[jewellery_category_id]"]');
+      const submitEl = document.getElementById('catalogue-submit');
+
+      function rupee(n){
+        const v = parseFloat(n);
+        if(isNaN(v)) return '₹0.00';
+        return '\u20B9' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      function quantityValue(){
+        const q = parseFloat((qtyEl && qtyEl.value) || '');
+        if(isNaN(q) || q < 1) return 1;
+        return q;
+      }
+      function gramsLabel(n){
+        const v = parseFloat(n);
+        if(isNaN(v)) return '0.00 g';
+        return v.toFixed(2) + ' g';
+      }
+      function updatePurityWeightHint(){
+        const hint = document.getElementById('purity-weight-hint');
+        const weightHint = document.getElementById('weight-available-hint');
+        const purity = purityEl ? findPurity(purityEl.value) : null;
+        if(!purity){
+          if(hint){
+            hint.textContent = 'Choose a hallmark to see remaining house weight.';
+            hint.style.color = '';
+          }
+          if(weightHint){
+            weightHint.textContent = 'Select a hallmark to see how many grams are available.';
+            weightHint.style.color = '';
+          }
+          if(weightEl) weightEl.placeholder = '0.00';
+          return;
+        }
+        const remaining = parseFloat(purity.available_grams || 0);
+        const weight = parseFloat((weightEl && weightEl.value) || 0);
+        const qty = quantityValue();
+        const needed = (isNaN(weight) ? 0 : weight) * qty;
+        if(weightEl) weightEl.placeholder = remaining.toFixed(2);
+        if(weightHint){
+          if(remaining <= 0){
+            weightHint.textContent = 'No grams currently available on ' + purity.name + '.';
+            weightHint.style.color = '#7f1d1d';
+          } else if(needed > remaining + 0.0001){
+            weightHint.textContent = 'Available now: ' + remaining.toFixed(2) + ' g. Enter a weight up to this amount.';
+            weightHint.style.color = '#7f1d1d';
+          } else {
+            weightHint.textContent = 'Available now: ' + remaining.toFixed(2) + ' g. You may enter up to this weight.';
+            weightHint.style.color = '';
+          }
+        }
+        if(!hint) return;
+        if(needed > remaining + 0.0001){
+          hint.textContent = 'Need ' + gramsLabel(needed) + ' from ' + purity.name + ', but only ' + gramsLabel(remaining) + ' remain.';
+          hint.style.color = '#7f1d1d';
+        } else {
+          hint.textContent = purity.name + ' has ' + gramsLabel(remaining) + ' in the house. This piece will take ' + gramsLabel(needed) + '.';
+          hint.style.color = '';
+        }
+      }
+      function requiredFilled(){
+        const nameOk = !!(nameEl && nameEl.value.trim());
+        const weight = parseFloat(weightEl && weightEl.value);
+        const weightOk = !isNaN(weight) && weight > 0;
+        const qty = parseInt(qtyEl && qtyEl.value, 10);
+        const qtyOk = !isNaN(qty) && qty >= 1;
+        const metalOk = !!(metalEl && metalEl.value);
+        const purityOk = !!(purityEl && purityEl.value);
+        const categoryOk = !!(categoryEl && categoryEl.value);
+        if(!(metalOk && purityOk && categoryOk && nameOk && weightOk && qtyOk)) return false;
+        const purity = findPurity(purityEl.value);
+        if(!purity) return false;
+        const remaining = parseFloat(purity.available_grams || 0);
+        const needed = weight * qty;
+        return needed <= remaining + 0.0001;
+      }
+      function syncSubmit(){
+        if(submitEl) submitEl.disabled = !requiredFilled();
+      }
       function computeAndSetPrice(){
+        updatePurityWeightHint();
+        syncSubmit();
         if(!priceRupeesEl || !priceHiddenEl) return;
         const purity = purityEl ? findPurity(purityEl.value) : null;
-        const perGram = purity && (purity.per_gram_price || purity.per_gram_price === 0) ? parseFloat(purity.per_gram_price) : 0;
+        const perGram = purity ? parseFloat(purity.per_gram_price || 0) : 0;
         const weight = parseFloat((weightEl && weightEl.value) || 0);
-        const qty = parseFloat((qtyEl && qtyEl.value) || 1);
-        const total = perGram * (isNaN(weight) ? 0 : weight) * (isNaN(qty) ? 1 : qty);
-        priceRupeesEl.value = isNaN(total) ? '' : total.toFixed(2);
-        if(priceRupeesEl.value) priceHiddenEl.value = Math.round(parseFloat(priceRupeesEl.value) * 100);
+        const qty = quantityValue();
+        const wt = isNaN(weight) ? 0 : weight;
+        const total = perGram * wt * qty;
+        priceRupeesEl.value = total.toFixed(2);
+        priceHiddenEl.value = Math.round(total * 100);
         const previewPrice = document.getElementById('preview-price');
-        if(previewPrice) previewPrice.textContent = priceRupeesEl.value ? '\u20B9' + parseFloat(priceRupeesEl.value).toFixed(2) : '₹ —';
+        if(previewPrice) previewPrice.textContent = rupee(total);
+        const formula = document.getElementById('price-formula');
+        if(formula){
+          if(!purityEl || !purityEl.value){
+            formula.textContent = 'Select a hallmark, then enter weight.';
+          } else if(!(perGram > 0)){
+            formula.textContent = 'No rate on this hallmark. Set today’s rate first.';
+          } else {
+            formula.textContent = rupee(perGram) + '/g × ' + wt.toFixed(2) + ' g × ' + qty + ' pcs = ' + rupee(total);
+          }
+        }
       }
 
       function populatePurityOptions(selectedMetalId){
@@ -287,7 +396,7 @@
         list.forEach(function(p){
           const opt = document.createElement('option');
           opt.value = p.id;
-          opt.text = p.name;
+          opt.text = p.label || p.name;
           purityEl.appendChild(opt);
         });
         if(prev){
@@ -320,7 +429,7 @@
         }
       }
 
-      [purityEl, weightEl, qtyEl].forEach(el=>{ if(!el) return; el.addEventListener('input', computeAndSetPrice); el.addEventListener('change', computeAndSetPrice); });
+      [purityEl, weightEl, qtyEl, nameEl, categoryEl, metalEl].forEach(el=>{ if(!el) return; el.addEventListener('input', computeAndSetPrice); el.addEventListener('change', computeAndSetPrice); });
       if(metalEl){
         metalEl.addEventListener('change', function(){
           populatePurityOptions(metalEl.value);

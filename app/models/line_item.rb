@@ -9,6 +9,16 @@ class LineItem < ActiveRecord::Base
   validates :net_weight, numericality: { greater_than_or_equal_to: 0 }
   validates :making_charge, numericality: { greater_than_or_equal_to: 0 }
   validates :additional_charge, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
+  validate :quantity_within_catalogue_stock
+
+  def quantity_within_catalogue_stock
+    return if jewelry_item.blank? || quantity.blank?
+
+    available = jewelry_item.quantity.to_i
+    return unless quantity.to_i > available
+
+    errors.add(:quantity, "cannot exceed remaining stock (#{available} pcs)")
+  end
 
   def total_cents
     # include making charge per-line (converted to cents) and additional charge per-item

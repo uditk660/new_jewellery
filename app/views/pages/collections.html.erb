@@ -1,0 +1,89 @@
+<% content_for :title, 'Collections — Maison Atelier' %>
+
+<header class="page-hero">
+  <p class="eyebrow">Collections</p>
+  <h1>Pieces for the tray.</h1>
+  <p class="lede" style="margin:0 auto">Bridal gold, solitaires and daily wear — photographed as they sit in the house. Ask the atelier to view a piece in person.</p>
+</header>
+
+<section class="section" style="padding-top:8px">
+  <div class="wrap">
+    <div class="collection-grid">
+      <article class="card reveal">
+        <img src="<%= maison_photo(:gold, width: 1000) %>" alt="Temple gold">
+        <div class="card-copy">
+          <h3>Temple gold</h3>
+          <p>22K work for ceremony and heirloom</p>
+        </div>
+      </article>
+      <article class="card reveal delay-1">
+        <img src="<%= maison_photo(:necklace, width: 1000) %>" alt="Bridal necklace">
+        <div class="card-copy">
+          <h3>Bridal</h3>
+          <p>Sets arranged for the viewing room</p>
+        </div>
+      </article>
+      <article class="card reveal delay-2">
+        <img src="<%= maison_photo(:ring, width: 1000) %>" alt="Solitaire ring">
+        <div class="card-copy">
+          <h3>Solitaires</h3>
+          <p>Rings and studs with a quiet fire</p>
+        </div>
+      </article>
+      <article class="card reveal">
+        <img src="<%= maison_photo(:earrings, width: 1000) %>" alt="Earrings">
+        <div class="card-copy">
+          <h3>Earrings</h3>
+          <p>Jhumkas, chaandbali and contemporary drops</p>
+        </div>
+      </article>
+      <article class="card reveal delay-1">
+        <img src="<%= maison_photo(:bracelet, width: 1000) %>" alt="Bangles">
+        <div class="card-copy">
+          <h3>Bangles</h3>
+          <p>Kadas and stacks in yellow and rose</p>
+        </div>
+      </article>
+      <article class="card reveal delay-2">
+        <img src="<%= maison_photo(:bench, width: 1000) %>" alt="Fine jewellery">
+        <div class="card-copy">
+          <h3>Atelier pieces</h3>
+          <p>Made to measure from the house bench</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<% if @pieces.present? %>
+  <section class="section ivory">
+    <div class="wrap">
+      <p class="eyebrow reveal">From the catalogue</p>
+      <h2 class="reveal">On the book now</h2>
+      <div class="piece-grid">
+        <% @pieces.each do |piece| %>
+          <div class="piece reveal">
+            <div class="meta">
+              <h3><%= piece.name %></h3>
+              <p><%= [piece.metal&.name, piece.purity&.name, piece.jewellery_category&.name].compact.join(' · ') %></p>
+              <p><%= number_with_precision(piece.weight_grams, precision: 2) %> g · <%= piece.quantity %> pcs</p>
+              <div class="price"><%= format_rupees(piece.catalogue_amount) %></div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+      <p class="lede reveal" style="margin-top:22px">Prices follow today’s hallmark rates. Sign in to raise a bill from the atelier.</p>
+    </div>
+  </section>
+<% end %>
+
+<section class="cta-band">
+  <img src="<%= maison_photo(:sparkle, width: 1800) %>" alt="Jewellery sparkle">
+  <div class="inner">
+    <p class="eyebrow">Private viewing</p>
+    <h2>Ask to see a piece.</h2>
+    <div class="hero-ctas" style="justify-content:center">
+      <%= link_to 'Contact the house', contact_path, class: 'btn-gold' %>
+    </div>
+  </div>
+</section>

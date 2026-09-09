@@ -1,0 +1,80 @@
+<% content_for :title, 'Contact us — Maison Atelier' %>
+
+<header class="page-hero">
+  <p class="eyebrow">Contact us</p>
+  <h1>Write to the house.</h1>
+  <p class="lede" style="margin:0 auto">Appointments, bridal viewings and custom making. Leave a note — the atelier answers in kind.</p>
+</header>
+
+<section class="section" style="padding-top:8px">
+  <div class="wrap contact-grid">
+    <aside class="glass reveal">
+      <p class="eyebrow">The atelier</p>
+      <h2>Visit or write.</h2>
+      <p class="lede">Showroom hours are by appointment. For rates of the day, bills and the client book, sign in to the atelier.</p>
+      <p style="margin:18px 0 8px;color:#e8d5a3;font-weight:600">Maison Atelier</p>
+      <p style="margin:0;color:#d6cbb8;line-height:1.7">
+        Private viewing room<br>
+        By appointment, India<br>
+        <a href="mailto:house@maisonatelier.test" style="color:#e8d5a3">house@maisonatelier.test</a>
+      </p>
+      <div class="hero-ctas" style="margin-top:22px">
+        <%= link_to 'Sign in', new_user_session_path, class: 'btn-ghost' %>
+      </div>
+      <div class="photo-frame" style="margin-top:22px">
+        <img src="<%= maison_photo(:necklace, width: 900) %>" alt="Necklace in atelier light" style="height:220px">
+      </div>
+    </aside>
+
+    <div class="glass reveal delay-1">
+      <% if @inquiry.errors.any? %>
+        <div class="errors"><%= @inquiry.errors.full_messages.to_sentence %></div>
+      <% end %>
+
+      <%= form_for @inquiry, url: contact_path do |f| %>
+        <div class="hp" aria-hidden="true">
+          <label for="company_website">Company</label>
+          <input type="text" name="company_website" id="company_website" tabindex="-1" autocomplete="off">
+        </div>
+        <div class="field">
+          <%= f.label :name, 'Your name' %>
+          <%= f.text_field :name, required: true, maxlength: 120, placeholder: 'How we should address you' %>
+        </div>
+        <div class="field">
+          <%= f.label :email, 'Email' %>
+          <%= f.email_field :email, required: true, placeholder: 'you@example.com' %>
+        </div>
+        <div class="field">
+          <%= f.label :phone, 'Phone' %>
+          <%= f.telephone_field :phone, maxlength: 10, inputmode: 'numeric', placeholder: '10 digits' %>
+        </div>
+        <div class="field">
+          <%= f.label :subject, 'Subject' %>
+          <%= f.select :subject, [
+            ['Private viewing', 'Private viewing'],
+            ['Bridal appointment', 'Bridal appointment'],
+            ['Custom making', 'Custom making'],
+            ['Open a house / atelier', 'Open a house / atelier'],
+            ['Something else', 'Something else']
+          ], include_blank: 'Choose a subject' %>
+        </div>
+        <div class="field">
+          <%= f.label :message, 'Your note' %>
+          <%= f.text_area :message, rows: 6, required: true, placeholder: 'Tell us the piece, the date, or how we may help.' %>
+        </div>
+        <%= f.submit 'Send to the house', class: 'btn-gold', style: 'width:100%;border:0' %>
+      <% end %>
+    </div>
+  </div>
+</section>
+
+<script>
+  (function(){
+    var phone = document.getElementById('contact_inquiry_phone');
+    if(!phone) return;
+    phone.addEventListener('input', function(){
+      var cleaned = (this.value || '').replace(/\D/g, '').slice(0, 10);
+      if(this.value !== cleaned) this.value = cleaned;
+    });
+  })();
+</script>

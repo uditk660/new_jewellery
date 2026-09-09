@@ -1,132 +1,324 @@
-<div class="container">
-  <div class="page-header">
+<%= render 'shared/atelier_styles' %>
+
+<%
+  items = @items || []
+  tray_value = items.sum { |it| it.respond_to?(:catalogue_amount) ? it.catalogue_amount.to_f : 0 }
+  q = params[:q].to_s
+  sort_for = lambda do |key, label|
+    next_dir = (params[:sort] == key && params[:direction] != 'asc') ? 'asc' : 'desc'
+    active = params[:sort] == key
+    arrow = active ? (params[:direction] == 'asc' ? ' ↑' : ' ↓') : ''
+    link_to "#{label}#{arrow}", jewelry_items_path(request.query_parameters.merge(sort: key, direction: next_dir, page: 1)), class: (active ? 'sort-link is-active' : 'sort-link')
+  end
+%>
+
+<div class="atelier-page catalogue-index">
+  <header class="atelier-hero">
     <div>
-      <h1>Jewelry Catalog</h1>
-      <p class="lead">Browse items, view stock and master-data attributes inline.</p>
+      <p class="eyebrow">Showroom</p>
+      <h1>Catalogue</h1>
+      <p class="lead">Every piece on the tray — metal, hallmark, weight and valuation at a glance.</p>
     </div>
-    <div>
-      <%= link_to 'Add New Item', new_jewelry_item_path, class: 'btn btn-primary' %>
+    <%= link_to 'Register a piece', new_jewelry_item_path, class: 'btn-gold' %>
+  </header>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag jewelry_items_path, method: :get, class: 'cat-search' do %>
+      <%= hidden_field_tag :sort, params[:sort] if params[:sort].present? %>
+      <%= hidden_field_tag :direction, params[:direction] if params[:direction].present? %>
+      <%= text_field_tag :q, q, class: 'form-control', placeholder: 'Search name, SKU, metal, purity or category' %>
+      <button type="submit" class="atelier-back">Search</button>
+      <% if q.present? %>
+        <%= link_to 'Clear', jewelry_items_path, class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="cat-stats">
+      <div>
+        <span>Pieces</span>
+        <strong><%= @total_count || items.size %></strong>
+      </div>
+      <div>
+        <span>Tray value</span>
+        <strong class="gold"><%= format_rupees(tray_value) %></strong>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-toolbar">
-      <form action="" method="get" class="inline-form search-form">
-        <input type="text" name="q" value="<%= h(params[:q]) %>" placeholder="Search by name, sku, category, metal or purity" />
-        <button class="btn" type="submit">Search</button>
-        <% if params[:q].present? %>
-          <%= link_to 'Clear', jewelry_items_path, class: 'btn btn-link' %>
+  <% if items.any? %>
+    <div class="cat-table-wrap">
+      <table class="cat-table">
+        <thead>
+          <tr>
+            <th>Piece</th>
+            <th>Metal &amp; hallmark</th>
+            <th class="col-weight"><%= sort_for.call('weight', 'Weight') %></th>
+            <th class="col-price"><%= sort_for.call('price', 'Price') %></th>
+            <th class="col-tray"><%= sort_for.call('available', 'Tray') %></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% items.each do |item| %>
+            <% qty = item.quantity.to_i %>
+            <tr>
+              <td>
+                <%= link_to jewelry_item_path(item), class: 'piece-link' do %>
+                  <span class="gem-dot" aria-hidden="true">💍</span>
+                  <span>
+                    <strong><%= item.name %></strong>
+                    <span class="sku"><%= item.sku %></span>
+                    <% if item.jewellery_category %>
+                      <span class="sub"><%= item.jewellery_category.name %></span>
+                    <% end %>
+                  </span>
+                <% end %>
+              </td>
+              <td>
+                <div class="marks">
+                  <% if item.metal %><span class="mark"><%= item.metal.name %></span><% end %>
+                  <% if item.purity %><span class="mark gold-mark"><%= item.purity.name %></span><% end %>
+                  <% if item.metal.blank? && item.purity.blank? %>—<% end %>
+                </div>
+              </td>
+              <td class="col-weight">
+                <span class="wt"><span class="wt-val"><%= '%.2f' % item.weight_grams.to_f %></span><span class="wt-unit">g</span></span>
+              </td>
+              <td class="col-price price">
+                <%= format_rupees(item.computed_price) %>
+                <% if item.effective_price_per_gram.present? %>
+                  <span class="rate-line"><%= format_rupees(item.effective_price_per_gram) %>/g</span>
+                <% end %>
+              </td>
+              <td class="col-tray">
+                <% if qty > 0 %>
+                  <span class="stock in"><%= qty %> pcs</span>
+                <% else %>
+                  <span class="stock out">Out of tray</span>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+
+    <% if @page && @per_page && (@total_count.to_i > @per_page) %>
+      <div class="cat-pager">
+        <% if @page > 1 %>
+          <%= link_to '← Previous', jewelry_items_path(request.query_parameters.merge(page: @page - 1)), class: 'atelier-back' %>
         <% end %>
-      </form>
-      <%# compute total value for items that have a numeric quantity (pcs) %>
-      <% total_price = (@items || []).sum do |it|
-           q = (it.respond_to?(:quantity) && it.quantity.to_i > 0) ? it.quantity.to_i : 0
-           q > 0 ? (it.computed_price.to_f * q) : 0
-         end %>
-      <div class="pagination-controls muted">
-        <span>Total: <%= @total_count || @items.count %></span>
-        <span style="margin-left:12px">Value: <%= "\u20B9#{'%.2f' % total_price}" %></span>
+        <span>Page <%= @page %></span>
+        <% if (@page * @per_page) < @total_count.to_i %>
+          <%= link_to 'Next →', jewelry_items_path(request.query_parameters.merge(page: @page + 1)), class: 'atelier-back' %>
+        <% end %>
+      </div>
+    <% end %>
+  <% else %>
+    <div class="atelier-form empty">
+      <p class="eyebrow">Empty tray</p>
+      <h2>No pieces yet</h2>
+      <p class="hint">
+        <% if q.present? %>
+          Nothing matches “<%= q %>”. Try another name, SKU or metal.
+        <% else %>
+          Register the first catalogue piece — metal, hallmark and weight — to open the showroom tray.
+        <% end %>
+      </p>
+      <div class="actions" style="margin-top:16px">
+        <% if q.present? %>
+          <%= link_to 'Clear search', jewelry_items_path, class: 'atelier-back' %>
+        <% else %>
+          <%= link_to 'Register a piece', new_jewelry_item_path, class: 'btn-gold' %>
+        <% end %>
       </div>
     </div>
-    <table class="catalog-table">
-      <thead>
-        <tr>
-          <th class="serial-col">#</th>
-          <th class="sku-col">SKU</th>
-          <th class="item-col">Item</th>
-          <th class="category-col">Category</th>
-          <th class="metal-col">Metal</th>
-          <th class="purity-col">Purity</th>
-          <th class="weight-col"><%= link_to 'Weight (g)', jewelry_items_path(request.query_parameters.merge(sort: 'weight', direction: params[:direction] == 'asc' ? 'desc' : 'asc')) %></th>
-          <th class="price-col"><%= link_to 'Price', jewelry_items_path(request.query_parameters.merge(sort: 'price', direction: params[:direction] == 'asc' ? 'desc' : 'asc')) %></th>
-          <th class="available-col"><%= link_to 'Available', jewelry_items_path(request.query_parameters.merge(sort: 'available', direction: params[:direction] == 'asc' ? 'desc' : 'asc')) %></th>
-          <th class="actions-col"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% @items.each_with_index do |item, idx| %>
-          <tr>
-            <td class="serial-col small muted" style="text-align:left"><%= (@start_index || 0) + idx + 1 %></td>
-            <td class="sku-col small muted"><%= item.sku %></td>
-            <td class="item-col">
-              <div class="item-row">
-                <div class="item-avatar" aria-hidden="true">💍</div>
-                <div class="item-meta">
-                  <div class="item-title"><strong><%= link_to item.name, jewelry_item_path(item) %></strong></div>
-                  <div class="small muted item-desc"><%= truncate(item.description.to_s, length: 100) %></div>
-                </div>
-              </div>
-            </td>
-            <td class="small muted">
-              <% if item.jewellery_category && item.metal %>
-                <%= link_to item.jewellery_category.name, metal_path(item.metal) %>
-              <% elsif item.jewellery_category %>
-                <%= item.jewellery_category.name %>
-              <% else %>
-                &mdash;
-              <% end %>
-            </td>
-            <td class="small muted">
-              <% if item.metal %>
-                <%= link_to item.metal.name, metal_path(item.metal) %>
-              <% else %>
-                &mdash;
-              <% end %>
-            </td>
-            <td class="small muted">
-              <% if item.purity %>
-                <%= link_to item.purity.name, metal_path(item.purity.metal_id) %>
-              <% else %>
-                &mdash;
-              <% end %>
-            </td>
-            <td><%= item.weight_grams.to_f %></td>
-            <td class="price-col">
-              <span class="price-badge"> <%= "\u20B9#{'%.2f' % item.computed_price}" %> </span>
-              <% if item.effective_price_per_gram.present? %>
-                <% if item.purity && item.purity.updated_price.present? %>
-                  <div class="small muted">(source: <%= item.purity.name %> @ <%= "\u20B9#{'%.2f' % item.effective_price_per_gram}" %> /g)</div>
-                <% else %>
-                  <div class="small muted">(source: metal stock @ <%= "\u20B9#{'%.2f' % item.effective_price_per_gram}" %> /g)</div>
-                <% end %>
-              <% end %>
-            </td>
-      <td class="text-center">
-        <% if item.quantity.present? && item.quantity > 0 %>
-          <span class="available-badge"> <%= item.quantity.to_i %> pcs</span>
-        <% else %>
-          <% if item.metal %>
-            <% stocks = item.metal.respond_to?(:metal_stocks) ? item.metal.metal_stocks : [] %>
-            <% total = stocks.sum(&:available_grams) %>
-            <span class="available-badge"> <%= total.to_i %> g</span>
-            <div class="small muted stock-breakdown"><%= stocks.map{|s| "#{s.store.try(:name)}: #{s.available_grams}g"}.join(' | ') %></div>
-          <% else %>
-            <% inv = InventoryItem.find_by(jewelry_item: item) %>
-            <span class="available-badge"> <%= inv ? "#{inv.available_grams.to_i} g" : '—' %></span>
-          <% end %>
-        <% end %>
-      </td>
-            <td class="actions-col">
-              <%= link_to 'View', jewelry_item_path(item), class: 'btn' %>
-            </td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-    <div class="card-footer pagination">
-      <% if @page && @per_page %>
-        <% prev_page = @page - 1 %>
-        <% next_page = @page + 1 %>
-        <div class="pager">
-          <% if prev_page >= 1 %>
-            <%= link_to '← Prev', jewelry_items_path(request.query_parameters.merge(page: prev_page)), class: 'btn' %>
-          <% end %>
-          <span class="muted">Page <%= @page %></span>
-          <% if (@page * @per_page) < (@total_count || 0) %>
-            <%= link_to 'Next →', jewelry_items_path(request.query_parameters.merge(page: next_page)), class: 'btn' %>
-          <% end %>
-        </div>
-      <% end %>
-    </div>
-  </div>
+  <% end %>
 </div>
+
+<style>
+  .catalogue-index a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .catalogue-index .cat-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 18px;
+    padding: 16px 18px;
+  }
+  .catalogue-index .cat-search { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
+  .catalogue-index .cat-search .form-control { max-width: 420px; }
+  .catalogue-index button.atelier-back { cursor: pointer; font-family: inherit; }
+  .catalogue-index .cat-stats { display: flex; gap: 22px; flex-shrink: 0; }
+  .catalogue-index .cat-stats span {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6258;
+    font-weight: 700;
+  }
+  .catalogue-index .cat-stats strong {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.45rem;
+    font-weight: 600;
+    color: #0b1220;
+  }
+  .catalogue-index .cat-stats strong.gold { color: #c9a227; }
+  .catalogue-index .cat-table-wrap {
+    background: #fffaf3;
+    border: 1px solid rgba(201,162,39,0.28);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 18px 40px rgba(20,17,15,0.06);
+  }
+  .catalogue-index .cat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .catalogue-index .cat-table th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6258;
+    font-weight: 700;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(201,162,39,0.22);
+    background: #f7f1e8;
+  }
+  .catalogue-index .cat-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(201,162,39,0.12);
+    vertical-align: middle;
+    font-size: 14px;
+    color: #14110f;
+  }
+  .catalogue-index .cat-table th:nth-child(1),
+  .catalogue-index .cat-table td:nth-child(1) { width: 38%; }
+  .catalogue-index .cat-table th:nth-child(2),
+  .catalogue-index .cat-table td:nth-child(2) { width: 24%; }
+  .catalogue-index .cat-table th.col-weight,
+  .catalogue-index .cat-table td.col-weight {
+    width: 118px;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .catalogue-index .cat-table th.col-price,
+  .catalogue-index .cat-table td.col-price {
+    width: 140px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .catalogue-index .cat-table th.col-tray,
+  .catalogue-index .cat-table td.col-tray {
+    width: 120px;
+    text-align: right;
+  }
+  .catalogue-index .wt {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 88px;
+  }
+  .catalogue-index .wt-val {
+    display: inline-block;
+    min-width: 6.5ch;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  .catalogue-index .wt-unit {
+    display: inline-block;
+    min-width: 1em;
+    text-align: left;
+    color: #6b6258;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .catalogue-index .cat-table tbody tr:last-child td { border-bottom: 0; }
+  .catalogue-index .cat-table tbody tr { transition: background 140ms ease; }
+  .catalogue-index .cat-table tbody tr:hover { background: rgba(232,213,163,0.22); }
+  .catalogue-index .sort-link { color: #6b6258; text-decoration: none; }
+  .catalogue-index .col-weight .sort-link,
+  .catalogue-index .col-price .sort-link,
+  .catalogue-index .col-tray .sort-link { display: block; text-align: right; }
+  .catalogue-index .sort-link.is-active { color: #0b1220; }
+  .catalogue-index .piece-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .catalogue-index .gem-dot {
+    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, #2a2218, #12151c);
+    border: 1px solid rgba(201,162,39,0.28);
+    font-size: 18px;
+  }
+  .catalogue-index .piece-link strong {
+    display: block;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #0b1220;
+  }
+  .catalogue-index .sku {
+    display: inline-block;
+    margin-top: 2px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #6b6258;
+    text-transform: uppercase;
+  }
+  .catalogue-index .sub { display: block; margin-top: 2px; font-size: 12px; color: #6b6258; }
+  .catalogue-index .marks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .catalogue-index .mark {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.28);
+    background: #fff;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .catalogue-index .gold-mark { background: linear-gradient(90deg, #e8d5a3, #c9a227); color: #0b1220; border-color: transparent; }
+  .catalogue-index .price {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #c9a227;
+    white-space: nowrap;
+  }
+  .catalogue-index .rate-line {
+    display: block;
+    margin-top: 2px;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b6258;
+  }
+  .catalogue-index .stock {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .catalogue-index .stock.in { background: #0b1220; color: #e8d5a3; }
+  .catalogue-index .stock.out { background: #f3eee6; color: #6b6258; }
+  .catalogue-index .cat-pager {
+    display: flex; align-items: center; gap: 12px; margin-top: 16px; color: #6b6258; font-size: 13px;
+  }
+  .catalogue-index .empty h2 {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.6rem; margin: 0 0 8px; font-weight: 600;
+  }
+  @media (max-width: 900px) {
+    .catalogue-index .cat-toolbar { flex-direction: column; align-items: stretch; }
+    .catalogue-index .cat-search { flex-wrap: wrap; }
+    .catalogue-index .cat-search .form-control { max-width: none; }
+    .catalogue-index .cat-table th.col-weight,
+    .catalogue-index .cat-table td.col-weight { display: none; }
+  }
+</style>

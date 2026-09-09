@@ -1,0 +1,61 @@
+<% content_for :title, 'The house — Maison Atelier' %>
+
+<header class="page-hero">
+  <p class="eyebrow">The house</p>
+  <h1>Hallmark, weight and word.</h1>
+  <p class="lede" style="margin:0 auto">Maison Atelier is a jewellery house before it is a shop. Gold is spoken of in grams, purity and the mark that travels with the piece.</p>
+</header>
+
+<section class="section" style="padding-top:24px">
+  <div class="wrap split">
+    <div class="copy reveal">
+      <p class="eyebrow">Our word</p>
+      <h2>Built like a maison, run like an atelier.</h2>
+      <p class="lede">The public rooms are for viewing. Behind them sits the book: clients, rates of the day, catalogue pieces and bills. Staff open the atelier to weigh, hallmark and raise an invoice without leaving the language of jewellery.</p>
+    </div>
+    <div class="photo-frame reveal delay-1">
+      <img src="<%= maison_photo(:portrait, width: 1400) %>" alt="Jewellery worn in warm light">
+    </div>
+  </div>
+</section>
+
+<section class="section ivory">
+  <div class="wrap">
+    <p class="eyebrow reveal">What we keep</p>
+    <h2 class="reveal">Three promises of the house</h2>
+    <div class="feat-grid">
+      <article class="feat reveal">
+        <b>01</b>
+        <h3>Metal as it is</h3>
+        <p>Gold, silver and platinum are named, coloured and hallmarked. Each purity carries its own remaining weight in the house.</p>
+      </article>
+      <article class="feat reveal delay-1">
+        <b>02</b>
+        <h3>A rate that holds</h3>
+        <p>Today’s board is ₹ per gram. A necklace is not a guess — it is purity rate × weight × quantity, then making and tax.</p>
+      </article>
+      <article class="feat reveal delay-2">
+        <b>03</b>
+        <h3>A bill with a face</h3>
+        <p>The invoice carries the client’s papers, HUID and HSN. It should read as the piece does in the tray.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap split reverse">
+    <div class="photo-frame reveal">
+      <img src="<%= maison_photo(:tray, width: 1400) %>" alt="Jewellery on a dark tray">
+    </div>
+    <div class="copy reveal delay-1">
+      <p class="eyebrow">For jewellers</p>
+      <h2>Open a house of your own.</h2>
+      <p class="lede">Maison Atelier also powers showrooms: catalogue, rates, clients and bills in one atelier. Create an account, choose a yearly plan, and set up your shop name as it should appear on the bill head.</p>
+      <div class="hero-ctas">
+        <%= link_to 'Create an account', new_user_registration_path, class: 'btn-gold' %>
+        <%= link_to 'Write to us', contact_path, class: 'btn-ghost' %>
+      </div>
+    </div>
+  </div>
+</section>

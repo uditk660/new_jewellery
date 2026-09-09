@@ -1,0 +1,134 @@
+<% content_for :title, 'Maison Atelier — Gold, hallmark and light' %>
+
+<section class="hero">
+  <div class="hero-media">
+    <img src="<%= maison_photo(:hero, width: 2200) %>" alt="Gold jewellery arranged in warm atelier light">
+    <div class="hero-shade"></div>
+    <div class="hero-sheen"></div>
+  </div>
+  <div class="hero-copy">
+    <p class="eyebrow">Established for the house</p>
+    <h1>Quiet gold.<br>Lasting light.</h1>
+    <p>Bridal sets, temple gold and solitaires cut for the showroom — hallmarked, weighed, and kept with the care of a jewellery house.</p>
+    <div class="hero-ctas">
+      <%= link_to 'View collections', collections_path, class: 'btn-gold' %>
+      <%= link_to 'Book an appointment', contact_path, class: 'btn-ghost' %>
+    </div>
+  </div>
+</section>
+
+<div class="strip" aria-hidden="true">
+  <div class="strip-track">
+    <% 2.times do %>
+      <span>22K temple gold</span>
+      <span>BIS hallmark</span>
+      <span>Solitaires</span>
+      <span>Bridal sets</span>
+      <span>Polki &amp; kundan</span>
+      <span>Silver 925</span>
+      <span>Custom making</span>
+      <span>Private viewing</span>
+    <% end %>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap split">
+    <div class="copy reveal">
+      <p class="eyebrow">The house</p>
+      <h2>Crafted for the counter and the ceremony.</h2>
+      <p class="lede">Every piece is spoken of as jewellery should be: metal, purity, weight in grams, and the hallmark that stands behind it. The atelier is where the board, the book and the bill meet.</p>
+      <div class="hero-ctas">
+        <%= link_to 'Our story', about_path, class: 'btn-gold' %>
+      </div>
+    </div>
+    <div class="photo-frame reveal delay-1">
+      <img src="<%= maison_photo(:gold, width: 1400) %>" alt="A tray of gold jewellery">
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="wrap">
+    <p class="eyebrow reveal">Collections</p>
+    <h2 class="reveal">Chosen for the season</h2>
+    <div class="collection-grid">
+      <%= link_to collections_path, class: 'card reveal' do %>
+        <img src="<%= maison_photo(:necklace, width: 900) %>" alt="Gold necklace">
+        <div class="card-copy">
+          <h3>Necklines</h3>
+          <p>Temple, antique and daily wear</p>
+        </div>
+      <% end %>
+      <%= link_to collections_path, class: 'card reveal delay-1' do %>
+        <img src="<%= maison_photo(:ring, width: 900) %>" alt="Diamond ring">
+        <div class="card-copy">
+          <h3>Solitaires</h3>
+          <p>Rings cut to catch the lamp</p>
+        </div>
+      <% end %>
+      <%= link_to collections_path, class: 'card reveal delay-2' do %>
+        <img src="<%= maison_photo(:earrings, width: 900) %>" alt="Gold earrings">
+        <div class="card-copy">
+          <h3>Earmarks</h3>
+          <p>Jhumkas, studs and drops</p>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</section>
+
+<section class="section ivory">
+  <div class="wrap">
+    <p class="eyebrow reveal">The atelier</p>
+    <h2 class="reveal">How the house is run</h2>
+    <div class="feat-grid">
+      <article class="feat reveal">
+        <b>01</b>
+        <h3>Rates of the day</h3>
+        <p>Gold and silver are set on the board by hallmark. Catalogue valuation follows ₹ per gram, weight and quantity.</p>
+      </article>
+      <article class="feat reveal delay-1">
+        <b>02</b>
+        <h3>The client book</h3>
+        <p>Every buyer is a name, a phone and papers for the invoice — GST, Aadhaar or PAN when the bill requires them.</p>
+      </article>
+      <article class="feat reveal delay-2">
+        <b>03</b>
+        <h3>Bills that read as jewellery</h3>
+        <p>HUID, HSN, making and tax sit on a bill that looks like the house, not a generic ledger.</p>
+      </article>
+    </div>
+    <div class="hero-ctas reveal" style="margin-top:28px">
+      <%= link_to 'Open your own house', new_user_registration_path, class: 'btn-gold' %>
+      <%= link_to 'Sign in to the atelier', new_user_session_path, class: 'btn-ghost', style: 'color:#0b1220;border-color:rgba(11,18,32,0.2)' %>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap split reverse">
+    <div class="photo-frame reveal">
+      <img src="<%= maison_photo(:bracelet, width: 1400) %>" alt="Gold bangles">
+    </div>
+    <div class="copy reveal delay-1">
+      <p class="eyebrow">Private viewing</p>
+      <h2>Write to the house.</h2>
+      <p class="lede">Bridal trials, custom making and showroom visits are arranged by note. Leave your name and we will answer from the atelier.</p>
+      <div class="hero-ctas">
+        <%= link_to 'Contact us', contact_path, class: 'btn-gold' %>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-band">
+  <img src="<%= maison_photo(:bench, width: 1800) %>" alt="Jewellery close-up">
+  <div class="inner">
+    <p class="eyebrow">Maison Atelier</p>
+    <h2>A house of gold, kept with care.</h2>
+    <div class="hero-ctas" style="justify-content:center">
+      <%= link_to 'See the collections', collections_path, class: 'btn-gold' %>
+    </div>
+  </div>
+</section>

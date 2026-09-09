@@ -1,0 +1,27 @@
+<nav class="maison-nav" aria-label="House">
+  <%= link_to root_path, class: 'maison-brand' do %>
+    <span class="maison-mark" aria-hidden="true"></span>
+    <span>
+      <strong>Maison Atelier</strong>
+      <span>Jewellery house</span>
+    </span>
+  <% end %>
+
+  <button type="button" class="maison-toggle" aria-expanded="false" aria-controls="maison-links">Menu</button>
+
+  <ul class="maison-links" id="maison-links">
+    <li><%= maison_nav_link 'Collections', collections_path %></li>
+    <li><%= maison_nav_link 'The house', about_path %></li>
+    <li><%= maison_nav_link 'Contact', contact_path %></li>
+  </ul>
+
+  <div class="maison-actions">
+    <% if user_signed_in? %>
+      <%= link_to 'Atelier', root_path, class: 'btn-gold' %>
+      <%= button_to 'Sign out', destroy_user_session_path, method: :delete, class: 'btn-ghost', form: { style: 'margin:0' } %>
+    <% else %>
+      <%= link_to 'Sign in', new_user_session_path, class: 'btn-ghost' %>
+      <%= link_to 'Open a house', new_user_registration_path, class: 'btn-gold' %>
+    <% end %>
+  </div>
+</nav>

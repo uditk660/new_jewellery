@@ -1,13 +1,19 @@
 <%= render 'shared/atelier_styles' %>
 
-<div class="atelier-page metal-master">
+<div class="atelier-page metal-master is-cards" id="metals-view">
   <header class="atelier-hero">
     <div>
       <p class="eyebrow">House masters</p>
       <h1>Metals, hallmarks &amp; categories</h1>
       <p class="lead">Each metal holds its own purities — Gold may be 18K, 20K and 22K — and the piece types you sell in that metal.</p>
     </div>
-    <%= link_to 'New metal', new_metal_path, class: 'atelier-back' %>
+    <div class="metal-hero-actions">
+      <div class="view-toggle" role="group" aria-label="Layout">
+        <button type="button" class="view-btn is-active" data-view="cards" aria-pressed="true">Cards</button>
+        <button type="button" class="view-btn" data-view="list" aria-pressed="false">List</button>
+      </div>
+      <%= link_to 'New metal', new_metal_path, class: 'atelier-back' %>
+    </div>
   </header>
 
   <% if params[:q].present? %>
@@ -15,7 +21,7 @@
   <% end %>
 
   <% if @metals.any? %>
-    <div class="metal-cards">
+    <div class="metal-cards" data-layout="cards">
       <% @metals.each do |metal| %>
         <%= link_to metal_path(metal), class: 'metal-card' do %>
           <div class="metal-card-top">
@@ -29,7 +35,7 @@
           <div class="chips">
             <% if metal.purity_names.any? %>
               <% metal.purities.ordered.each do |p| %>
-                <span class="chip"><%= p.name %></span>
+                <span class="chip"><%= p.name %> · <%= p.available_weight_label %></span>
               <% end %>
             <% else %>
               <span class="chip muted-chip">No hallmarks yet</span>
@@ -45,6 +51,59 @@
         <% end %>
       <% end %>
     </div>
+
+    <div class="metal-list-wrap" data-layout="list">
+      <table class="metal-list">
+        <thead>
+          <tr>
+            <th>Metal</th>
+            <th>Hallmarks &amp; weight</th>
+            <th>Categories</th>
+            <th class="col-status">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @metals.each do |metal| %>
+            <tr>
+              <td>
+                <%= link_to metal_path(metal), class: 'metal-name' do %>
+                  <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
+                  <span>
+                    <strong><%= metal.name %></strong>
+                    <span class="meta"><%= [metal.code.presence, metal.base_unit.presence || 'gram', (metal.bis_mandatory? ? 'BIS' : nil)].compact.join(' · ') %></span>
+                  </span>
+                <% end %>
+              </td>
+              <td>
+                <div class="chips">
+                  <% if metal.purity_names.any? %>
+                    <% metal.purities.ordered.each do |p| %>
+                      <span class="chip"><%= p.name %> · <%= p.available_weight_label %></span>
+                    <% end %>
+                  <% else %>
+                    <span class="chip muted-chip">No hallmarks yet</span>
+                  <% end %>
+                </div>
+              </td>
+              <td class="cats-cell">
+                <% if metal.category_names.any? %>
+                  <%= metal.category_names.join(' · ') %>
+                <% else %>
+                  <span class="muted">No categories yet</span>
+                <% end %>
+              </td>
+              <td class="col-status">
+                <% if metal.active? %>
+                  <span class="stock in">Active</span>
+                <% else %>
+                  <span class="off">Inactive</span>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
   <% else %>
     <div class="atelier-form">
       <p class="hint" style="margin:0">No metals yet. Add Gold with 18K, 20K and 22K to start the catalogue.</p>
@@ -54,6 +113,31 @@
 </div>
 
 <style>
+  .metal-master .metal-hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .metal-master .view-toggle {
+    display: inline-flex;
+    padding: 3px;
+    border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.4);
+    background: #fffaf3;
+  }
+  .metal-master .view-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #6b6258;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 7px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .metal-master .view-btn.is-active {
+    background: linear-gradient(90deg, #e8d5a3, #c9a227);
+    color: #0b1220;
+  }
   .metal-master .metal-cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -80,6 +164,7 @@
   .metal-master .off {
     margin-left: auto; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
     color: #9a9186; border: 1px solid #e6dcc8; border-radius: 999px; padding: 3px 8px;
+    display: inline-block;
   }
   .metal-master .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .metal-master .chip {
@@ -88,4 +173,102 @@
   }
   .metal-master .muted-chip { color: #9a9186; font-weight: 500; }
   .metal-master .cats { margin: 12px 0 0; color: #6b6258; font-size: 13px; }
+  .metal-master .metal-list-wrap {
+    background: #fffaf3;
+    border: 1px solid rgba(201,162,39,0.28);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 12px 28px rgba(20,17,15,0.05);
+  }
+  .metal-master .metal-list { width: 100%; border-collapse: collapse; }
+  .metal-master .metal-list th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6258;
+    font-weight: 700;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(201,162,39,0.22);
+    background: #f7f1e8;
+  }
+  .metal-master .metal-list td {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(201,162,39,0.12);
+    vertical-align: middle;
+    font-size: 14px;
+    color: #14110f;
+  }
+  .metal-master .metal-list tbody tr:last-child td { border-bottom: 0; }
+  .metal-master .metal-list tbody tr:hover { background: rgba(232,213,163,0.22); }
+  .metal-master .metal-name {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .metal-master .metal-name strong {
+    display: block;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #0b1220;
+  }
+  .metal-master .metal-name .meta {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #6b6258;
+    text-transform: uppercase;
+  }
+  .metal-master .cats-cell { color: #6b6258; font-size: 13px; }
+  .metal-master .muted { color: #9a9186; }
+  .metal-master .stock {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    background: #0b1220;
+    color: #e8d5a3;
+  }
+  .metal-master .col-status { width: 110px; white-space: nowrap; }
+  .metal-master.is-list [data-layout="cards"] { display: none; }
+  .metal-master.is-list [data-layout="list"] { display: block; }
+  .metal-master.is-cards [data-layout="list"] { display: none; }
+  .metal-master.is-cards [data-layout="cards"] { display: grid; }
+  @media (max-width: 800px) {
+    .metal-master .metal-hero-actions { width: 100%; }
+    .metal-master .metal-list th:nth-child(3),
+    .metal-master .metal-list td:nth-child(3) { display: none; }
+  }
 </style>
+
+<script>
+  (function(){
+    var wrap = document.getElementById('metals-view');
+    if(!wrap) return;
+    var buttons = wrap.querySelectorAll('.view-btn');
+    var key = 'metals-view';
+    function apply(view){
+      var mode = view === 'list' ? 'list' : 'cards';
+      wrap.classList.remove('is-list', 'is-cards');
+      wrap.classList.add(mode === 'list' ? 'is-list' : 'is-cards');
+      buttons.forEach(function(btn){
+        var on = btn.getAttribute('data-view') === mode;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      try { localStorage.setItem(key, mode); } catch(e){}
+    }
+    buttons.forEach(function(btn){
+      btn.addEventListener('click', function(){ apply(btn.getAttribute('data-view')); });
+    });
+    var saved = 'cards';
+    try { saved = localStorage.getItem(key) || 'cards'; } catch(e){}
+    apply(saved);
+  })();
+</script>

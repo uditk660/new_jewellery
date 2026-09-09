@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= content_for?(:title) ? yield(:title) : 'Maison Atelier — Gold, hallmark and light' %></title>
+    <meta name="description" content="Maison Atelier is a jewellery house of gold, hallmark and quiet brilliance. Visit the collections, write to the house, or open your own atelier.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <%= csrf_meta_tags %>
+    <%= render 'pages/maison_styles' %>
+  </head>
+  <body class="maison">
+    <%= render 'pages/nav' %>
+    <main>
+      <% if flash[:notice].present? %>
+        <div class="maison-flash is-ok"><%= flash[:notice] %></div>
+      <% end %>
+      <% if flash[:alert].present? %>
+        <div class="maison-flash is-bad"><%= flash[:alert] %></div>
+      <% end %>
+      <%= yield %>
+    </main>
+    <%= render 'pages/footer' %>
+    <script>
+      (function(){
+        var nav = document.querySelector('.maison-nav');
+        var toggle = document.querySelector('.maison-toggle');
+        var links = document.querySelector('.maison-links');
+        function onScroll(){
+          if(!nav) return;
+          nav.classList.toggle('is-solid', window.scrollY > 24);
+        }
+        window.addEventListener('scroll', onScroll, { passive: true });
+        onScroll();
+        if(toggle && links){
+          toggle.addEventListener('click', function(){
+            var open = links.classList.toggle('is-open');
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+          });
+        }
+        var els = document.querySelectorAll('.reveal');
+        if('IntersectionObserver' in window){
+          var io = new IntersectionObserver(function(entries){
+            entries.forEach(function(e){
+              if(e.isIntersecting){ e.target.classList.add('is-in'); io.unobserve(e.target); }
+            });
+          }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+          els.forEach(function(el){ io.observe(el); });
+        } else {
+          els.forEach(function(el){ el.classList.add('is-in'); });
+        }
+      })();
+    </script>
+  </body>
+</html>

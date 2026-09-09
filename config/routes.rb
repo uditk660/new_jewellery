@@ -33,6 +33,10 @@ Rails.application.routes.draw do
   resource :shop_profile, only: [:show]
 
   root to: 'home#dashboard'
+  get 'about', to: 'pages#about', as: :about
+  get 'collections', to: 'pages#collections', as: :collections
+  get 'contact', to: 'pages#contact', as: :contact
+  post 'contact', to: 'pages#create_contact'
 
   resources :jewelry_items
   resources :orders, only: [:index, :show, :new, :create] do
@@ -56,7 +60,7 @@ Rails.application.routes.draw do
   get 'security/new', to: 'security#new', as: :new_security
   resources :metals, only: [:index, :new, :create, :show, :update, :destroy]
   resources :purities, only: [:index, :new, :create, :show, :edit, :update]
-  resources :customers, only: [:index, :new, :create, :show]
+  resources :customers
   resources :payments, only: [:show] do
     member do
       get :invoice

@@ -1,7 +1,10 @@
 class HomeController < ApplicationController
-  before_action :authenticate_user!
-
   def dashboard
+    unless user_signed_in?
+      render 'pages/home', layout: 'marketing'
+      return
+    end
+
   scope = Order.where(status: 'paid')
     today = Time.zone.today
   # compute totals using line_item.line_amount to reflect per-gram * net_weight * qty + making

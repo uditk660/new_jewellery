@@ -43,15 +43,13 @@ class JewelryItemsController < ApplicationController
   end
 
   def show
-    @item = JewelryItem.find(params[:id])
+    @item = JewelryItem.includes(:purity, :jewellery_category, metal: { metal_stocks: :store }).find(params[:id])
     render template: 'jewelry_items/show'
   end
 
   def new
-    @item = JewelryItem.new
-    @metals = Metal.active.ordered
-    @purities = Purity.active.ordered
-    @categories = JewelleryCategory.active.ordered
+    @item = JewelryItem.new(quantity: 1)
+    load_catalogue_masters
     render template: 'jewelry_items/new'
   end
 
@@ -60,29 +58,23 @@ class JewelryItemsController < ApplicationController
     if @item.save
       redirect_to @item
     else
-      @metals = Metal.active.ordered
-      @purities = Purity.active.ordered
-      @categories = JewelleryCategory.active.ordered
+      load_catalogue_masters
       render template: 'jewelry_items/new'
     end
   end
 
   def edit
-    @item = JewelryItem.find(params[:id])
-    @metals = Metal.active.ordered
-    @purities = Purity.active.ordered
-    @categories = JewelleryCategory.active.ordered
+    Purity.reset_column_information unless Purity.column_names.include?('available_grams')
+    @item = JewelryItem.includes(:purity, :jewellery_category, :metal).find(params[:id])
     render template: 'jewelry_items/edit'
   end
 
   def update
-    @item = JewelryItem.find(params[:id])
-    if @item.update(jewelry_item_params)
+    Purity.reset_column_information unless Purity.column_names.include?('available_grams')
+    @item = JewelryItem.includes(:purity, :jewellery_category, :metal).find(params[:id])
+    if @item.update(jewelry_item_update_params)
       redirect_to @item
     else
-      @metals = Metal.active.ordered
-      @purities = Purity.active.ordered
-      @categories = JewelleryCategory.active.ordered
       render template: 'jewelry_items/edit'
     end
   end
@@ -95,7 +87,18 @@ class JewelryItemsController < ApplicationController
 
   private
 
+  def load_catalogue_masters
+    Purity.reset_column_information unless Purity.column_names.include?('available_grams')
+    @metals = Metal.active.ordered
+    @purities = Purity.active.ordered.includes(:metal)
+    @categories = JewelleryCategory.active.ordered
+  end
+
   def jewelry_item_params
-    params.require(:jewelry_item).permit(:name, :description, :price_cents, :sku, :quantity, :metal_id, :purity_id, :jewellery_category_id, :weight_grams)
+    params.require(:jewelry_item).permit(:name, :description, :sku, :quantity, :metal_id, :purity_id, :jewellery_category_id, :weight_grams)
+  end
+
+  def jewelry_item_update_params
+    params.require(:jewelry_item).permit(:name, :description, :quantity, :weight_grams)
   end
 end

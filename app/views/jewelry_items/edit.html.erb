@@ -1,245 +1,260 @@
-<div class="container">
-  <div class="page-header">
+<%= render 'shared/atelier_styles' %>
+
+<%
+  purity = @item.purity
+  per_gram = @item.effective_price_per_gram.to_f
+  allocated_grams = (@item.weight_grams_in_database.to_f * @item.quantity_in_database.to_i)
+  remaining_on_hallmark = purity ? purity.available_grams.to_f : 0
+  usable_grams = remaining_on_hallmark + allocated_grams
+%>
+
+<div class="atelier-page piece-edit">
+  <header class="atelier-hero">
     <div>
-      <h1>Edit Jewelry Item</h1>
-      <p class="lead">Update product details, pricing and available quantity.</p>
+      <p class="eyebrow">Catalogue piece</p>
+      <h1>Amend this piece</h1>
+      <p class="lead">You may change the piece name, description, weight and tray count. Metal, hallmark, category and SKU stay as registered.</p>
     </div>
-    <div class="right">
-      <%= link_to 'Back to Item', jewelry_item_path(@item), class: 'btn' %>
+    <div class="piece-hero-actions">
+      <%= link_to '← Piece', jewelry_item_path(@item), class: 'atelier-back' %>
+      <%= link_to 'Catalogue', jewelry_items_path, class: 'atelier-back' %>
     </div>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> House details</span>
+    <span class="step"><b>2</b> Name &amp; notes</span>
+    <span class="step"><b>3</b> Weight &amp; tray</span>
   </div>
 
-  <div class="card">
-    <div class="edit-grid">
-      <div class="edit-form">
-        <%= form_for @item, url: jewelry_item_path(@item), method: :put do |f| %>
-          <div class="form-row">
-            <div style="flex:1">
-              <%= f.label :name %>
-              <%= f.text_field :name, class: 'form-control' %>
+  <div class="atelier-grid">
+    <div class="atelier-form">
+      <%= form_for @item, url: jewelry_item_path(@item), method: :put do |f| %>
+        <% if @item.errors.any? %>
+          <div class="errors"><%= @item.errors.full_messages.to_sentence %></div>
+        <% end %>
+
+        <section class="section">
+          <h2>House details</h2>
+          <p class="hint">These were set when the piece was registered and cannot be amended here.</p>
+          <dl class="piece-dl">
+            <div><dt>Metal</dt><dd><%= @item.metal.try(:name) || '—' %></dd></div>
+            <div><dt>Purity</dt><dd><%= purity.try(:hallmark_label) || '—' %></dd></div>
+            <div><dt>Category</dt><dd><%= @item.jewellery_category.try(:display_name) || '—' %></dd></div>
+            <div><dt>SKU</dt><dd><%= @item.sku.presence || '—' %></dd></div>
+          </dl>
+        </section>
+
+        <section class="section">
+          <h2>Piece details</h2>
+          <p class="hint">Name how it should appear on invoices and the showroom catalogue.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :name do %>Piece name <span class="req">*</span><% end %>
+              <%= f.text_field :name, class: 'form-control', placeholder: 'e.g. 22K temple necklace' %>
             </div>
           </div>
-
-          <div style="margin-top:10px">
-            <%= f.label :description %>
-            <%= f.text_area :description, rows: 4, class: 'form-control' %>
-          </div>
-
-          <div class="form-row" style="margin-top:10px">
-            <div style="flex:1">
-              <%= f.label :metal_id, 'Metal' %>
-              <%= f.collection_select :metal_id, (@metals || []), :id, :name, { include_blank: '— Select metal —' }, { class: 'form-control' } %>
-            </div>
-            <div style="width:220px; margin-left:12px">
-              <%= f.label :purity_id, 'Purity' %>
-              <%= f.collection_select :purity_id, (@purities || []), :id, :hallmark_label, { include_blank: '— Select purity —' }, { class: 'form-control' } %>
-            </div>
-            <div style="width:220px; margin-left:12px">
-              <%= f.label :jewellery_category_id, 'Category' %>
-              <%= f.collection_select :jewellery_category_id, (@categories || []), :id, :display_name, { include_blank: '— Select category —' }, { class: 'form-control' } %>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :description, 'Description' %>
+              <%= f.text_area :description, rows: 4, class: 'form-control', placeholder: 'Setting, stones, occasion or making notes' %>
             </div>
           </div>
+        </section>
 
-          <div class="form-row" style="margin-top:10px">
-            <div style="flex:1">
-              <%= f.label :quantity, 'Quantity (pieces)' %>
+        <section class="section">
+          <h2>Weight &amp; tray</h2>
+          <p class="hint">Changing weight or quantity adjusts this hallmark’s remaining house stock. Price is calculated and cannot be typed.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :weight_grams do %>Weight (g) <span class="req">*</span><% end %>
+              <%= f.number_field :weight_grams, step: 0.01, min: 0.01, class: 'form-control', placeholder: ('%.2f' % usable_grams) %>
+              <p class="hint" id="weight-available-hint" style="margin:8px 0 0">
+                Available now: <%= '%.2f' % usable_grams %> g. You may enter up to this weight.
+              </p>
+            </div>
+            <div class="field narrow">
+              <%= f.label :quantity do %>Quantity (pcs) <span class="req">*</span><% end %>
               <%= f.number_field :quantity, step: 1, min: 0, class: 'form-control' %>
             </div>
           </div>
-
-          <div class="form-row" style="margin-top:10px">
-            <div style="flex:1">
-              <%= f.label :sku %>
-              <%= f.text_field :sku, class: 'form-control', readonly: true %>
-            </div>
-            <div style="width:220px;margin-left:12px">
-              <%= f.label :weight_grams, 'Weight (g)' %>
-              <%= f.number_field :weight_grams, step: 0.01, class: 'form-control' %>
-            </div>
-          </div>
-
-          <div class="form-row" style="margin-top:10px">
-            <div style="flex:1">
-              <%= f.label :price_cents, 'Price (₹) — computed from purity × weight × qty' %>
-              <%= text_field_tag 'price_rupees', (@item.price.present? ? ('%.2f' % @item.price) : ''), class: 'form-control', id: 'price_rupees', placeholder: 'e.g. 1234.50', readonly: true %>
-              <%= f.hidden_field :price_cents, id: 'price_cents_hidden' %>
-            </div>
-          </div>
-
-          <div style="margin-top:14px">
-            <%= f.submit 'Update Item', class: 'btn btn-primary' %>
-            <%= link_to 'Cancel', jewelry_items_path, class: 'btn btn-outline' %>
-          </div>
-        <% end %>
-      </div>
-
-      <div class="edit-preview">
-        <div class="product-hero card">
-          <div class="product-grid">
-            <div class="product-media">
-              <div class="product-image">💍</div>
-            </div>
-            <div class="product-details">
-              <h2 id="preview-title" class="product-title"><%= @item.name.presence || 'Item' %></h2>
-              <div id="preview-meta" class="product-meta small muted">SKU: <span id="preview-sku"><%= @item.sku.presence || '—' %></span> • Category: <%= @item.jewellery_category.try(:name) || '—' %></div>
-              <div class="product-pricing" style="margin-top:12px">
-                <div id="preview-price" class="price-large"><%= @item.price.present? ? "\u20B9#{'%.2f' % @item.price}" : '—' %></div>
-                <div class="product-attributes small muted" style="margin-left:12px">
-                  <div>Weight: <strong id="preview-weight"><%= @item.weight_grams.to_f %> g</strong></div>
-                  <div>Purity: <strong><%= @item.purity.try(:name) || '—' %></strong></div>
-                </div>
-              </div>
-              <div style="margin-top:12px" class="small muted">
-                <% if @item.quantity.present? && @item.quantity > 0 %>
-                  In stock: <strong><%= @item.quantity %> pcs</strong>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <%= f.label :price_cents, 'Catalogue price (₹)' %>
+              <%= text_field_tag 'price_rupees', (@item.catalogue_amount.positive? ? ('%.2f' % @item.catalogue_amount) : ''), class: 'form-control', id: 'price_rupees', placeholder: 'Calculated', readonly: true, tabindex: -1 %>
+              <p class="hint" id="price-formula" style="margin:8px 0 0">
+                <% if per_gram.positive? %>
+                  <%= format_rupees(per_gram) %>/g × <%= '%.2f' % @item.weight_grams.to_f %> g × <%= @item.valuation_quantity %> pcs
                 <% else %>
-                  Out of stock
+                  No rate on this hallmark. Set today’s rate first.
                 <% end %>
-              </div>
+              </p>
             </div>
           </div>
+        </section>
+
+        <div class="actions">
+          <%= f.submit 'Save piece', class: 'btn-gold', id: 'catalogue-submit' %>
+          <%= link_to 'Cancel', jewelry_item_path(@item), class: 'atelier-back' %>
         </div>
-      </div>
+      <% end %>
     </div>
+
+    <aside class="preview" aria-live="polite">
+      <p class="preview-kicker">Showroom preview</p>
+      <div class="gem" aria-hidden="true">💍</div>
+      <h2 id="preview-title"><%= @item.name.presence || 'Catalogue piece' %></h2>
+      <span class="sku-chip">SKU <span id="preview-sku"><%= @item.sku.presence || '—' %></span></span>
+      <div class="chips">
+        <span class="chip">Metal <strong><%= @item.metal.try(:name) || '—' %></strong></span>
+        <span class="chip">Purity <strong><%= purity.try(:name) || '—' %></strong></span>
+        <span class="chip">Category <strong><%= @item.jewellery_category.try(:name) || '—' %></strong></span>
+        <span class="chip">Wt <strong id="preview-weight"><%= sprintf('%.2f', @item.weight_grams.to_f) %> g</strong></span>
+      </div>
+      <div id="preview-price" class="preview-price"><%= format_rupees(@item.catalogue_amount) %></div>
+      <div id="preview-desc" class="preview-desc"><%= @item.description.presence || 'Description will appear here as you type.' %></div>
+      <p class="preview-note">Metal, hallmark and SKU remain as registered. Saving updates name, notes, weight and tray count.</p>
+    </aside>
   </div>
 </div>
 
-      <script>
-        // live preview sync for edit form (mirrors new form behavior)
-        (function(){
-          function slugify(s){
-            return s.toString().toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0,10);
+<style>
+  .piece-edit .piece-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .piece-edit .piece-dl { margin: 0; }
+  .piece-edit .piece-dl > div {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(201,162,39,0.16);
+  }
+  .piece-edit .piece-dl dt {
+    color: #6b6258;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .piece-edit .piece-dl dd { margin: 0; color: #14110f; }
+  @media (max-width: 880px) {
+    .piece-edit .piece-hero-actions { width: 100%; }
+    .piece-edit .piece-dl > div { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+  window.addReadyListener = function(fn){
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', fn);
+    } else { fn(); }
+    if(typeof Turbolinks !== 'undefined') document.addEventListener('turbolinks:load', fn);
+    if(typeof Turbo !== 'undefined') document.addEventListener('turbo:load', fn);
+  };
+
+  (function(){
+    const PURITY = <%= {
+      id: purity.try(:id),
+      name: purity.try(:hallmark_label) || purity.try(:name) || 'this hallmark',
+      per_gram_price: per_gram,
+      usable_grams: usable_grams
+    }.to_json.html_safe %>;
+
+    addReadyListener(function(){
+      const form = document.querySelector('.atelier-page form');
+      const nameEl = document.querySelector('input[name="jewelry_item[name]"]');
+      const descEl = document.querySelector('textarea[name="jewelry_item[description]"]');
+      const qtyEl = document.querySelector('input[name="jewelry_item[quantity]"]');
+      const weightEl = document.querySelector('input[name="jewelry_item[weight_grams]"]');
+      const priceRupeesEl = document.getElementById('price_rupees');
+      const submitEl = document.getElementById('catalogue-submit');
+      if(!form) return;
+
+      function rupee(n){
+        const v = parseFloat(n);
+        if(isNaN(v)) return '₹0.00';
+        return '\u20B9' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      function stockQuantity(){
+        const q = parseFloat((qtyEl && qtyEl.value) || '');
+        if(isNaN(q) || q < 0) return 0;
+        return q;
+      }
+      function priceQuantity(){
+        const q = stockQuantity();
+        return q < 1 ? 1 : q;
+      }
+      function remaining(){
+        return parseFloat(PURITY.usable_grams || 0);
+      }
+      function updatePreview(){
+        const previewTitle = document.getElementById('preview-title');
+        const previewWeight = document.getElementById('preview-weight');
+        const previewDesc = document.getElementById('preview-desc');
+        if(previewTitle && nameEl) previewTitle.textContent = nameEl.value || 'Catalogue piece';
+        if(previewDesc && descEl) previewDesc.innerHTML = (descEl.value || 'Description will appear here as you type.').replace(/\n/g,'<br>');
+        if(previewWeight && weightEl) previewWeight.textContent = (parseFloat(weightEl.value || 0)).toFixed(2) + ' g';
+      }
+      function updateWeightHint(){
+        const weightHint = document.getElementById('weight-available-hint');
+        if(!weightHint) return;
+        const avail = remaining();
+        const weight = parseFloat((weightEl && weightEl.value) || 0);
+        const needed = (isNaN(weight) ? 0 : weight) * stockQuantity();
+        if(avail <= 0){
+          weightHint.textContent = 'No grams currently available on ' + PURITY.name + '.';
+          weightHint.style.color = '#7f1d1d';
+        } else if(needed > avail + 0.0001){
+          weightHint.textContent = 'Available now: ' + avail.toFixed(2) + ' g. Enter a weight up to this amount.';
+          weightHint.style.color = '#7f1d1d';
+        } else {
+          weightHint.textContent = 'Available now: ' + avail.toFixed(2) + ' g. You may enter up to this weight.';
+          weightHint.style.color = '';
+        }
+      }
+      function requiredFilled(){
+        const nameOk = !!(nameEl && nameEl.value.trim());
+        const weight = parseFloat(weightEl && weightEl.value);
+        const weightOk = !isNaN(weight) && weight > 0;
+        const qty = parseInt(qtyEl && qtyEl.value, 10);
+        const qtyOk = !isNaN(qty) && qty >= 0;
+        if(!(nameOk && weightOk && qtyOk)) return false;
+        const needed = weight * (qty < 1 ? 0 : qty);
+        return needed <= remaining() + 0.0001;
+      }
+      function syncSubmit(){
+        if(submitEl) submitEl.disabled = !requiredFilled();
+      }
+      function compute(){
+        updatePreview();
+        updateWeightHint();
+        syncSubmit();
+        const perGram = parseFloat(PURITY.per_gram_price || 0);
+        const weight = parseFloat((weightEl && weightEl.value) || 0);
+        const qty = priceQuantity();
+        const wt = isNaN(weight) ? 0 : weight;
+        const total = perGram * wt * qty;
+        if(priceRupeesEl) priceRupeesEl.value = total.toFixed(2);
+        const previewPrice = document.getElementById('preview-price');
+        if(previewPrice) previewPrice.textContent = rupee(total);
+        const formula = document.getElementById('price-formula');
+        if(formula){
+          if(!(perGram > 0)){
+            formula.textContent = 'No rate on this hallmark. Set today’s rate first.';
+          } else {
+            formula.textContent = rupee(perGram) + '/g × ' + wt.toFixed(2) + ' g × ' + qty + ' pcs = ' + rupee(total);
           }
+        }
+      }
 
-          const _ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-          function rndAlnum(n){
-            let out='';
-            for(let i=0;i<n;i++) out += _ALNUM.charAt(Math.floor(Math.random()*_ALNUM.length));
-            return out;
-          }
-
-          const nameEl = document.querySelector('input[name="jewelry_item[name]"]');
-          const descEl = document.querySelector('textarea[name="jewelry_item[description]"]');
-          const priceRupeesEl = document.getElementById('price_rupees');
-          const priceHiddenEl = document.getElementById('price_cents_hidden');
-          const weightEl = document.querySelector('input[name="jewelry_item[weight_grams]"]');
-          const skuEl = document.querySelector('input[name="jewelry_item[sku]"]');
-
-          const previewTitle = document.getElementById('preview-title');
-          const previewSku = document.getElementById('preview-sku');
-          const previewPrice = document.getElementById('preview-price');
-          const previewWeight = document.getElementById('preview-weight');
-          const previewDesc = document.getElementById('preview-desc');
-
-          function updatePreview(){
-            if(nameEl) previewTitle.textContent = nameEl.value || (previewTitle.textContent || 'Item');
-            if(descEl) previewDesc.innerHTML = (descEl.value || '').replace(/\n/g,'<br>');
-            let rupeesText = '—';
-            if(priceHiddenEl && priceHiddenEl.value){
-              rupeesText = '\u20B9' + (parseInt(priceHiddenEl.value)/100).toFixed(2);
-            } else if(priceRupeesEl && priceRupeesEl.value){
-              const v = parseFloat(priceRupeesEl.value);
-              if(!isNaN(v)) rupeesText = '\u20B9' + v.toFixed(2);
-            }
-            if(previewPrice) previewPrice.textContent = rupeesText;
-            if(weightEl) previewWeight.textContent = (parseFloat(weightEl.value || 0)).toFixed(2) + ' g';
-            if(skuEl && skuEl.value.trim().length) previewSku.textContent = skuEl.value;
-          }
-
-          function maybeGenerateSku(){
-            if(!skuEl) return;
-            if(skuEl.value && skuEl.value.trim().length) { previewSku.textContent = skuEl.value; return; }
-            const s = nameEl ? slugify(nameEl.value || '') : '';
-            if(s){
-              const base = s.slice(0,10);
-              const need = 10 - base.length;
-              const suffix = rndAlnum(need);
-              skuEl.value = 'J' + (base + suffix).slice(0,10);
-            } else {
-              skuEl.value = 'J' + rndAlnum(10);
-            }
-            previewSku.textContent = skuEl.value || '—';
-          }
-
-          [nameEl, descEl, priceRupeesEl, weightEl, skuEl].forEach(el=>{ if(!el) return; el.addEventListener('input', function(){ updatePreview(); }); });
-          if(nameEl) nameEl.addEventListener('input', function(){ maybeGenerateSku(); });
-
-          // price_rupees is readonly on edit page; no manual input handler to keep value stable
-
-          if(priceRupeesEl && priceRupeesEl.value && priceHiddenEl) priceHiddenEl.value = Math.round(parseFloat(priceRupeesEl.value) * 100);
-          maybeGenerateSku();
-          updatePreview();
-        })();
-      </script>
-
-      <script>
-        // Compute and display readonly price on edit page using purity per-gram price (or metal_stock fallback).
-        (function(){
-          const PURITIES = <%= (@purities || []).map do |p|
-            per_gram = if p.updated_price.present?
-              p.updated_price.to_f
-            else
-              ms = p.metal&.metal_stocks&.order(created_at: :desc)&.first
-              (ms && ms.price_cents_per_gram.present?) ? (ms.price_cents_per_gram.to_f / 100.0) : 0.0
-            end
-            { id: p.id, per_gram_price: per_gram, name: p.hallmark_label, metal_id: p.metal_id }
-          end.to_json.html_safe %>;
-          const CATEGORIES = <%= (@categories || []).map { |c| { id: c.id, name: c.display_name, metal_id: c.metal_id } }.to_json.html_safe %>;
-
-          function findPurity(id){ return PURITIES.find(x=>String(x.id) === String(id)); }
-
-          document.addEventListener('DOMContentLoaded', function(){
-            const metalEl = document.querySelector('select[name="jewelry_item[metal_id]"]');
-            const purityEl = document.querySelector('select[name="jewelry_item[purity_id]"]');
-            const categoryEl = document.querySelector('select[name="jewelry_item[jewellery_category_id]"]');
-            const weightEl = document.querySelector('input[name="jewelry_item[weight_grams]"]');
-            const qtyEl = document.querySelector('input[name="jewelry_item[quantity]"]');
-            const priceRupeesEl = document.getElementById('price_rupees');
-            const priceHiddenEl = document.getElementById('price_cents_hidden');
-            const previewPrice = document.getElementById('preview-price');
-
-            function fillSelect(select, items, blankText, selectedMetalId, prev){
-              if(!select) return;
-              select.innerHTML = '';
-              const blank = document.createElement('option');
-              blank.value = '';
-              blank.text = blankText;
-              select.appendChild(blank);
-              items.filter(function(x){ return !selectedMetalId || String(x.metal_id) === String(selectedMetalId); }).forEach(function(x){
-                const opt = document.createElement('option');
-                opt.value = x.id;
-                opt.text = x.name;
-                select.appendChild(opt);
-              });
-              if(prev){
-                const still = Array.prototype.slice.call(select.options).some(o=>String(o.value)===String(prev));
-                if(still) select.value = prev;
-              }
-            }
-
-            function computeAndSetPrice(){
-              if(!priceRupeesEl || !priceHiddenEl) return;
-              const purity = purityEl ? findPurity(purityEl.value) : null;
-              const perGram = purity && (purity.per_gram_price || purity.per_gram_price === 0) ? parseFloat(purity.per_gram_price) : 0;
-              const weight = parseFloat((weightEl && weightEl.value) || 0);
-              const qty = parseFloat((qtyEl && qtyEl.value) || 1);
-              const total = perGram * (isNaN(weight) ? 0 : weight) * (isNaN(qty) ? 1 : qty);
-              priceRupeesEl.value = isNaN(total) ? '' : total.toFixed(2);
-              if(priceRupeesEl.value) priceHiddenEl.value = Math.round(parseFloat(priceRupeesEl.value) * 100);
-              if(previewPrice) previewPrice.textContent = priceRupeesEl.value ? '\u20B9' + parseFloat(priceRupeesEl.value).toFixed(2) : '—';
-            }
-
-            [purityEl, weightEl, qtyEl].forEach(el=>{ if(!el) return; el.addEventListener('input', computeAndSetPrice); el.addEventListener('change', computeAndSetPrice); });
-            if(metalEl){
-              metalEl.addEventListener('change', function(){
-                fillSelect(purityEl, PURITIES, '— Select purity —', metalEl.value, '');
-                fillSelect(categoryEl, CATEGORIES, '— Select category —', metalEl.value, '');
-                computeAndSetPrice();
-              });
-            }
-            fillSelect(purityEl, PURITIES, '— Select purity —', metalEl ? metalEl.value : null, purityEl ? purityEl.value : '');
-            fillSelect(categoryEl, CATEGORIES, '— Select category —', metalEl ? metalEl.value : null, categoryEl ? categoryEl.value : '');
-            computeAndSetPrice();
-          });
-        })();
-      </script>
+      [nameEl, descEl, weightEl, qtyEl].forEach(function(el){
+        if(!el) return;
+        el.addEventListener('input', compute);
+        el.addEventListener('change', compute);
+      });
+      form.addEventListener('submit', function(e){
+        if(!requiredFilled()) e.preventDefault();
+      });
+      compute();
+    });
+  })();
+</script>

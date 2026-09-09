@@ -5,7 +5,7 @@
     <div>
       <p class="eyebrow">House masters</p>
       <h1><%= @metal.persisted? ? @metal.name : 'New metal' %></h1>
-      <p class="lead">One metal, many hallmarks. Gold can carry 18K, 20K and 22K, each with its own fineness, rate and making.</p>
+      <p class="lead">One metal, many hallmarks. Gold can carry 18K, 20K and 22K, each with its own weight, fineness, rate and making.</p>
     </div>
     <%= link_to '← All metals', metals_path, class: 'atelier-back' %>
   </header>
@@ -71,7 +71,7 @@
     <div class="atelier-form" style="margin-bottom:18px">
       <section class="section">
         <h2>Purities / hallmarks</h2>
-        <p class="hint">Example: Gold → 18K (750), 20K (833), 22K (916). Rates here feed catalogue valuation.</p>
+        <p class="hint">Example: Gold → 18K, 20K, 22K. Enter the house weight for each hallmark; registering a catalogue piece subtracts that piece’s weight from this stock.</p>
         <div id="purity-rows">
           <%= f.fields_for :purities do |pf| %>
             <%= render 'metals/purity_fields', f: pf %>

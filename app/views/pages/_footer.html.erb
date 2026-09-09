@@ -1,0 +1,18 @@
+<footer class="maison-footer">
+  <div class="wrap footer-row">
+    <div>
+      <%= link_to root_path, class: 'maison-brand' do %>
+        <span class="maison-mark" aria-hidden="true"></span>
+        <span>
+          <strong>Maison Atelier</strong>
+          <span>Gold · hallmark · light</span>
+        </span>
+      <% end %>
+    </div>
+    <div class="maison-actions">
+      <%= link_to 'Collections', collections_path, class: 'btn-ghost' %>
+      <%= link_to 'Write to us', contact_path, class: 'btn-gold' %>
+    </div>
+  </div>
+  <p class="powered">Powered by <strong>Strucxil PVT LTD</strong></p>
+</footer>

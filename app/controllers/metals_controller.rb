@@ -49,7 +49,7 @@ class MetalsController < ApplicationController
   private
 
   def refresh_master_columns
-    Purity.reset_column_information unless Purity.column_names.include?('hallmark_standard')
+    Purity.reset_column_information unless Purity.column_names.include?('available_grams')
     JewelleryCategory.reset_column_information unless JewelleryCategory.column_names.include?('gender')
     Metal.reset_column_information unless Metal.column_names.include?('code')
   end
@@ -68,7 +68,7 @@ class MetalsController < ApplicationController
       :name, :code, :base_unit, :hsn_code, :colour, :notes, :display_order, :bis_mandatory, :active,
       purities_attributes: [
         :id, :name, :purity_percent, :fineness, :hallmark_standard, :updated_price,
-        :wastage_percent, :making_charge_percent, :position, :remarks, :active, :_destroy
+        :available_grams, :wastage_percent, :making_charge_percent, :position, :remarks, :active, :_destroy
       ],
       jewellery_categories_attributes: [
         :id, :name, :description, :hsn_code, :gender, :default_making_charge_percent,
