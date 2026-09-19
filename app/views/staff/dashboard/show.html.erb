@@ -1,55 +1,132 @@
-<div class="top">
+<%
+  now = Time.current.in_time_zone('Asia/Kolkata')
+  greeting = now.hour < 12 ? 'Good morning' : now.hour < 17 ? 'Good afternoon' : 'Good evening'
+%>
+
+<header class="ep-hero">
   <div>
-    <h1>Staff overview</h1>
-    <div class="sub">Approve store subscriptions, manage access, and keep an audit trail.</div>
+    <p class="ep-eyebrow">Licence desk · <%= now.strftime('%A, %d %B %Y') %></p>
+    <h1><%= greeting %>, <%= current_employee.name %></h1>
+    <p class="ep-lead">Houses waiting for a year, live licences, and the trail of every grant. Approve from here — the store cannot open until you do.</p>
   </div>
-  <%= link_to 'Review queue', staff_subscription_requests_path, class: 'btn btn-gold' %>
+  <div class="ep-actions">
+    <%= link_to 'Waiting houses', staff_subscription_requests_path, class: 'btn btn-gold' %>
+    <%= link_to 'Earnings', staff_earnings_path, class: 'btn btn-ghost' %>
+    <%= link_to 'Grant a year', new_staff_subscription_path, class: 'btn btn-ghost' %>
+  </div>
+</header>
+
+<div class="ep-metrics">
+  <div class="ep-metric is-wait">
+    <span>Waiting</span>
+    <strong><%= @pending_count.to_i %></strong>
+    <em>Cannot open the desk until approved</em>
+  </div>
+  <div class="ep-metric">
+    <span>Live years</span>
+    <strong><%= @active_count.to_i %></strong>
+    <em>Active and not yet expired</em>
+  </div>
+  <div class="ep-metric">
+    <span>Suspended</span>
+    <strong><%= @suspended_count.to_i %></strong>
+    <em>Dashboard locked by staff</em>
+  </div>
+  <div class="ep-metric">
+    <span>Houses</span>
+    <strong><%= @house_count.to_i %></strong>
+    <em><%= @expiring_soon.size %> ending within 30 days</em>
+  </div>
 </div>
 
-<div class="metrics">
-  <div class="metric"><div class="label">Waiting approval</div><div class="value"><%= @pending_count %></div></div>
-  <div class="metric"><div class="label">Live subscriptions</div><div class="value"><%= @active_count %></div></div>
-  <div class="metric"><div class="label">Suspended</div><div class="value"><%= @suspended_count %></div></div>
-  <div class="metric"><div class="label">Expiring in 30 days</div><div class="value"><%= @expiring_soon.size %></div></div>
-</div>
-
-<div class="grid-2">
-  <div class="card">
-    <h2 style="margin:0 0 12px;font-size:1.05rem">Latest requests</h2>
+<div class="ep-grid">
+  <div class="ep-card">
+    <h2>Waiting for a year</h2>
+    <p class="ep-hint">Newest first. Approving starts twelve months from this moment.</p>
     <% if @recent_requests.empty? %>
-      <p class="sub">No pending requests.</p>
+      <div class="ep-empty">
+        <p class="ep-hint" style="margin:12px 0 0">The queue is clear. Grant a year directly if a house should open without a request.</p>
+      </div>
     <% else %>
-      <table>
-        <thead><tr><th>Store</th><th>Plan</th><th></th></tr></thead>
-        <tbody>
-          <% @recent_requests.each do |sub| %>
-            <tr>
-              <td><%= sub.user.display_name %><div class="sub"><%= sub.user.email %></div></td>
-              <td><%= sub.plan.name %></td>
-              <td><%= link_to 'Open', staff_subscription_request_path(sub) %></td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
+      <div class="ep-table-wrap">
+        <table class="ep-table">
+          <thead>
+            <tr><th>House</th><th>Plan</th><th>Asked</th><th></th></tr>
+          </thead>
+          <tbody>
+            <% @recent_requests.each do |sub| %>
+              <tr>
+                <td>
+                  <strong><%= sub.user.display_name %></strong>
+                  <span class="ep-sub"><%= sub.user.email %></span>
+                </td>
+                <td>
+                  <%= sub.plan.name %>
+                  <span class="ep-sub"><%= format_rupees(sub.plan.price_cents, cents: true) %> / year</span>
+                </td>
+                <td><%= ist_stamp(sub.requested_at || sub.created_at, with_year: false) %></td>
+                <td><%= link_to 'Review', staff_subscription_request_path(sub), class: 'btn btn-gold' %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
     <% end %>
   </div>
-  <div class="card">
-    <h2 style="margin:0 0 12px;font-size:1.05rem">Recent activity</h2>
+
+  <div class="ep-card">
+    <h2>Recent activity</h2>
+    <p class="ep-hint">Every approval, grant and lock is written here.</p>
     <% if @recent_logs.empty? %>
-      <p class="sub">Logs will appear when staff take action.</p>
+      <p class="ep-hint" style="margin:12px 0 0">Nothing posted yet. The first review will open the book.</p>
     <% else %>
-      <table>
-        <thead><tr><th>Action</th><th>By</th><th>When</th></tr></thead>
-        <tbody>
-          <% @recent_logs.each do |log| %>
-            <tr>
-              <td><%= log.action.humanize %></td>
-              <td><%= log.employee&.name || '—' %></td>
-              <td><%= log.created_at.in_time_zone('Asia/Kolkata').strftime('%d %b %H:%M') %></td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
+      <div class="ep-table-wrap">
+        <table class="ep-table">
+          <thead>
+            <tr><th>Action</th><th>By</th><th>When</th></tr>
+          </thead>
+          <tbody>
+            <% @recent_logs.each do |log| %>
+              <tr>
+                <td>
+                  <strong><%= log.action.humanize %></strong>
+                  <span class="ep-sub"><%= log.user&.display_name || log.plan&.name || '—' %></span>
+                </td>
+                <td><%= log.employee&.name || '—' %></td>
+                <td><%= ist_stamp(log.created_at, with_year: false) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+      <p class="ep-hint" style="margin:12px 0 0"><%= link_to 'Open the full trail', staff_logs_path, class: 'ep-link' %></p>
     <% end %>
   </div>
 </div>
+
+<% if @expiring_soon.any? %>
+  <div class="ep-card">
+    <h2>Years ending soon</h2>
+    <p class="ep-hint">Live licences that close within thirty days. Grant a fresh year before the house goes dark.</p>
+    <div class="ep-table-wrap">
+      <table class="ep-table">
+        <thead>
+          <tr><th>House</th><th>Plan</th><th>Ends</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% @expiring_soon.each do |sub| %>
+            <tr>
+              <td>
+                <strong><%= sub.user.display_name %></strong>
+                <span class="ep-sub"><%= sub.user.email %></span>
+              </td>
+              <td><%= sub.plan.name %></td>
+              <td><%= ist_stamp(sub.ends_at) %></td>
+              <td><%= link_to 'Manage', staff_subscription_path(sub), class: 'ep-link' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% end %>

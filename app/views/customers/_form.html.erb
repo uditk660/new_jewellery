@@ -2,7 +2,7 @@
 
 <%
   editing = @customer.persisted?
-  preview_name = @customer.full_name.presence || 'New client'
+  preview_name = @customer.persisted? ? @customer.card_name : (@customer.full_name.presence || 'New client')
   preview_phone = @customer.phone.presence || 'Phone will appear here'
   preview_gst = @customer.gst_number.presence || 'No GST yet'
   preview_papers = @customer.aadhaar_or_pan.presence || 'No Aadhaar / PAN yet'
@@ -96,8 +96,15 @@
     </div>
 
     <aside class="preview" aria-live="polite">
-      <p class="preview-kicker">Client card</p>
-      <div class="gem avatar-lg" id="preview-initials" aria-hidden="true"><%= @customer.initials.presence || '—' %></div>
+      <div class="card-head">
+        <p class="preview-kicker">Client card</p>
+        <% if @customer.client_ref.present? %>
+          <span class="client-ref"><%= @customer.client_ref %></span>
+        <% else %>
+          <span class="client-ref is-wait">#<%= Customer.house_prefix %>-••••••••••</span>
+        <% end %>
+      </div>
+      <%= render 'customers/cameo', gid: 'client-form-gold' %>
       <h2 id="preview-name"><%= preview_name %></h2>
       <span class="sku-chip" id="preview-phone"><%= preview_phone %></span>
       <div class="chips">
@@ -112,10 +119,8 @@
 </div>
 
 <style>
-  .people-form .avatar-lg {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 28px; font-weight: 700; letter-spacing: 0.08em; color: #e8d5a3;
-  }
+  .people-form .client-gem { position: relative; overflow: hidden; }
+  .people-form .cameo { width: 92px; height: 92px; display: block; }
 </style>
 
 <script>
@@ -132,7 +137,6 @@
     var phoneEl = document.getElementById('preview-phone');
     var gstEl = document.getElementById('preview-gst');
     var papersEl = document.getElementById('preview-papers');
-    var initialsEl = document.getElementById('preview-initials');
     var noteEl = document.getElementById('preview-note');
 
     function val(el){ return el ? el.value.trim() : ''; }
@@ -141,15 +145,16 @@
       var a = val(first);
       var b = val(last);
       var letters = ((a[0] || '') + (b[0] || '')) || a.slice(0, 2);
-      return letters.toUpperCase() || '—';
+      return letters.toUpperCase();
     }
     function sync(){
       if(submit) submit.disabled = !ready();
-      if(nameEl) nameEl.textContent = [val(first), val(last)].filter(Boolean).join(' ') || 'New client';
+      var full = [val(first), val(last)].filter(Boolean).join(' ');
+      var short = initials();
+      if(nameEl) nameEl.textContent = full ? (short ? (full + '(' + short + ')') : full) : 'New client';
       if(phoneEl) phoneEl.textContent = val(phone) || 'Phone will appear here';
       if(gstEl) gstEl.textContent = val(gst) || 'No GST yet';
       if(papersEl) papersEl.textContent = val(papers) || 'No Aadhaar / PAN yet';
-      if(initialsEl) initialsEl.textContent = initials();
       if(noteEl) noteEl.textContent = ready() ? 'Ready to save to the house book.' : 'Name and phone open the book.';
     }
     [first, last, phone, gst, papers].forEach(function(el){

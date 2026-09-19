@@ -1,0 +1,189 @@
+<% report = @report %>
+
+<header class="ep-hero">
+  <div>
+    <p class="ep-eyebrow">Licence desk</p>
+    <h1>Earnings</h1>
+    <p class="ep-lead">Booked when a year is approved or granted — at the plan price. Houses still waiting or declined are not counted. All figures IST.</p>
+  </div>
+  <div class="ep-actions">
+    <%= link_to 'This month', staff_earnings_path, class: 'btn btn-gold' %>
+    <%= link_to 'Grant a year', new_staff_subscription_path, class: 'btn btn-ghost' %>
+  </div>
+</header>
+
+<div class="ep-metrics">
+  <div class="ep-metric is-gold">
+    <span>Today</span>
+    <strong><%= format_rupees(report.today_cents, cents: true) %></strong>
+    <em><%= pluralize(report.today_count, 'year') %> booked today</em>
+  </div>
+  <div class="ep-metric is-gold">
+    <span>This month</span>
+    <strong><%= format_rupees(report.month_cents, cents: true) %></strong>
+    <em><%= report.month_label %> · <%= pluralize(report.month_count, 'year') %></em>
+  </div>
+  <div class="ep-metric is-gold">
+    <span>This year</span>
+    <strong><%= format_rupees(report.year_cents, cents: true) %></strong>
+    <em><%= report.month.year %> · <%= pluralize(report.year_count, 'year') %></em>
+  </div>
+  <div class="ep-metric is-gold">
+    <span>Live book</span>
+    <strong><%= format_rupees(report.live_cents, cents: true) %></strong>
+    <em><%= pluralize(report.live_count, 'house') %> on the desk now</em>
+  </div>
+</div>
+
+<div class="ep-card">
+  <div class="ep-hero" style="border:0;padding:0;margin:0 0 4px">
+    <div>
+      <p class="ep-eyebrow">Day wise</p>
+      <h2><%= report.month_label %></h2>
+      <p class="ep-hint">Every grant that opened in this month, day by day. All-time book <%= format_rupees(report.all_time_cents, cents: true) %>.</p>
+    </div>
+    <div class="ep-actions">
+      <%= link_to '← ' + report.prev_month.strftime('%b %Y'), staff_earnings_path(month: report.prev_month.strftime('%Y-%m')), class: 'btn btn-ghost' %>
+      <% unless report.next_month > Time.zone.today.beginning_of_month %>
+        <%= link_to report.next_month.strftime('%b %Y') + ' →', staff_earnings_path(month: report.next_month.strftime('%Y-%m')), class: 'btn btn-ghost' %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="ep-cal" aria-label="<%= report.month_label %>">
+    <% %w[Mon Tue Wed Thu Fri Sat Sun].each do |dow| %>
+      <div class="ep-cal-dow"><%= dow %></div>
+    <% end %>
+    <% report.calendar_blanks.times do %>
+      <div class="ep-cal-cell is-pad"></div>
+    <% end %>
+    <% report.day_rows.each do |row| %>
+      <div class="ep-cal-cell <%= 'is-today' if row[:today] %> <%= 'is-earn' if row[:cents].positive? %>">
+        <span><%= row[:date].day %></span>
+        <% if row[:cents].positive? %>
+          <strong><%= format_rupees(row[:cents], cents: true) %></strong>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<div class="ep-grid">
+  <div class="ep-card">
+    <h2>Days with a grant</h2>
+    <p class="ep-hint">Only days that booked a year in <%= report.month_label %>.</p>
+    <% if report.active_days.empty? %>
+      <div class="ep-empty">
+        <p class="ep-hint" style="margin:12px 0 0">No years booked this month yet.</p>
+      </div>
+    <% else %>
+      <div class="ep-table-wrap">
+        <table class="ep-table">
+          <thead>
+            <tr><th>Day</th><th>Years</th><th>Booked</th></tr>
+          </thead>
+          <tbody>
+            <% peak = report.month_peak_cents %>
+            <% report.active_days.reverse_each do |row| %>
+              <tr>
+                <td>
+                  <strong><%= row[:date].strftime('%d %b, %a') %></strong>
+                  <% if row[:today] %><span class="ep-sub">Today</span><% end %>
+                  <div class="ep-bar"><i style="width:<%= peak.positive? ? ((row[:cents] * 100.0) / peak).round : 0 %>%"></i></div>
+                </td>
+                <td><%= row[:count] %></td>
+                <td style="color:#c9a227;font-weight:700"><%= format_rupees(row[:cents], cents: true) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="ep-card">
+    <h2><%= report.month.year %> by month</h2>
+    <p class="ep-hint">Yearly licence book, month by month.</p>
+    <div class="ep-table-wrap">
+      <table class="ep-table">
+        <thead>
+          <tr><th>Month</th><th>Years</th><th>Booked</th></tr>
+        </thead>
+        <tbody>
+          <% report.year_months.each do |row| %>
+            <tr>
+              <td>
+                <%= link_to row[:date].strftime('%B'), staff_earnings_path(month: row[:date].strftime('%Y-%m')), class: 'ep-link' %>
+                <% if row[:current] %><span class="ep-sub">Showing</span><% end %>
+              </td>
+              <td><%= row[:count] %></td>
+              <td style="color:#c9a227;font-weight:700"><%= row[:cents].positive? ? format_rupees(row[:cents], cents: true) : '—' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<% if report.by_plan.any? %>
+  <div class="ep-card">
+    <h2>Plans this month</h2>
+    <p class="ep-hint">How <%= report.month_label %> split across the catalogue.</p>
+    <div class="ep-plan-grid">
+      <% report.by_plan.each do |row| %>
+        <article class="ep-plan">
+          <p class="ep-eyebrow" style="margin:0 0 4px"><%= pluralize(row[:count], 'year') %></p>
+          <h2 style="margin:0;font-family:'Cormorant Garamond',Georgia,serif;font-size:1.35rem;font-weight:600"><%= row[:name] %></h2>
+          <div class="price"><%= format_rupees(row[:cents], cents: true) %></div>
+        </article>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
+<div class="ep-card">
+  <h2>Recent grants</h2>
+  <p class="ep-hint">Newest years booked, from any month.</p>
+  <% if report.recent_grants.empty? %>
+    <div class="ep-empty">
+      <h2>The book is empty</h2>
+      <p class="ep-hint">Approve a waiting house or grant a year — the first licence opens the ledger.</p>
+      <div class="ep-actions" style="margin-top:16px">
+        <%= link_to 'Waiting houses', staff_subscription_requests_path, class: 'btn btn-gold' %>
+        <%= link_to 'Grant a year', new_staff_subscription_path, class: 'btn btn-ghost' %>
+      </div>
+    </div>
+  <% else %>
+    <div class="ep-table-wrap">
+      <table class="ep-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>House</th>
+            <th>Plan</th>
+            <th>Booked</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% report.recent_grants.each do |sub| %>
+            <tr>
+              <td><%= ist_stamp(sub.starts_at) %></td>
+              <td>
+                <strong><%= sub.user.display_name %></strong>
+                <span class="ep-sub"><%= sub.user.email %></span>
+              </td>
+              <td>
+                <%= sub.plan.name %>
+                <span class="ep-sub"><%= sub.effective_status %></span>
+              </td>
+              <td style="color:#c9a227;font-weight:700"><%= format_rupees(sub.plan.price_cents, cents: true) %></td>
+              <td><%= link_to 'Open', staff_subscription_path(sub), class: 'ep-link' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+</div>

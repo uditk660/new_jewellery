@@ -135,6 +135,7 @@
                 <span><%= [client.phone.presence, client.gst_number.present? ? "GST #{client.gst_number}" : nil].compact.join(' · ') %></span>
               </div>
               <%= link_to 'Client card', customer_path(client), class: 'atelier-back' %>
+              <%= link_to 'Khata', ledger_path(client), class: 'atelier-back' %>
             </div>
             <dl class="piece-dl">
               <div><dt>Phone</dt><dd><%= client.phone.presence || '—' %></dd></div>

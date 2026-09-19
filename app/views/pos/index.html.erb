@@ -1,160 +1,722 @@
-<div class="container">
-  <div class="page-header">
+<%= render 'shared/atelier_styles' %>
+
+<%
+  @order ||= Order.new(status: 'pending', cgst_rate: Order::DEFAULT_CGST_RATE, igst_rate: Order::DEFAULT_IGST_RATE)
+  @draft_customer ||= Customer.new
+  @customer_mode ||= 'existing'
+  @items ||= []
+  @customers ||= []
+  @metals ||= []
+  @board_rows ||= []
+  selected = (@customers || []).find { |c| c.id.to_s == @selected_customer_id.to_s }
+%>
+
+<div class="atelier-page pos-desk" id="pos-desk">
+  <header class="atelier-hero">
     <div>
-      <h1>POS Sales</h1>
-      <p class="lead">Select one or more items, adjust quantities, apply discounts and charges. Totals calculate below.</p>
+      <p class="eyebrow">Counter</p>
+      <h1>Point of sale</h1>
+      <p class="lead">Scan a SKU or tap a piece onto the ticket. Name the client, then raise the bill — payment stays on the invoice.</p>
     </div>
-    <div>
-      <%= link_to 'View Orders', orders_path, class: 'btn' %>
+    <div class="pos-hero-actions">
+      <%= link_to 'Raise a bill', new_order_path, class: 'atelier-back' %>
+      <%= link_to 'Bills', orders_path, class: 'atelier-back' %>
     </div>
-  </div>
+  </header>
 
-  <div class="card">
-    <form id="pos-form" action="<%= pos_create_order_path %>" method="post">
-      <%= hidden_field_tag :authenticity_token, form_authenticity_token %>
+  <% if @board_rows.any? %>
+    <div class="board-strip" aria-label="Today’s board">
+      <span class="board-kicker"><%= (@board_date || Time.zone.today).strftime('%d %b') %></span>
+      <% @board_rows.first(8).each do |row| %>
+        <span class="board-chip">
+          <i class="swatch" style="background:<%= row[:colour] %>"></i>
+          <%= row[:metal] %> <%= row[:hallmark] %>
+          <strong>₹<%= '%.2f' % row[:rate] %></strong><em>/g</em>
+        </span>
+      <% end %>
+    </div>
+  <% end %>
 
-      <table>
-        <thead>
-          <tr><th>Item</th><th>Price</th><th>Qty</th><th>Weight (g)</th><th>Line Total</th><th></th></tr>
-        </thead>
-        <tbody id="pos-items">
-        </tbody>
-      </table>
+  <%= form_tag pos_create_order_path, method: :post, id: 'pos-form' do %>
+    <% if @order.errors.any? %>
+      <div class="errors" id="form-error"><%= @order.errors.full_messages.to_sentence %></div>
+    <% else %>
+      <div class="errors" id="form-error" hidden></div>
+    <% end %>
 
-      <p><button type="button" id="add-row" class="btn">+ Add Item</button></p>
-
-      <div class="form-row">
-        <div>
-          <label>Discount (₹)</label>
-          <input type="number" step="0.01" name="discount" id="discount" value="0">
+    <div class="pos-layout">
+      <section class="tray-pane">
+        <div class="scan-bar">
+          <label for="piece-search" class="sr-only">Scan SKU or search the tray</label>
+          <input type="search" id="piece-search" class="form-control scan-input" placeholder="Scan SKU, or type a piece, metal, hallmark…" autocomplete="off" autofocus>
+          <span class="scan-hint">Enter adds an exact SKU · / focuses search</span>
         </div>
-        <div>
-          <label>Charges (₹)</label>
-          <input type="number" step="0.01" name="charges" id="charges" value="0">
-        </div>
-      </div>
 
-      <div class="form-row" style="margin-top:12px">
-        <div>
-          <label>Gross Weight (g)</label>
-          <input type="number" step="0.01" name="gross_weight" id="gross_weight" value="0">
+        <div class="metal-filters" id="metal-filters" role="tablist" aria-label="Metal">
+          <button type="button" class="filter is-on" data-metal="" role="tab" aria-selected="true">All</button>
+          <% @metals.each do |metal| %>
+            <button type="button" class="filter" data-metal="<%= metal.id %>" role="tab" aria-selected="false">
+              <i class="swatch" style="background:<%= metal.chip_colour %>"></i>
+              <%= metal.name %>
+            </button>
+          <% end %>
         </div>
-        <div>
-          <label>Net Weight (g)</label>
-          <input type="number" step="0.01" name="net_weight" id="net_weight" value="0">
-        </div>
-      </div>
 
-      <div style="margin-top:12px">
-        <label>Tax Rates</label>
-        <div class="form-row">
-          <div>
-            <label>CGST %</label>
-            <input type="number" step="0.01" id="cgst_rate" value="0">
+        <div class="tray-meta">
+          <span id="tray-count"><%= @items.size %> on the tray</span>
+        </div>
+        <div class="tray-grid" id="tray-grid"></div>
+        <p class="hint tray-empty" id="tray-empty" hidden>No matching pieces on the tray.</p>
+        <% if @items.empty? %>
+          <div class="atelier-form empty-tray">
+            <p class="hint" style="margin:0">Nothing sellable is on the tray. Register a piece, set a rate, and keep the metal active.</p>
+            <div class="actions" style="margin-top:14px">
+              <%= link_to 'Register a piece', new_jewelry_item_path, class: 'btn-gold' %>
+              <%= link_to 'Today’s board', rates_path, class: 'atelier-back' %>
+            </div>
           </div>
-          <div>
-            <label>CGST %</label>
-            <input type="number" step="0.01" id="igst_rate" value="0">
+        <% end %>
+      </section>
+
+      <aside class="ticket" aria-live="polite">
+        <p class="preview-kicker">Ticket <span id="ticket-count">0</span></p>
+
+        <div class="ticket-block">
+          <h2>Client</h2>
+          <div class="mode-toggle" role="radiogroup" aria-label="Client source">
+            <label class="mode <%= @customer_mode != 'new' ? 'is-on' : '' %>">
+              <input type="radio" name="customer_mode" value="existing" <%= 'checked' if @customer_mode != 'new' %>>
+              On the book
+            </label>
+            <label class="mode <%= @customer_mode == 'new' ? 'is-on' : '' %>">
+              <input type="radio" name="customer_mode" value="new" <%= 'checked' if @customer_mode == 'new' %>>
+              New client
+            </label>
+          </div>
+
+          <div id="existing-client" class="client-pane" <%= 'hidden' if @customer_mode == 'new' %>>
+            <%= hidden_field_tag :existing_customer_id, @selected_customer_id, id: 'existing_customer_id' %>
+            <label for="client-search">Name or phone</label>
+            <input type="search" id="client-search" class="form-control" placeholder="Search the book" autocomplete="off" value="<%= selected ? "#{selected.full_name} · #{selected.phone}" : '' %>">
+            <ul id="client-results" class="combo-list" hidden></ul>
+            <div id="client-chip" class="client-chip" <%= 'hidden' unless selected %>>
+              <span class="avatar" id="chip-initials"><%= selected&.initials %></span>
+              <div>
+                <strong id="chip-name"><%= selected&.full_name %></strong>
+                <span id="chip-meta"><%= [selected&.phone, selected&.outstanding.to_f.positive? ? "Due #{format_rupees(selected.outstanding)}" : nil].compact.join(' · ') %></span>
+              </div>
+              <button type="button" class="atelier-back" id="client-clear">Change</button>
+            </div>
+          </div>
+
+          <div id="new-client" class="client-pane" <%= 'hidden' if @customer_mode != 'new' %>>
+            <div class="row">
+              <div class="field">
+                <label for="customer_first_name">First name <span class="req">*</span></label>
+                <%= text_field_tag 'customer[first_name]', @draft_customer.first_name, class: 'form-control', id: 'customer_first_name', placeholder: 'Given name' %>
+              </div>
+              <div class="field">
+                <label for="customer_last_name">Last name</label>
+                <%= text_field_tag 'customer[last_name]', @draft_customer.last_name, class: 'form-control', id: 'customer_last_name' %>
+              </div>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <div class="field">
+                <label for="customer_phone">Phone <span class="req">*</span></label>
+                <%= telephone_field_tag 'customer[phone]', @draft_customer.phone, class: 'form-control', id: 'customer_phone', maxlength: 10, inputmode: 'numeric', placeholder: '10 digits' %>
+              </div>
+              <div class="field">
+                <label for="customer_gst">GSTIN</label>
+                <%= text_field_tag 'customer[gst_number]', @draft_customer.gst_number, class: 'form-control', id: 'customer_gst' %>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div style="margin-top:16px">
-        <table>
-          <tbody>
-            <tr><td>Subtotal</td><td id="subtotal">₹0.00</td></tr>
-            <tr><td>Discount</td><td id="discount-display">₹0.00</td></tr>
-            <tr><td>Charges</td><td id="charges-display">₹0.00</td></tr>
-            <tr><td>Taxable</td><td id="taxable">₹0.00</td></tr>
-            <tr><td>CGST</td><td id="cgst">₹0.00</td></tr>
-            <tr><td>CGST</td><td id="igst">₹0.00</td></tr>
-            <tr><td><strong>Total</strong></td><td id="grand-total"><strong>₹0.00</strong></td></tr>
-          </tbody>
-        </table>
-      </div>
+        <div class="ticket-block">
+          <h2>Pieces</h2>
+          <div id="ticket-lines"></div>
+          <p class="hint" id="ticket-empty">Tap a tray piece or scan a SKU.</p>
+        </div>
 
-      <div style="margin-top:14px">
-        <button type="submit" class="btn btn-primary">Create Order</button>
-      </div>
-    </form>
+        <div class="ticket-block">
+          <h2>Charges &amp; tax</h2>
+          <div class="row">
+            <div class="field">
+              <label for="discount">Discount (₹)</label>
+              <%= number_field_tag :discount, ('%.2f' % @order.discount.to_f), step: 0.01, min: 0, class: 'form-control', id: 'discount' %>
+            </div>
+            <div class="field">
+              <label for="charges">Extra (₹)</label>
+              <%= number_field_tag :charges, ('%.2f' % @order.charges.to_f), step: 0.01, min: 0, class: 'form-control', id: 'charges' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <div class="field">
+              <label for="cgst_rate">CGST (%)</label>
+              <%= number_field_tag :cgst_rate, ('%.2f' % (@order.cgst_rate.presence || Order::DEFAULT_CGST_RATE)), step: 0.01, min: 0, class: 'form-control', id: 'cgst_rate' %>
+            </div>
+            <div class="field">
+              <label for="igst_rate">CGST (%)</label>
+              <%= number_field_tag :igst_rate, ('%.2f' % (@order.igst_rate.presence || Order::DEFAULT_IGST_RATE)), step: 0.01, min: 0, class: 'form-control', id: 'igst_rate' %>
+            </div>
+          </div>
+        </div>
+
+        <div class="ticket-sum">
+          <div><span>Subtotal</span><strong id="sum-subtotal">₹0.00</strong></div>
+          <div><span>Discount</span><strong id="sum-discount">₹0.00</strong></div>
+          <div><span>Charges</span><strong id="sum-charges">₹0.00</strong></div>
+          <div><span>Taxable</span><strong id="sum-taxable">₹0.00</strong></div>
+          <div><span>CGST</span><strong id="sum-cgst">₹0.00</strong></div>
+          <div><span>CGST</span><strong id="sum-igst">₹0.00</strong></div>
+        </div>
+        <div class="preview-price" id="sum-total">₹0.00</div>
+        <p class="preview-note" id="preview-note">Name the client and add a piece to raise the bill.</p>
+        <div class="actions ticket-actions">
+          <%= submit_tag 'Raise bill', class: 'btn-gold', id: 'raise-bill', disabled: true %>
+        </div>
+      </aside>
+    </div>
+  <% end %>
+
+  <div id="qty-popup" class="qty-popup" hidden>
+    <div class="qty-popup-card" role="alertdialog" aria-modal="true" aria-labelledby="qty-popup-msg">
+      <p class="eyebrow">Stock</p>
+      <p id="qty-popup-msg"></p>
+      <button type="button" class="btn-gold" id="qty-popup-ok">OK</button>
+    </div>
   </div>
 </div>
 
+<style>
+  .container:has(.pos-desk) { max-width: 1280px; }
+  .pos-desk .pos-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pos-desk .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+  .pos-desk input[type=number]::-webkit-outer-spin-button,
+  .pos-desk input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .pos-desk input[type=number] { -moz-appearance: textfield; }
+  .pos-desk .board-strip {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -6px 0 18px;
+  }
+  .pos-desk .board-kicker {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #6b6258; font-weight: 700;
+  }
+  .pos-desk .board-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 999px;
+    padding: 5px 10px; font-size: 12px; color: #14110f; font-weight: 600;
+  }
+  .pos-desk .board-chip strong { color: #c9a227; font-variant-numeric: tabular-nums; }
+  .pos-desk .board-chip em { color: #6b6258; font-style: normal; font-weight: 600; }
+  .pos-desk .swatch {
+    width: 12px; height: 12px; border-radius: 4px; display: inline-block;
+    border: 1px solid rgba(11,18,32,0.12); flex-shrink: 0;
+  }
+  .pos-desk .pos-layout {
+    display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.9fr); gap: 22px; align-items: start;
+  }
+  .pos-desk .scan-bar { margin-bottom: 12px; }
+  .pos-desk .scan-input {
+    font-size: 16px !important; padding: 14px 16px !important; border-radius: 14px !important;
+    border: 1px solid rgba(201,162,39,0.45) !important; background: #fff;
+  }
+  .pos-desk .scan-hint { display: block; margin-top: 6px; color: #6b6258; font-size: 12px; }
+  .pos-desk .metal-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .pos-desk .filter {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    border: 1px solid rgba(201,162,39,0.3); background: #fffaf3; color: #6b6258;
+    border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; font-family: inherit;
+  }
+  .pos-desk .filter.is-on { background: #0b1220; color: #e8d5a3; border-color: #0b1220; }
+  .pos-desk .tray-meta { color: #6b6258; font-size: 12px; margin-bottom: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .pos-desk .tray-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px;
+  }
+  .pos-desk .tray-card {
+    text-align: left; cursor: pointer; font-family: inherit;
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 16px;
+    padding: 12px 12px 10px; color: #14110f;
+  }
+  .pos-desk .tray-card:hover { border-color: #c9a227; box-shadow: 0 10px 24px rgba(20,17,15,0.06); }
+  .pos-desk .tray-card.is-on { background: #0b1220; color: #f7f1e8; border-color: #0b1220; }
+  .pos-desk .tray-card.is-on .meta, .pos-desk .tray-card.is-on .sku { color: #d6cbb8; }
+  .pos-desk .tray-card .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .pos-desk .tray-card .swatch { width: 16px; height: 16px; border-radius: 5px; }
+  .pos-desk .tray-card h3 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.15rem; margin: 0; font-weight: 600; line-height: 1.2;
+  }
+  .pos-desk .tray-card .sku { font-size: 11px; letter-spacing: 0.08em; color: #6b6258; }
+  .pos-desk .tray-card .meta { margin: 6px 0 0; font-size: 12px; color: #6b6258; }
+  .pos-desk .tray-card .price { margin-top: 8px; color: #c9a227; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pos-desk .ticket {
+    position: sticky; top: 18px;
+    background: linear-gradient(180deg, #16120e, #0b1220); color: #f7f1e8;
+    border-radius: 18px; padding: 18px 18px 16px;
+    border: 1px solid rgba(232,213,163,0.25);
+    box-shadow: 0 24px 50px rgba(11,18,32,0.28);
+  }
+  .pos-desk .ticket h2 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.2rem; margin: 0 0 8px; font-weight: 600;
+  }
+  .pos-desk .ticket .preview-kicker { display: flex; justify-content: space-between; align-items: center; }
+  .pos-desk .ticket #ticket-count {
+    display: inline-flex; min-width: 22px; height: 22px; padding: 0 7px; align-items: center; justify-content: center;
+    border-radius: 999px; background: rgba(232,213,163,0.16); color: #e8d5a3; font-size: 12px;
+  }
+  .pos-desk .ticket-block {
+    margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px dashed rgba(232,213,163,0.18);
+  }
+  .pos-desk .ticket label { color: #d6cbb8; }
+  .pos-desk .ticket .form-control {
+    background: rgba(255,255,255,0.96); color: #14110f;
+  }
+  .pos-desk .mode-toggle {
+    display: inline-flex; padding: 3px; border-radius: 999px; margin-bottom: 12px;
+    border: 1px solid rgba(232,213,163,0.28); background: rgba(255,255,255,0.04);
+  }
+  .pos-desk .mode {
+    display: inline-flex; cursor: pointer; padding: 6px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; color: #d6cbb8;
+  }
+  .pos-desk .mode input { position: absolute; opacity: 0; pointer-events: none; }
+  .pos-desk .mode.is-on { background: linear-gradient(90deg, #e8d5a3, #c9a227); color: #0b1220; }
+  .pos-desk .client-pane { position: relative; }
+  .pos-desk .combo-list {
+    list-style: none; margin: 6px 0 0; padding: 6px; max-height: 220px; overflow: auto;
+    background: #fff; color: #14110f; border-radius: 12px; position: absolute; left: 0; right: 0; z-index: 6;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.25);
+  }
+  .pos-desk .combo-list li {
+    padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px;
+  }
+  .pos-desk .combo-list li:hover { background: rgba(232,213,163,0.4); }
+  .pos-desk .combo-list .muted { color: #6b6258; font-size: 12px; }
+  .pos-desk .client-chip {
+    margin-top: 10px; display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(232,213,163,0.18); border-radius: 12px; padding: 8px 10px;
+  }
+  .pos-desk .avatar {
+    width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center;
+    background: #c9a227; color: #0b1220; font-weight: 700; font-size: 12px;
+  }
+  .pos-desk .client-chip strong { display: block; font-size: 14px; }
+  .pos-desk .client-chip span { color: #d6cbb8; font-size: 12px; }
+  .pos-desk .client-chip .atelier-back { margin-left: auto; padding: 6px 10px; }
+  .pos-desk .ticket-line {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(232,213,163,0.14);
+    border-radius: 12px; padding: 10px; margin-bottom: 8px;
+  }
+  .pos-desk .ticket-line-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .pos-desk .ticket-line h3 { margin: 0; font-size: 0.98rem; font-family: "Cormorant Garamond", Georgia, serif; }
+  .pos-desk .ticket-line .sub { display: block; color: #b7aa98; font-size: 11px; margin-top: 2px; }
+  .pos-desk .ticket-line .remove {
+    background: transparent; border: 0; color: #e8d5a3; cursor: pointer; font-size: 12px; font-weight: 700; font-family: inherit;
+  }
+  .pos-desk .ticket-grid {
+    display: grid; grid-template-columns: 54px 1fr 1fr 70px; gap: 6px; margin-top: 8px;
+  }
+  .pos-desk .ticket-grid label { margin-bottom: 3px; font-size: 10px; }
+  .pos-desk .ticket-grid .form-control { padding: 7px 8px; font-size: 13px; }
+  .pos-desk .line-total { text-align: right; margin-top: 6px; color: #e8d5a3; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pos-desk .ticket-sum div {
+    display: flex; justify-content: space-between; font-size: 13px; color: #b7aa98; padding: 3px 0;
+  }
+  .pos-desk .ticket-sum strong { color: #f7f1e8; font-variant-numeric: tabular-nums; }
+  .pos-desk .preview-price { font-size: 1.85rem; margin: 8px 0 4px; }
+  .pos-desk .preview-note { color: #8a8072; }
+  .pos-desk .ticket-actions { margin-top: 12px; }
+  .pos-desk .ticket-actions .btn-gold { width: 100%; }
+  .pos-desk a.btn-gold, .pos-desk input.btn-gold { text-decoration: none; }
+  .pos-desk .qty-popup {
+    position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+    background: rgba(11,18,32,0.45); padding: 20px;
+  }
+  .pos-desk .qty-popup[hidden] { display: none; }
+  .pos-desk .qty-popup-card {
+    width: min(420px, 100%); background: #fffaf3; color: #14110f;
+    border: 1px solid rgba(201,162,39,0.35); border-radius: 18px; padding: 22px;
+  }
+  .pos-desk .field-error { border-color: #9f1239 !important; box-shadow: 0 0 0 3px rgba(159,18,57,0.12) !important; }
+  @media (max-width: 980px) {
+    .pos-desk .pos-layout { grid-template-columns: 1fr; }
+    .pos-desk .ticket { position: static; }
+  }
+</style>
+
+<script type="application/json" id="pos-payload"><%= raw json_escape({
+  items: (@items || []).map(&:bill_payload),
+  customers: (@customers || []).map(&:bill_payload),
+  draft: @draft_lines || [],
+  selectedId: @selected_customer_id.to_s,
+  mode: @customer_mode || 'existing'
+}.to_json) %></script>
+
 <script>
-  const items = <%= raw(@items.select{ |i| (i.quantity.present? && i.quantity > 0) || i.metal.present? }.map{|i| {id: i.id, name: i.name, price: i.price}}.to_json) %>;
-  const tbody = document.getElementById('pos-items');
+(function(){
+  var payload = {};
+  try { payload = JSON.parse(document.getElementById('pos-payload').textContent || '{}'); } catch(e){ payload = {}; }
+  var items = payload.items || [];
+  var customers = payload.customers || [];
+  var form = document.getElementById('pos-form');
+  var grid = document.getElementById('tray-grid');
+  var linesEl = document.getElementById('ticket-lines');
+  var emptyEl = document.getElementById('ticket-empty');
+  var search = document.getElementById('piece-search');
+  var raiseBtn = document.getElementById('raise-bill');
+  var errorBox = document.getElementById('form-error');
+  var results = document.getElementById('client-results');
+  var clientSearch = document.getElementById('client-search');
+  var hiddenId = document.getElementById('existing_customer_id');
+  var metalFilter = '';
+  var query = '';
 
-  function money(v){ return '\u20B9' + v.toFixed(2); }
+  function money(v){ return '\u20B9' + (isFinite(v) ? Number(v) : 0).toFixed(2); }
+  function num(el){ return parseFloat((el && el.value) || 0) || 0; }
+  function int(el){ return parseInt((el && el.value) || 0, 10) || 0; }
+  function val(sel){ var el = document.querySelector(sel); return el ? el.value.trim() : ''; }
+  function itemById(id){ return items.find(function(it){ return String(it.id) === String(id); }); }
+  function customerById(id){ return customers.find(function(c){ return String(c.id) === String(id); }); }
+  function mode(){ var on = document.querySelector('input[name="customer_mode"]:checked'); return on ? on.value : 'existing'; }
+  function ticketIds(){
+    var ids = [];
+    linesEl.querySelectorAll('.ticket-line').forEach(function(row){ ids.push(String(row.getAttribute('data-id'))); });
+    return ids;
+  }
+  function setError(msg){
+    if(!errorBox) return;
+    if(!msg){ errorBox.hidden = true; errorBox.textContent = ''; return; }
+    errorBox.hidden = false; errorBox.textContent = msg;
+  }
+  function showQtyPopup(msg){
+    var pop = document.getElementById('qty-popup');
+    var text = document.getElementById('qty-popup-msg');
+    if(!pop || !text){ window.alert(msg); return; }
+    text.textContent = msg; pop.hidden = false;
+  }
+  function hideQtyPopup(){ var pop = document.getElementById('qty-popup'); if(pop) pop.hidden = true; }
 
-  function addRow(){
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>
-        <select name="items[][jewelry_item_id]" class="item-select">
-          ${items.map(it => `<option value="${it.id}">${it.name}</option>`).join('')}
-        </select>
-      </td>
-      <td class="price-cell">${money(items[0].price)}</td>
-      <td><input type="number" name="items[][quantity]" value="1" min="1" class="qty" style="width:72px"></td>
-      <td><input type="number" name="items[][weight]" value="0" step="0.01" style="width:90px"></td>
-      <td class="line-total">${money(items[0].price)}</td>
-      <td><button type="button" class="btn remove">Remove</button></td>
-    `;
-    tbody.appendChild(row);
-    attachRowListeners(row);
+  function matches(it){
+    if(metalFilter && String(it.metal_id) !== String(metalFilter)) return false;
+    if(!query) return true;
+    var hay = [it.name, it.sku, it.metal, it.purity, it.purity_label, it.category].join(' ').toLowerCase();
+    return hay.indexOf(query) !== -1;
+  }
+
+  function renderTray(){
+    if(!grid) return;
+    var taken = ticketIds();
+    var shown = items.filter(matches);
+    grid.innerHTML = shown.map(function(it){
+      var on = taken.indexOf(String(it.id)) !== -1;
+      var unit = Number(it.price_per_gram || 0) * Number(it.weight_grams || 0);
+      return '<button type="button" class="tray-card'+(on?' is-on':'')+'" data-id="'+it.id+'">'+
+        '<div class="top"><i class="swatch" style="background:'+(it.colour || '#c9a227')+'"></i><span class="sku">'+ (it.sku || '') +'</span></div>'+
+        '<h3>'+it.name+'</h3>'+
+        '<p class="meta">'+[it.metal, it.purity_label || it.purity, Number(it.weight_grams).toFixed(2)+' g', it.quantity+' pcs'].filter(Boolean).join(' · ')+'</p>'+
+        '<div class="price">'+(unit > 0 ? money(unit) : 'No rate')+'</div>'+
+      '</button>';
+    }).join('');
+    var empty = document.getElementById('tray-empty');
+    if(empty) empty.hidden = shown.length > 0 || items.length === 0;
+    var count = document.getElementById('tray-count');
+    if(count) count.textContent = shown.length + ' on the tray';
+  }
+
+  function addItem(it, data){
+    if(!it) return;
+    data = data || {};
+    if(ticketIds().indexOf(String(it.id)) !== -1){
+      var existing = linesEl.querySelector('.ticket-line[data-id="'+it.id+'"]');
+      if(existing){
+        var qtyEl = existing.querySelector('.piece-qty');
+        var next = int(qtyEl) + 1;
+        if(next > it.quantity){ showQtyPopup('Only ' + it.quantity + ' pcs of ' + it.name + ' remain on the tray.'); return; }
+        qtyEl.value = next;
+        recalc();
+      }
+      return;
+    }
+    var net = data.net_weight != null && data.net_weight !== '' ? data.net_weight : it.weight_grams;
+    var gross = data.gross_weight != null && data.gross_weight !== '' ? data.gross_weight : net;
+    var row = document.createElement('div');
+    row.className = 'ticket-line';
+    row.setAttribute('data-id', it.id);
+    row.innerHTML =
+      '<div class="ticket-line-top">'+
+        '<div><h3>'+it.name+'</h3><span class="sub">'+(it.sku || '')+' · '+(it.metal || '')+' '+(it.purity || '')+'</span></div>'+
+        '<button type="button" class="remove">Remove</button>'+
+      '</div>'+
+      '<input type="hidden" name="line_items[][jewelry_item_id]" class="piece-id" value="'+it.id+'">'+
+      '<input type="hidden" name="line_items[][hsn]" value="'+(it.hsn || '')+'">'+
+      '<input type="hidden" name="line_items[][huid]" value="'+(it.sku || '')+'">'+
+      '<input type="hidden" name="line_items[][gross_weight]" class="piece-gross" value="'+Number(gross).toFixed(2)+'">'+
+      '<input type="hidden" name="line_items[][additional_charge]" class="piece-add" value="'+(data.additional_charge || 0)+'">'+
+      '<div class="ticket-grid">'+
+        '<div class="field"><label>Qty</label><input type="text" name="line_items[][quantity]" class="form-control piece-qty" inputmode="numeric" value="'+(data.quantity || 1)+'"></div>'+
+        '<div class="field"><label>Net g</label><input type="number" name="line_items[][net_weight]" class="form-control piece-net" min="0.01" step="0.01" value="'+Number(net).toFixed(2)+'"></div>'+
+        '<div class="field"><label>₹ / g</label><input type="number" name="line_items[][rate_per_gram]" class="form-control piece-rate" min="0.01" step="0.01" value="'+(data.rate_per_gram != null && data.rate_per_gram !== '' ? data.rate_per_gram : (it.price_per_gram ? Number(it.price_per_gram).toFixed(2) : ''))+'"></div>'+
+        '<div class="field"><label>Mk %</label><input type="number" name="line_items[][making_charge_percent]" class="form-control piece-making" min="0" step="0.01" value="'+(data.making_charge_percent != null && data.making_charge_percent !== '' ? data.making_charge_percent : Number(it.making_percent || 0).toFixed(2))+'"></div>'+
+      '</div>'+
+      '<div class="line-total">₹0.00</div>';
+    linesEl.appendChild(row);
+    bindRow(row);
+    if(emptyEl) emptyEl.hidden = true;
     recalc();
   }
 
-  function attachRowListeners(row){
-    const select = row.querySelector('.item-select');
-    const qty = row.querySelector('.qty');
-    const priceCell = row.querySelector('.price-cell');
-    const lineTotal = row.querySelector('.line-total');
-    select.addEventListener('change', function(){
-      const it = items.find(x => x.id == select.value);
-      priceCell.textContent = money(it.price);
-      lineTotal.textContent = money(it.price * parseInt(qty.value || 1));
-      recalc();
-    });
-    qty.addEventListener('input', function(){
-      const it = items.find(x => x.id == select.value);
-      lineTotal.textContent = money(it.price * parseInt(qty.value || 0));
-      recalc();
-    });
-    row.querySelector('.remove').addEventListener('click', function(){ row.remove(); recalc(); });
+  function lineAmount(row){
+    var it = itemById(row.getAttribute('data-id'));
+    var qty = int(row.querySelector('.piece-qty'));
+    var net = num(row.querySelector('.piece-net'));
+    var rate = num(row.querySelector('.piece-rate'));
+    var makingPct = num(row.querySelector('.piece-making'));
+    var add = num(row.querySelector('.piece-add'));
+    var grossEl = row.querySelector('.piece-gross');
+    var gross = grossEl ? parseFloat(grossEl.value || net) : net;
+    var metal = rate * net * qty;
+    var making = metal * (makingPct / 100);
+    return { it: it, qty: qty, net: net, gross: gross, rate: rate, makingPct: makingPct, add: add, metal: metal, making: making, total: metal + making + (add * qty) };
   }
 
-  document.getElementById('add-row').addEventListener('click', addRow);
-  // start with one row
-  addRow();
+  function bindRow(row){
+    row.querySelector('.remove').addEventListener('click', function(){
+      row.remove();
+      recalc();
+    });
+    row.querySelectorAll('input').forEach(function(el){
+      el.addEventListener('input', function(){
+        el.classList.remove('field-error');
+        if(el.classList.contains('piece-qty')){
+          var cleaned = (el.value || '').replace(/\D/g, '');
+          if(el.value !== cleaned) el.value = cleaned;
+        }
+        var netEl = row.querySelector('.piece-net');
+        var grossEl = row.querySelector('.piece-gross');
+        if(el === netEl && grossEl){
+          var g = parseFloat(grossEl.value || 0);
+          var n = parseFloat(netEl.value || 0);
+          if(g < n) grossEl.value = n.toFixed(2);
+        }
+        recalc();
+      });
+    });
+    row.querySelector('.piece-qty').addEventListener('blur', function(){
+      var l = lineAmount(row);
+      if(l.it && l.qty > l.it.quantity){
+        showQtyPopup('Only ' + l.it.quantity + ' pcs of ' + l.it.name + ' remain on the tray.');
+      }
+    });
+  }
+
+  function clientValid(){
+    if(mode() === 'new'){
+      var phone = val('#customer_phone').replace(/\D/g,'');
+      return !!(val('#customer_first_name') && phone.length === 10);
+    }
+    return !!(hiddenId && hiddenId.value);
+  }
+
+  function formValid(show){
+    var cOk = clientValid();
+    if(!cOk){
+      if(show) setError(mode() === 'new' ? 'Give the client a first name and a 10-digit phone.' : 'Choose a client on the book, or register a new one.');
+      return false;
+    }
+    var rows = linesEl.querySelectorAll('.ticket-line');
+    if(!rows.length){ if(show) setError('Add at least one catalogue piece to the ticket.'); return false; }
+    var ok = true, message = '', subtotal = 0;
+    rows.forEach(function(row, i){
+      var l = lineAmount(row);
+      var n = i + 1;
+      if(!l.it){ ok = false; message = message || 'Piece ' + n + ': choose a catalogue piece.'; }
+      if(l.qty < 1){ ok = false; message = message || 'Piece ' + n + ': quantity must be at least 1.'; }
+      else if(l.it && l.qty > l.it.quantity){ ok = false; message = message || 'Only ' + l.it.quantity + ' pcs of ' + l.it.name + ' remain.'; }
+      if(l.net <= 0){ ok = false; message = message || 'Piece ' + n + ': net weight must be greater than 0 g.'; }
+      if(l.rate <= 0){ ok = false; message = message || 'Piece ' + n + ': set a rupee-per-gram rate.'; }
+      subtotal += l.total;
+    });
+    var discount = num(document.getElementById('discount'));
+    if(discount < 0){ ok = false; message = message || 'Discount cannot be negative.'; }
+    if(discount > subtotal){ ok = false; message = message || 'Discount cannot exceed the bill subtotal.'; }
+    if(show && !ok) setError(message);
+    return ok;
+  }
 
   function recalc(){
-    let subtotal = 0;
-    tbody.querySelectorAll('tr').forEach(r => {
-      const select = r.querySelector('.item-select');
-      const qty = parseInt(r.querySelector('.qty').value || 0);
-      const it = items.find(x => x.id == select.value);
-      subtotal += it.price * qty;
+    var rows = linesEl.querySelectorAll('.ticket-line');
+    var subtotal = 0;
+    rows.forEach(function(row){
+      var l = lineAmount(row);
+      row.querySelector('.line-total').textContent = money(l.total);
+      subtotal += l.total;
     });
-    const discount = parseFloat(document.getElementById('discount').value || 0);
-    const charges = parseFloat(document.getElementById('charges').value || 0);
-    const taxable = subtotal - discount + charges;
-    const cgstRate = parseFloat(document.getElementById('cgst_rate').value || 0);
-    const igstRate = parseFloat(document.getElementById('igst_rate').value || 0);
-    const cgst = taxable * (cgstRate/100);
-    const igst = taxable * (igstRate/100);
-    document.getElementById('subtotal').textContent = money(subtotal);
-    document.getElementById('discount-display').textContent = money(discount);
-    document.getElementById('charges-display').textContent = money(charges);
-    document.getElementById('taxable').textContent = money(taxable);
-    document.getElementById('cgst').textContent = money(cgst);
-    document.getElementById('igst').textContent = money(igst);
-    document.getElementById('grand-total').textContent = money(taxable + cgst + igst);
+    if(emptyEl) emptyEl.hidden = rows.length > 0;
+    var count = document.getElementById('ticket-count');
+    if(count) count.textContent = String(rows.length);
+    var discount = Math.max(0, num(document.getElementById('discount')));
+    var charges = Math.max(0, num(document.getElementById('charges')));
+    var taxable = subtotal - discount + charges;
+    var cgst = taxable * (num(document.getElementById('cgst_rate')) / 100);
+    var igst = taxable * (num(document.getElementById('igst_rate')) / 100);
+    var total = taxable + cgst + igst;
+    document.getElementById('sum-subtotal').textContent = money(subtotal);
+    document.getElementById('sum-discount').textContent = money(discount);
+    document.getElementById('sum-charges').textContent = money(charges);
+    document.getElementById('sum-taxable').textContent = money(taxable);
+    document.getElementById('sum-cgst').textContent = money(cgst);
+    document.getElementById('sum-igst').textContent = money(igst);
+    document.getElementById('sum-total').textContent = money(total);
+    if(raiseBtn) raiseBtn.disabled = !formValid(false);
+    document.getElementById('preview-note').textContent = formValid(false) ? 'Ready to raise. Payment is recorded on the bill.' : 'Name the client and add a piece to raise the bill.';
+    renderTray();
   }
 
-  ['discount','charges','cgst_rate','igst_rate'].forEach(id => document.getElementById(id).addEventListener('input', recalc));
-  tbody.addEventListener('input', recalc);
+  function tryScan(q){
+    q = (q || '').trim();
+    if(!q) return false;
+    var exact = items.find(function(it){ return String(it.sku).toLowerCase() === q.toLowerCase(); });
+    if(exact){ addItem(exact); return true; }
+    var hits = items.filter(matches);
+    if(hits.length === 1){ addItem(hits[0]); return true; }
+    return false;
+  }
+
+  function setMode(next){
+    document.querySelectorAll('.mode').forEach(function(lab){
+      lab.classList.toggle('is-on', lab.querySelector('input').value === next);
+    });
+    document.getElementById('existing-client').hidden = next === 'new';
+    document.getElementById('new-client').hidden = next !== 'new';
+    if(next === 'new' && hiddenId) hiddenId.value = '';
+    recalc();
+  }
+
+  function pickCustomer(c){
+    if(!hiddenId) return;
+    hiddenId.value = c ? c.id : '';
+    if(clientSearch) clientSearch.value = c ? (c.name + ' · ' + c.phone) : '';
+    var chip = document.getElementById('client-chip');
+    if(c){
+      chip.hidden = false;
+      document.getElementById('chip-initials').textContent = c.initials || '—';
+      document.getElementById('chip-name').textContent = c.name;
+      var due = Number(c.outstanding || 0) > 0 ? ('Due ' + money(c.outstanding)) : null;
+      document.getElementById('chip-meta').textContent = [c.phone, due].filter(Boolean).join(' · ');
+    } else {
+      chip.hidden = true;
+    }
+    if(results) results.hidden = true;
+    recalc();
+  }
+
+  function filterCustomers(q){
+    q = (q || '').toLowerCase();
+    return customers.filter(function(c){
+      return !q || (c.name + ' ' + c.phone + ' ' + (c.email || '') + ' ' + (c.gst || '')).toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 12);
+  }
+
+  if(grid){
+    grid.addEventListener('click', function(e){
+      var card = e.target.closest('.tray-card');
+      if(!card) return;
+      addItem(itemById(card.getAttribute('data-id')));
+    });
+  }
+  if(search){
+    search.addEventListener('input', function(){
+      query = (search.value || '').toLowerCase().trim();
+      renderTray();
+    });
+    search.addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        if(tryScan(search.value)){ search.value = ''; query = ''; renderTray(); }
+      }
+    });
+  }
+  var metalFilters = document.getElementById('metal-filters');
+  if(metalFilters){
+    metalFilters.addEventListener('click', function(e){
+    var btn = e.target.closest('.filter');
+    if(!btn) return;
+    metalFilter = btn.getAttribute('data-metal') || '';
+    document.querySelectorAll('.filter').forEach(function(b){
+      var on = b === btn;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    renderTray();
+    });
+  }
+
+  document.querySelectorAll('input[name="customer_mode"]').forEach(function(r){
+    r.addEventListener('change', function(){ setMode(this.value); });
+  });
+  if(clientSearch){
+    clientSearch.addEventListener('focus', function(){ results.hidden = false; results.innerHTML = filterCustomers(clientSearch.value).map(function(c){ return '<li data-id="'+c.id+'"><span>'+c.name+'</span><span class="muted">'+c.phone+'</span></li>'; }).join(''); if(!results.innerHTML) results.hidden = true; });
+    clientSearch.addEventListener('input', function(){
+      if(hiddenId) hiddenId.value = '';
+      document.getElementById('client-chip').hidden = true;
+      var list = filterCustomers(clientSearch.value);
+      results.innerHTML = list.map(function(c){ return '<li data-id="'+c.id+'"><span>'+c.name+'</span><span class="muted">'+c.phone+'</span></li>'; }).join('');
+      results.hidden = !list.length;
+      recalc();
+    });
+  }
+  if(results){
+    results.addEventListener('mousedown', function(e){
+      var li = e.target.closest('li');
+      if(!li) return;
+      pickCustomer(customerById(li.getAttribute('data-id')));
+    });
+  }
+  document.addEventListener('click', function(e){
+    if(results && !results.contains(e.target) && e.target !== clientSearch) results.hidden = true;
+  });
+  var clearBtn = document.getElementById('client-clear');
+  if(clearBtn) clearBtn.addEventListener('click', function(){ pickCustomer(null); if(clientSearch) clientSearch.focus(); });
+
+  ['customer_first_name','customer_last_name','customer_phone','customer_gst','discount','charges','cgst_rate','igst_rate'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener('input', function(){
+      if(id === 'customer_phone'){
+        var cleaned = (el.value || '').replace(/\D/g,'').slice(0,10);
+        if(el.value !== cleaned) el.value = cleaned;
+      }
+      el.classList.remove('field-error');
+      recalc();
+    });
+  });
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === '/' && document.activeElement && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA' && document.activeElement.tagName !== 'SELECT'){
+      e.preventDefault();
+      if(search) search.focus();
+    }
+  });
+
+  var popupOk = document.getElementById('qty-popup-ok');
+  if(popupOk) popupOk.addEventListener('click', hideQtyPopup);
+  var popup = document.getElementById('qty-popup');
+  if(popup) popup.addEventListener('click', function(e){ if(e.target === popup) hideQtyPopup(); });
+  if(form) form.addEventListener('submit', function(e){
+    if(!formValid(true)){ e.preventDefault(); }
+  });
+
+  var draft = payload.draft || [];
+  if(draft.length){
+    draft.forEach(function(row){
+      var it = itemById(row.jewelry_item_id || row.jewelryItemId);
+      if(it) addItem(it, row);
+    });
+  }
+  if(payload.selectedId) pickCustomer(customerById(payload.selectedId));
+  setMode(mode());
+  renderTray();
+  recalc();
+  if(errorBox && errorBox.textContent.trim()) errorBox.hidden = false;
+})();
 </script>
-<h1>POS Terminal</h1>
-<p>Quick access to create an order at the point of sale. Choose items and quantities, then create the order.</p>
-<%= render 'orders/new' %>

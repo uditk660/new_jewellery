@@ -1,42 +1,42 @@
-class PosController < ApplicationController
-  # POS landing page
+class PosController < OrdersController
   def index
-    # show a simple terminal view (use orders/new for quick order creation)
-  @items = JewelryItem.available_for_sale.order(:name)
-    render template: 'pos/index'
+    load_bill_form
+    setup_counter
   end
 
-  # POST /pos/create_order
   def create_order
-    # expected params: items => [{jewelry_item_id, quantity}], discount, charges, gross_weight, net_weight
-    order = Order.create!(status: 'pending')
-    params.fetch(:items, []).each do |it|
-      ji = JewelryItem.find(it[:jewelry_item_id])
-      qty = it[:quantity].to_i
-      weight = it[:weight].to_f
-      # only create line if item has quantity or enough stock
-      if ji.quantity.nil? || ji.quantity <= 0 || ji.quantity >= qty
-        order.line_items.create!(jewelry_item: ji, price_cents: ji.price_cents, quantity: qty, weight: weight)
-      end
+    load_bill_form
+    setup_counter
+    @customer_mode = params[:customer_mode].to_s == 'new' ? 'new' : 'existing'
+    @selected_customer_id = params[:existing_customer_id].presence
+    @draft_customer = Customer.new(customer_params)
+    @draft_lines = raw_line_item_params
+    @order = Order.new(status: 'pending')
+    assign_bill_totals(@order)
+
+    saved = nil
+    begin
+      saved = raise_bill!
+    rescue ActiveRecord::RecordInvalid => e
+      @order.errors.add(:base, e.record.errors.full_messages.to_sentence)
+    rescue ActiveRecord::RecordNotUnique
+      @order.errors.add(:base, 'That phone or email is already on the book. Choose the existing client.')
     end
-  order.update(discount: params[:discount].to_f, charges: params[:charges].to_f, gross_weight: params[:gross_weight].to_f, net_weight: params[:net_weight].to_f, cgst_rate: params[:cgst_rate].to_f, igst_rate: params[:igst_rate].to_f)
-  # compute and persist tax cents
-  order.update_columns(cgst_cents: order.cgst_amount_cents(order.cgst_rate), igst_cents: order.igst_amount_cents(order.igst_rate))
-    redirect_to order_path(order)
-  rescue ActiveRecord::RecordInvalid => e
-    redirect_to pos_path, alert: "Could not create order: #{e.message}"
+
+    if saved
+      redirect_to saved, notice: 'Ticket raised from the counter. Record payment when the client settles.'
+    else
+      render :index, status: :unprocessable_entity
+    end
   end
 
-  # POST /pos/charge
-  # params: order_id, payment (hash)
   def charge
     @order = Order.find(params[:order_id])
     payment_info = params[:payment] || {}
 
     result = BillingService.new(@order, payment_info).charge!
     if result[:success]
-  # update status to 'paid' - Order#after_update will handle inventory decrement atomically
-  @order.update(status: 'paid')
+      @order.update(status: 'paid')
       redirect_to @order, notice: 'Payment processed successfully.'
     else
       @order.update(status: 'failed')
@@ -44,5 +44,33 @@ class PosController < ApplicationController
     end
   rescue ActiveRecord::RecordNotFound
     redirect_to orders_path, alert: 'Order not found'
+  end
+
+  private
+
+  def setup_counter
+    @order ||= Order.new(
+      status: 'pending',
+      cgst_rate: Order::DEFAULT_CGST_RATE,
+      igst_rate: Order::DEFAULT_IGST_RATE,
+      discount: 0,
+      charges: 0
+    )
+    @customer_mode ||= 'existing'
+    @selected_customer_id ||= params[:customer_id].presence
+    @draft_customer ||= Customer.new
+    @draft_lines ||= []
+    @metals = Metal.active.ordered.includes(:purities)
+    @board_date = Time.zone.today
+    @board_rows = @metals.flat_map do |metal|
+      metal.purities.active.ordered.map do |purity|
+        {
+          metal: metal.name,
+          colour: metal.chip_colour,
+          hallmark: purity.name,
+          rate: purity.updated_price.to_f
+        }
+      end
+    end.select { |row| row[:rate].positive? }
   end
 end

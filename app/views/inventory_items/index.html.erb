@@ -1,50 +1,248 @@
-<style>
-/* Inventory index professional styling (page-scoped) */
-.inv { max-width:1200px; margin:28px auto; padding:0 18px; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial }
-.inv-header { display:flex; justify-content:space-between; align-items:center }
-.inv-title { font-size:22px; margin:0 }
-.inv-actions { display:flex; gap:8px; align-items:center }
-.search { padding:8px 10px; border-radius:8px; border:1px solid #e6edf5 }
-.card { background:#fff; border-radius:12px; padding:14px; margin-top:14px; box-shadow:0 8px 20px rgba(2,6,23,0.04); border:1px solid rgba(2,6,23,0.03) }
-.table { width:100%; border-collapse:collapse; margin-top:8px }
-.table th, .table td { padding:12px 10px; text-align:left; border-bottom:1px solid #f1f5f9 }
-.low { background:linear-gradient(90deg,#fff7ed,#fff4ed) }
-.btn { padding:8px 12px; border-radius:8px; background:#0ea5a4; color:#fff; text-decoration:none; border:none }
-.muted { color:#7b8794 }
-@media(max-width:900px){ .inv-header { flex-direction:column; align-items:flex-start; gap:8px } }
-</style>
+<%= render 'shared/atelier_styles' %>
 
-<div class="inv">
-  <div class="inv-header">
-    <h1 class="inv-title">Inventory</h1>
-    <div class="inv-actions">
-      <form method="get" action="" style="display:inline">
-        <input class="search" name="q" placeholder="Search items or SKU" value="<%= params[:q].to_s %>" />
-      </form>
-      <a href="<%= new_inventory_item_path %>" class="btn">Add Inventory</a>
+<%
+  rows = @inventory_items || []
+  untracked = @untracked || []
+  status = @status.presence || 'all'
+  counts = @status_counts || {}
+  q = @q.to_s
+  tab_path = lambda do |key|
+    inventory_items_path(request.query_parameters.merge(status: key))
+  end
+  empty_copy = case status
+               when 'light'
+                 { title: 'No light trays', hint: 'Nothing is below a full piece weight.' }
+               when 'empty'
+                 { title: 'No empty cards', hint: 'Every stock card still has grams on the book.' }
+               else
+                 { title: 'Stock book is empty', hint: 'Open a catalogue piece here to keep grams, location and movements.' }
+               end
+%>
+
+<div class="atelier-page stock-book">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Stock</p>
+      <h1>Inventory</h1>
+      <p class="lead">Grams on the book for each catalogue piece — location, movements, and what remains against the tray.</p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to 'Metal stock', metal_stocks_path, class: 'atelier-back' %>
+      <%= link_to 'Open a stock card', new_inventory_item_path, class: 'btn-gold' %>
+    </div>
+  </header>
+
+  <nav class="cat-tabs" aria-label="Stock book">
+    <%= link_to tab_path.call('all'), class: (status == 'all' ? 'is-active' : nil) do %>
+      All <em><%= counts['all'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('light'), class: (status == 'light' ? 'is-active' : nil) do %>
+      Light <em><%= counts['light'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('empty'), class: (status == 'empty' ? 'is-active' : nil) do %>
+      Empty <em><%= counts['empty'].to_i %></em>
+    <% end %>
+  </nav>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag inventory_items_path, method: :get, class: 'stock-search' do %>
+      <%= hidden_field_tag :status, status %>
+      <%= text_field_tag :q, q, class: 'form-control', placeholder: 'Search piece, SKU, metal, hallmark or location' %>
+      <button type="submit" class="atelier-back">Search</button>
+      <% if q.present? %>
+        <%= link_to 'Clear', inventory_items_path(status: status), class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="stock-stats">
+      <div>
+        <span>Grams on book</span>
+        <strong><%= @total_grams.to_i %> <em>g</em></strong>
+      </div>
+      <div>
+        <span>On the tray</span>
+        <strong><%= @tray_pcs.to_i %> <em>pcs</em></strong>
+      </div>
+      <div>
+        <span>Tray value</span>
+        <strong><%= format_rupees(@tray_value.to_f) %></strong>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <table class="table">
-      <thead>
-        <tr><th style="width:48%">Item</th><th style="width:16%">Available (g)</th><th style="width:20%">Location</th><th style="width:16%">Actions</th></tr>
-      </thead>
-      <tbody>
-        <% @inventory_items.each do |it| %>
-          <% ji = it.jewelry_item %>
-          <% low = it.available_grams.to_i <= 50 %>
-          <tr class="<%= 'low' if low %>">
-            <td>
-              <div style="font-weight:600"><%= ji.name %></div>
-              <div class="muted">SKU: <%= ji.sku %></div>
-            </td>
-            <td><%= it.available_grams %></td>
-            <td><%= it.location.presence || 'Main' %></td>
-            <td><a href="<%= inventory_item_path(it) %>" class="muted">Show</a></td>
+  <% if rows.any? %>
+    <div class="stock-table-wrap">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>Piece</th>
+            <th>Metal &amp; hallmark</th>
+            <th>Location</th>
+            <th class="num">Grams</th>
+            <th class="num">Tray</th>
+            <th class="num">Value</th>
           </tr>
+        </thead>
+        <tbody>
+          <% rows.each do |row| %>
+            <%
+              piece = row.jewelry_item
+              grams = row.available_grams.to_i
+              qty = piece&.quantity.to_i
+              value = piece&.stock_amount.to_f || 0
+            %>
+            <tr class="<%= 'is-empty' if row.empty? %><%= ' is-light' if row.light? %>">
+              <td>
+                <%= link_to inventory_item_path(row), class: 'piece-link' do %>
+                  <strong><%= piece&.name || 'Missing piece' %></strong>
+                  <span class="sku"><%= piece&.sku %></span>
+                  <% if row.empty? %>
+                    <span class="pill empty">Empty</span>
+                  <% elsif row.light? %>
+                    <span class="pill light">Light</span>
+                  <% end %>
+                <% end %>
+              </td>
+              <td>
+                <span class="metal-cell">
+                  <% if piece&.metal %>
+                    <span class="swatch" style="background:<%= piece.metal.chip_colour %>"></span>
+                    <%= piece.metal.name %>
+                  <% else %>
+                    —
+                  <% end %>
+                </span>
+                <span class="sub"><%= piece&.purity&.try(:hallmark_label) || '—' %></span>
+              </td>
+              <td><%= row.location_label %></td>
+              <td class="num gold"><%= grams %> g</td>
+              <td class="num">
+                <% if qty > 0 %>
+                  <span class="stock in"><%= qty %> pcs</span>
+                <% else %>
+                  <span class="stock out">Out of tray</span>
+                <% end %>
+              </td>
+              <td class="num gold"><%= format_rupees(value) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">
+        <% if q.present? %>
+          Nothing matches “<%= q %>”.
+        <% else %>
+          <%= empty_copy[:hint] %>
         <% end %>
-      </tbody>
-    </table>
-  </div>
+      </p>
+      <div class="actions" style="margin-top:16px">
+        <% if q.present? %>
+          <%= link_to 'Clear search', inventory_items_path(status: status), class: 'atelier-back' %>
+        <% else %>
+          <%= link_to 'Open a stock card', new_inventory_item_path, class: 'btn-gold' %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if untracked.any? && status == 'all' && q.blank? %>
+    <section class="untracked">
+      <div class="untracked-head">
+        <div>
+          <h2>Not yet on the book</h2>
+          <p class="hint">Catalogue pieces without a grams ledger. Opening a card tracks location and movements.</p>
+        </div>
+      </div>
+      <ul class="untracked-list">
+        <% untracked.each do |piece| %>
+          <li>
+            <div>
+              <strong><%= piece.name %></strong>
+              <span><%= [piece.sku, piece.metal&.name, piece.purity&.try(:hallmark_label)].compact.join(' · ') %></span>
+            </div>
+            <%= link_to 'Open card', new_inventory_item_path(jewelry_item_id: piece.id), class: 'atelier-back' %>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
 </div>
+
+<style>
+  .container:has(.stock-book) { max-width: 1240px; }
+  .stock-book a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .stock-book .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stock-book .cat-tabs {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px;
+  }
+  .stock-book .cat-tabs a {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 999px; text-decoration: none;
+    border: 1px solid rgba(201,162,39,0.28); background: #fffaf3; color: #6b6258;
+    font-size: 13px; font-weight: 700;
+  }
+  .stock-book .cat-tabs a em {
+    min-width: 18px; text-align: center; font-style: normal;
+    background: rgba(11,18,32,0.06); border-radius: 999px; padding: 0 7px; font-size: 12px;
+  }
+  .stock-book .cat-tabs a.is-active {
+    background: #0b1220; color: #e8d5a3; border-color: #0b1220;
+  }
+  .stock-book .cat-tabs a.is-active em { background: rgba(232,213,163,0.16); color: #e8d5a3; }
+  .stock-book .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .stock-book .stock-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .stock-book .stock-search .form-control { min-width: min(100%, 280px); }
+  .stock-book .stock-stats { display: flex; gap: 18px; flex-wrap: wrap; }
+  .stock-book .stock-stats span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700; }
+  .stock-book .stock-stats strong { color: #0b1220; font-variant-numeric: tabular-nums; }
+  .stock-book .stock-stats em { font-style: normal; color: #6b6258; font-size: 12px; font-weight: 600; }
+  .stock-book .stock-table-wrap {
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 18px; overflow: auto;
+  }
+  .stock-book .stock-table { width: 100%; border-collapse: collapse; }
+  .stock-book .stock-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; padding: 12px 14px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .stock-book .stock-table td { padding: 12px 14px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: top; }
+  .stock-book .stock-table tr:last-child td { border-bottom: 0; }
+  .stock-book .stock-table tbody tr:hover { background: rgba(232,213,163,0.18); }
+  .stock-book .stock-table tr.is-empty { background: rgba(127,29,29,0.04); }
+  .stock-book .stock-table tr.is-light { background: rgba(201,162,39,0.08); }
+  .stock-book .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .stock-book .gold { color: #c9a227; font-weight: 700; }
+  .stock-book .piece-link { text-decoration: none; color: inherit; display: block; }
+  .stock-book .piece-link strong { display: block; color: #0b1220; }
+  .stock-book .sku { display: block; color: #6b6258; font-size: 12px; letter-spacing: 0.06em; margin-top: 2px; }
+  .stock-book .sub { display: block; color: #6b6258; font-size: 12px; margin-top: 3px; }
+  .stock-book .metal-cell { display: inline-flex; align-items: center; gap: 8px; }
+  .stock-book .swatch {
+    width: 12px; height: 12px; border-radius: 4px; border: 1px solid rgba(11,18,32,0.12); display: inline-block;
+  }
+  .stock-book .pill {
+    display: inline-block; margin-top: 6px; margin-right: 4px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .stock-book .pill.light { background: rgba(201,162,39,0.18); color: #8a6a12; }
+  .stock-book .pill.empty { background: #f3eee6; color: #7f1d1d; }
+  .stock-book .stock.in { background: #0b1220; color: #e8d5a3; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .stock-book .stock.out { background: #f3eee6; color: #6b6258; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .stock-book .untracked { margin-top: 28px; }
+  .stock-book .untracked h2 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.35rem; margin: 0 0 4px;
+  }
+  .stock-book .untracked-list { list-style: none; margin: 12px 0 0; padding: 0; }
+  .stock-book .untracked-list li {
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+    padding: 12px 14px; background: #fffaf3; border: 1px solid rgba(201,162,39,0.22);
+    border-radius: 14px; margin-bottom: 8px;
+  }
+  .stock-book .untracked-list strong { display: block; }
+  .stock-book .untracked-list span { color: #6b6258; font-size: 12px; }
+  .stock-book .untracked-list .atelier-back { flex-shrink: 0; }
+</style>

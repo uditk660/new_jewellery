@@ -1,2 +1,185 @@
-<h1>Generate P&L (placeholder)</h1>
-<p>Parameters will be added here.</p>
+<%= render 'shared/atelier_styles' %>
+
+<%
+  metals = @metals || []
+  window = @window.presence || 'month'
+  from = @from
+  to = @to
+  metal_id = @metal_id
+  today = Time.zone.today
+  presets = {
+    'today' => [today, today, 'Bills written today'],
+    'yesterday' => [today - 1, today - 1, 'The previous working book'],
+    'week' => [today.beginning_of_week, today.end_of_week, 'Monday to Sunday'],
+    'month' => [today.beginning_of_month, today.end_of_month, today.strftime('%B %Y')],
+    'year' => [today.beginning_of_year, today.end_of_year, today.strftime('%Y')],
+    'custom' => [from, to, 'Choose both dates']
+  }
+%>
+
+<div class="atelier-page house-compose" id="house-compose">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Books</p>
+      <h1>Compose a window</h1>
+      <p class="lead">Pick the span the house result should cover. The statement always reads from bill date — receipts on another day stay on the cash book.</p>
+    </div>
+    <%= link_to '← House result', profit_losses_path, class: 'atelier-back' %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Window</span>
+    <span class="step"><b>2</b> Dates</span>
+    <span class="step"><b>3</b> Metal</span>
+  </div>
+
+  <div class="atelier-grid">
+    <div class="atelier-form">
+      <%= form_tag profit_losses_path, method: :get, id: 'compose-form' do %>
+        <section class="section">
+          <h2>1 · Window</h2>
+          <p class="hint">Month is the usual house book. Open dates when you need a festival week or a stock-take span.</p>
+          <div class="compose-windows" role="radiogroup" aria-label="Window">
+            <% %w[today yesterday week month year custom].each do |key| %>
+              <% range = presets[key] %>
+              <label class="compose-window">
+                <%= radio_button_tag :window, key, window == key, class: 'sr-only', data: { from: range[0].strftime('%Y-%m-%d'), to: range[1].strftime('%Y-%m-%d') } %>
+                <strong><%= key == 'custom' ? 'Dates' : key.capitalize %></strong>
+                <span><%= range[2] %></span>
+              </label>
+            <% end %>
+          </div>
+        </section>
+
+        <section class="section" id="compose-dates">
+          <h2>2 · Dates</h2>
+          <p class="hint">Sale date on the invoice. Inclusive on both ends.</p>
+          <div class="row">
+            <div class="field narrow">
+              <%= label_tag :from, 'From' %>
+              <%= date_field_tag :from, from, class: 'form-control', id: 'compose_from' %>
+            </div>
+            <div class="field narrow">
+              <%= label_tag :to, 'To' %>
+              <%= date_field_tag :to, to, class: 'form-control', id: 'compose_to' %>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2>3 · Metal</h2>
+          <p class="hint">Leave open for the full house. Choose a metal to read only those lines — discounts and GST are shared in proportion to that metal’s amount on each bill.</p>
+          <div class="row">
+            <div class="field">
+              <%= label_tag :metal_id, 'Metal' %>
+              <%= select_tag :metal_id, options_from_collection_for_select(metals, :id, :name, metal_id), include_blank: 'All metals', class: 'form-control', id: 'compose_metal' %>
+            </div>
+          </div>
+        </section>
+
+        <div class="actions">
+          <%= submit_tag 'Open the statement', class: 'btn-gold' %>
+          <%= link_to 'This month', profit_losses_path(window: 'month'), class: 'atelier-back' %>
+        </div>
+      <% end %>
+    </div>
+
+    <aside class="preview" id="compose-preview">
+      <p class="preview-kicker">You will open</p>
+      <h2 id="preview-title">House result</h2>
+      <span class="sku-chip" id="preview-chip">Window</span>
+      <p class="preview-line" id="preview-range"></p>
+      <p class="preview-desc">The gold figure is making, extras and bill charges after discounts and cash refunds. Metal at the board and GST are listed so the book is honest — they are not kept as profit.</p>
+      <p class="preview-note" id="preview-metal-note">All metals on the bills.</p>
+    </aside>
+  </div>
+</div>
+
+<style>
+  .container:has(.house-compose) { max-width: 1100px; }
+  .house-compose .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); border: 0;
+  }
+  .house-compose .compose-windows {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
+  }
+  .house-compose .compose-window {
+    display: block; padding: 12px 14px; border-radius: 14px; cursor: pointer;
+    background: #fff; border: 1px solid #e6dcc8;
+  }
+  .house-compose .compose-window strong {
+    display: block; font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.15rem; font-weight: 600; color: #0b1220;
+  }
+  .house-compose .compose-window span { display: block; margin-top: 4px; font-size: 12px; color: #6b6258; }
+  .house-compose .compose-window:has(input:checked) {
+    border-color: #c9a227;
+    background: linear-gradient(180deg, #fffaf3, #f7f1e8);
+    box-shadow: 0 0 0 3px rgba(201,162,39,0.18);
+  }
+  .house-compose a.btn-gold { text-decoration: none; }
+  @media (max-width: 720px) {
+    .house-compose .compose-windows { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<script>
+  (function(){
+    var form = document.getElementById('compose-form');
+    if (!form) return;
+    var fromEl = document.getElementById('compose_from');
+    var toEl = document.getElementById('compose_to');
+    var metalEl = document.getElementById('compose_metal');
+    var dates = document.getElementById('compose-dates');
+    var title = document.getElementById('preview-title');
+    var chip = document.getElementById('preview-chip');
+    var range = document.getElementById('preview-range');
+    var metalNote = document.getElementById('preview-metal-note');
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    function fmt(value){
+      if (!value) return '—';
+      var parts = value.split('-');
+      if (parts.length !== 3) return value;
+      return parts[2] + ' ' + months[parseInt(parts[1], 10) - 1] + ' ' + parts[0];
+    }
+
+    function selectedWindow(){
+      var el = form.querySelector('input[name="window"]:checked');
+      return el ? el.value : 'month';
+    }
+
+    function sync(){
+      var key = selectedWindow();
+      var radio = form.querySelector('input[name="window"][value="' + key + '"]');
+      if (radio && key !== 'custom') {
+        if (radio.dataset.from) fromEl.value = radio.dataset.from;
+        if (radio.dataset.to) toEl.value = radio.dataset.to;
+      }
+      dates.style.opacity = key === 'custom' ? '1' : '0.72';
+      var labels = { today: 'Today', yesterday: 'Yesterday', week: 'This week', month: 'This month', year: 'This year', custom: 'Chosen dates' };
+      chip.textContent = labels[key] || 'Window';
+      title.textContent = 'House result';
+      range.textContent = fmt(fromEl.value) + ' → ' + fmt(toEl.value);
+      var metalName = metalEl.options[metalEl.selectedIndex] ? metalEl.options[metalEl.selectedIndex].text : 'All metals';
+      metalNote.textContent = (!metalEl.value) ? 'All metals on the bills.' : ('Only lines in ' + metalName + '. Discounts and GST follow that metal’s share of each bill.');
+    }
+
+    form.querySelectorAll('input[name="window"]').forEach(function(el){
+      el.addEventListener('change', sync);
+    });
+    fromEl.addEventListener('change', function(){
+      var custom = form.querySelector('input[name="window"][value="custom"]');
+      if (custom) custom.checked = true;
+      sync();
+    });
+    toEl.addEventListener('change', function(){
+      var custom = form.querySelector('input[name="window"][value="custom"]');
+      if (custom) custom.checked = true;
+      sync();
+    });
+    metalEl.addEventListener('change', sync);
+    sync();
+  })();
+</script>

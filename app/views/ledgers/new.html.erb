@@ -1,2 +1,154 @@
-<h1>New Journal Entry (placeholder)</h1>
-<p>Manual journal entry UI will be added in Phase 2.</p>
+<%= render 'shared/atelier_styles' %>
+
+<%
+  customers = @customers || []
+  payload = @customers_payload || []
+%>
+
+<script type="application/json" id="khata-clients-json"><%= raw json_escape(payload.to_json) %></script>
+
+<div class="atelier-page khata-open" id="khata-open">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Khata</p>
+      <h1>Post an entry</h1>
+      <p class="lead">Opening from an old book, a charge, or cash taken on account. Bill receipts still post from the invoice.</p>
+    </div>
+    <%= link_to '← Ledgers', ledgers_path, class: 'atelier-back' %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Client</span>
+    <span class="step"><b>2</b> Kind &amp; amount</span>
+    <span class="step"><b>3</b> Date &amp; note</span>
+  </div>
+
+  <% if customers.empty? %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">Register a client before posting to a khata.</p>
+      <div class="actions" style="margin-top:16px">
+        <%= link_to 'Register a client', new_customer_path, class: 'btn-gold' %>
+        <%= link_to 'Ledgers', ledgers_path, class: 'atelier-back' %>
+      </div>
+    </div>
+  <% else %>
+    <div class="atelier-grid">
+      <div class="atelier-form">
+        <%= form_for @entry, url: ledgers_path do |f| %>
+          <% if @entry.errors.any? %>
+            <div class="errors"><%= @entry.errors.full_messages.to_sentence %></div>
+          <% end %>
+
+          <section class="section">
+            <h2>1 · Client</h2>
+            <p class="hint">The khata this line belongs to.</p>
+            <div class="row">
+              <div class="field">
+                <%= f.label :customer_id do %>Client <span class="req">*</span><% end %>
+                <%= f.collection_select :customer_id, customers, :id, :full_name, { include_blank: 'Select a client' }, { class: 'form-control', id: 'ledger_entry_customer_id' } %>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>2 · Kind &amp; amount</h2>
+            <p class="hint">Opening and charge increase what they owe. Receipt reduces it, including an advance.</p>
+            <div class="row">
+              <div class="field">
+                <%= f.label :kind do %>Kind <span class="req">*</span><% end %>
+                <%= f.select :kind, [['Opening (they owe)', 'opening'], ['Charge (debit)', 'debit'], ['Receipt (on account)', 'credit']], {}, { class: 'form-control', id: 'ledger_entry_kind' } %>
+              </div>
+              <div class="field narrow">
+                <%= f.label :amount do %>Amount ₹ <span class="req">*</span><% end %>
+                <%= f.number_field :amount, value: (@entry.amount_cents.to_i.positive? ? ('%.2f' % @entry.amount) : nil), class: 'form-control', id: 'ledger_entry_amount', min: 0.01, step: 0.01, placeholder: '0.00' %>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>3 · Date &amp; note</h2>
+            <p class="hint">A short house note is enough — “old book”, “cash at counter”.</p>
+            <div class="row">
+              <div class="field narrow">
+                <%= f.label :entry_date, 'Date' %>
+                <%= f.date_field :entry_date, class: 'form-control', id: 'ledger_entry_entry_date' %>
+              </div>
+              <div class="field">
+                <%= f.label :note, 'Note' %>
+                <%= f.text_field :note, class: 'form-control', id: 'ledger_entry_note', maxlength: 160, placeholder: 'Opening from the old book' %>
+              </div>
+            </div>
+          </section>
+
+          <div class="actions">
+            <%= f.submit 'Post to khata', class: 'btn-gold', id: 'khata-submit' %>
+            <%= link_to 'Cancel', ledgers_path, class: 'atelier-back' %>
+          </div>
+        <% end %>
+      </div>
+
+      <aside class="preview" id="khata-preview" aria-live="polite">
+        <p class="preview-kicker">Entry</p>
+        <div class="gem" aria-hidden="true">📒</div>
+        <h2 id="preview-name">Choose a client</h2>
+        <span class="sku-chip" id="preview-kind">Kind</span>
+        <div class="preview-price" id="preview-amount">₹0.00</div>
+        <p class="preview-line" id="preview-due">Outstanding appears here</p>
+        <p class="preview-desc" id="preview-note">Select a client and amount to see the resulting khata.</p>
+        <p class="preview-note">This does not raise a bill. Take a bill receipt from the invoice.</p>
+      </aside>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .khata-open a.btn-gold, .khata-open input.btn-gold { text-decoration: none; }
+</style>
+
+<script>
+(function(){
+  var jsonEl = document.getElementById('khata-clients-json');
+  var clients = [];
+  try { clients = JSON.parse((jsonEl && jsonEl.textContent) || '[]'); } catch(e) { clients = []; }
+  var byId = {};
+  clients.forEach(function(c){ byId[String(c.id)] = c; });
+  var sel = document.getElementById('ledger_entry_customer_id');
+  var kindEl = document.getElementById('ledger_entry_kind');
+  var amtEl = document.getElementById('ledger_entry_amount');
+  var nameEl = document.getElementById('preview-name');
+  var kindChip = document.getElementById('preview-kind');
+  var amtPreview = document.getElementById('preview-amount');
+  var dueEl = document.getElementById('preview-due');
+  var noteEl = document.getElementById('preview-note');
+  var submit = document.getElementById('khata-submit');
+  var labels = { opening: 'Opening', debit: 'Charge', credit: 'Receipt' };
+
+  function paint(){
+    var client = sel ? byId[String(sel.value)] : null;
+    var kind = (kindEl && kindEl.value) || 'opening';
+    var amt = parseFloat((amtEl && amtEl.value) || '0') || 0;
+    var signed = kind === 'credit' ? -amt : amt;
+    if(nameEl) nameEl.textContent = client ? client.name : 'Choose a client';
+    if(kindChip) kindChip.textContent = labels[kind] || kind;
+    if(amtPreview) amtPreview.textContent = '₹' + amt.toFixed(2);
+    if(submit) submit.disabled = !(client && amt > 0);
+    if(!client){
+      if(dueEl) dueEl.textContent = 'Outstanding appears here';
+      if(noteEl) noteEl.textContent = 'Select a client and amount to see the resulting khata.';
+      return;
+    }
+    var next = Number(client.outstanding || 0) + signed;
+    if(dueEl){
+      if(next > 0) dueEl.textContent = 'Khata will read due ₹' + next.toFixed(2);
+      else if(next < 0) dueEl.textContent = 'Khata will hold advance ₹' + Math.abs(next).toFixed(2);
+      else dueEl.textContent = 'Khata will be settled.';
+    }
+    if(noteEl) noteEl.textContent = client.phone ? (client.phone + ' · current ' + (Number(client.outstanding||0) > 0 ? ('due ₹' + Number(client.outstanding).toFixed(2)) : ('₹' + Number(client.outstanding||0).toFixed(2)))) : 'Current outstanding updates after you post.';
+  }
+
+  if(sel) sel.addEventListener('change', paint);
+  if(kindEl) kindEl.addEventListener('change', paint);
+  if(amtEl) amtEl.addEventListener('input', paint);
+  paint();
+})();
+</script>

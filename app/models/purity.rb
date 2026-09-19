@@ -28,6 +28,10 @@ class Purity < ActiveRecord::Base
     "#{format('%.2f', available_grams.to_f)} g"
   end
 
+  def rate_board_locked?
+    (has_attribute?(:active) && !active?) || metal&.rate_board_locked?
+  end
+
   def catalogue_option_label
     "#{hallmark_label} · #{available_weight_label}"
   end

@@ -36,6 +36,10 @@ class Metal < ActiveRecord::Base
     colour.presence || COLOURS[name] || '#c9a227'
   end
 
+  def rate_board_locked?
+    has_attribute?(:active) && !active?
+  end
+
   private
 
   def normalize

@@ -1,0 +1,24 @@
+<%
+  gid = local_assigns[:gid].presence || 'client-cameo-gold'
+%>
+<div class="gem client-gem" aria-hidden="true">
+  <svg class="cameo" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="<%= gid %>" x1="0.2" y1="0" x2="0.8" y2="1">
+        <stop offset="0%" stop-color="#f4e7c8"/>
+        <stop offset="55%" stop-color="#e8d5a3"/>
+        <stop offset="100%" stop-color="#c9a227"/>
+      </linearGradient>
+      <radialGradient id="<%= gid %>-glow" cx="50%" cy="38%" r="55%">
+        <stop offset="0%" stop-color="rgba(232,213,163,0.35)"/>
+        <stop offset="100%" stop-color="rgba(232,213,163,0)"/>
+      </radialGradient>
+    </defs>
+    <circle cx="40" cy="40" r="38" fill="url(#<%= gid %>-glow)"/>
+    <circle cx="40" cy="40" r="34" fill="#1a1510" stroke="url(#<%= gid %>)" stroke-width="2.2"/>
+    <circle cx="40" cy="40" r="29.5" fill="none" stroke="rgba(232,213,163,0.28)" stroke-width="1"/>
+    <circle cx="40" cy="29" r="9.5" fill="url(#<%= gid %>)"/>
+    <path d="M17 66c3.5-16 12.5-24 23-24s19.5 8 23 24" fill="url(#<%= gid %>)"/>
+    <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,248,230,0.18)" stroke-width="0.6"/>
+  </svg>
+</div>

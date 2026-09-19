@@ -1,35 +1,259 @@
-<h1>Metal Stocks</h1>
-<p><%= link_to 'New Stock Record', new_metal_stock_path %> | <%= link_to 'Stores', stores_path %></p>
-<table>
-  <thead>
-    <tr><th>Store</th><th>Metal</th><th>Available</th><th>Price / g</th><th>Actions</th></tr>
-  </thead>
-  <tbody>
-    <% @metal_stocks.each do |ms| %>
-      <tr>
-        <td><%= ms.store.name %></td>
-        <td><%= ms.metal.name %></td>
-  <td id="ms-<%= ms.id %>-available"><%= ms.available_grams.to_i %></td>
-  <td><%= format_rupees(ms.price_per_gram) %></td>
-        <td>
-          <%= link_to 'Adjust', adjust_metal_stock_path(ms) %>
-        </td>
-        <td>
-          <%= form_tag do_adjust_metal_stock_path(ms), method: :post do %>
-            <%= number_field_tag 'metal_stock[change_grams]', 0, in: -100000..100000, step: 1, size: 6 %>
-            <%= hidden_field_tag 'metal_stock[note]', "adjusted from index" %>
-            <%= submit_tag 'Apply' %>
-          <% end %>
-        </td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+<%= render 'shared/atelier_styles' %>
 
-<script>
-  // Focus first change input for convenience
-  document.addEventListener('DOMContentLoaded', function(){
-    var inp = document.querySelector('input[name="metal_stock[change_grams]"]');
-    if(inp) inp.focus();
-  });
-</script>
+<%
+  rows = @metal_stocks || []
+  unopened = @unopened || []
+  status = @status.presence || 'all'
+  counts = @status_counts || {}
+  q = @q.to_s
+  metals = @metals || []
+  stores = @stores || []
+  tab_path = lambda do |key|
+    metal_stocks_path(request.query_parameters.merge(status: key))
+  end
+  empty_copy = case status
+               when 'light'
+                 { title: 'No light vaults', hint: 'Nothing is at or below 100 g.' }
+               when 'empty'
+                 { title: 'No empty vaults', hint: 'Every metal card still has grams.' }
+               else
+                 { title: 'Vault is empty', hint: 'Open a metal at a store to keep bulk grams and a fallback ₹/g.' }
+               end
+%>
+
+<div class="atelier-page metal-vault">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Stock</p>
+      <h1>Metal stock</h1>
+      <p class="lead">Bulk grams by metal and store — receive, issue, and a ₹/g the catalogue uses when hallmark has no board rate.</p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to 'Inventory', inventory_items_path, class: 'atelier-back' %>
+      <%= link_to 'Stores', stores_path, class: 'atelier-back' %>
+      <%= link_to 'Open a vault card', new_metal_stock_path, class: 'btn-gold' %>
+    </div>
+  </header>
+
+  <nav class="cat-tabs" aria-label="Metal vault">
+    <%= link_to tab_path.call('all'), class: (status == 'all' ? 'is-active' : nil) do %>
+      All <em><%= counts['all'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('light'), class: (status == 'light' ? 'is-active' : nil) do %>
+      Light <em><%= counts['light'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('empty'), class: (status == 'empty' ? 'is-active' : nil) do %>
+      Empty <em><%= counts['empty'].to_i %></em>
+    <% end %>
+  </nav>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag metal_stocks_path, method: :get, class: 'stock-search' do %>
+      <%= hidden_field_tag :status, status %>
+      <%= text_field_tag :q, q, class: 'form-control', placeholder: 'Search metal, store or location' %>
+      <%= select_tag :metal_id, options_from_collection_for_select(metals, :id, :name, @metal_id), include_blank: 'All metals', class: 'form-control' %>
+      <%= select_tag :store_id, options_from_collection_for_select(stores, :id, :name, @store_id), include_blank: 'All stores', class: 'form-control' %>
+      <button type="submit" class="atelier-back">Search</button>
+      <% if q.present? || @metal_id.present? || @store_id.present? %>
+        <%= link_to 'Clear', metal_stocks_path(status: status), class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="stock-stats">
+      <div>
+        <span>Grams in vault</span>
+        <strong><%= @total_grams.to_i %> <em>g</em></strong>
+      </div>
+      <div>
+        <span>Stores</span>
+        <strong><%= @store_count.to_i %></strong>
+      </div>
+      <div>
+        <span>Vault value</span>
+        <strong><%= format_rupees(@total_value.to_f) %></strong>
+      </div>
+    </div>
+  </div>
+
+  <% if metals.any? %>
+    <div class="metal-chips" aria-label="Filter by metal">
+      <%= link_to 'All metals', metal_stocks_path(request.query_parameters.except('metal_id')), class: (@metal_id.blank? ? 'is-on' : nil) %>
+      <% metals.each do |metal| %>
+        <%= link_to metal_stocks_path(request.query_parameters.merge(metal_id: metal.id)), class: (@metal_id.to_s == metal.id.to_s ? 'is-on' : nil) do %>
+          <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
+          <%= metal.name %>
+        <% end %>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% if rows.any? %>
+    <div class="stock-table-wrap">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>Metal</th>
+            <th>Store</th>
+            <th class="num">Grams</th>
+            <th class="num">₹ / g</th>
+            <th class="num">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.each do |ms| %>
+            <% grams = ms.available_grams.to_i %>
+            <tr class="<%= 'is-empty' if ms.empty? %><%= ' is-light' if ms.light? %>">
+              <td>
+                <%= link_to metal_stock_path(ms), class: 'piece-link' do %>
+                  <strong>
+                    <span class="metal-cell">
+                      <% if ms.metal %>
+                        <span class="swatch" style="background:<%= ms.metal.chip_colour %>"></span>
+                        <%= ms.metal.name %>
+                      <% else %>
+                        Metal
+                      <% end %>
+                    </span>
+                  </strong>
+                  <% if ms.empty? %>
+                    <span class="pill empty">Empty</span>
+                  <% elsif ms.light? %>
+                    <span class="pill light">Light</span>
+                  <% end %>
+                <% end %>
+              </td>
+              <td>
+                <%= ms.store ? link_to(ms.store.name, store_path(ms.store), class: 'house-link') : '—' %>
+                <span class="sub"><%= ms.store&.location.presence || 'House store' %></span>
+              </td>
+              <td class="num gold"><%= grams %> g</td>
+              <td class="num"><%= ms.price_cents_per_gram.to_i.positive? ? format_rupees(ms.price_per_gram) : '—' %></td>
+              <td class="num gold"><%= format_rupees(ms.stock_value) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">
+        <% if q.present? || @metal_id.present? || @store_id.present? %>
+          Nothing matches this search.
+        <% else %>
+          <%= empty_copy[:hint] %>
+        <% end %>
+      </p>
+      <div class="actions" style="margin-top:16px">
+        <% if q.present? || @metal_id.present? || @store_id.present? %>
+          <%= link_to 'Clear search', metal_stocks_path(status: status), class: 'atelier-back' %>
+        <% else %>
+          <%= link_to 'Open a vault card', new_metal_stock_path, class: 'btn-gold' %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if unopened.any? && status == 'all' && q.blank? %>
+    <section class="untracked">
+      <div class="untracked-head">
+        <div>
+          <h2>Not yet in the vault</h2>
+          <p class="hint">Metal and store pairs without a grams card. Opening one keeps bulk weight and a fallback ₹/g.</p>
+        </div>
+      </div>
+      <ul class="untracked-list">
+        <% unopened.each do |pair| %>
+          <li>
+            <div>
+              <strong><%= pair[:metal].name %></strong>
+              <span><%= [pair[:store].name, pair[:store].location].compact.join(' · ') %></span>
+            </div>
+            <%= link_to 'Open card', new_metal_stock_path(metal_id: pair[:metal].id, store_id: pair[:store].id), class: 'atelier-back' %>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+</div>
+
+<style>
+  .container:has(.metal-vault) { max-width: 1240px; }
+  .metal-vault a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .metal-vault .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .metal-vault .cat-tabs {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px;
+  }
+  .metal-vault .cat-tabs a {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 999px; text-decoration: none;
+    border: 1px solid rgba(201,162,39,0.28); background: #fffaf3; color: #6b6258;
+    font-size: 13px; font-weight: 700;
+  }
+  .metal-vault .cat-tabs a em {
+    min-width: 18px; text-align: center; font-style: normal;
+    background: rgba(11,18,32,0.06); border-radius: 999px; padding: 0 7px; font-size: 12px;
+  }
+  .metal-vault .cat-tabs a.is-active {
+    background: #0b1220; color: #e8d5a3; border-color: #0b1220;
+  }
+  .metal-vault .cat-tabs a.is-active em { background: rgba(232,213,163,0.16); color: #e8d5a3; }
+  .metal-vault .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .metal-vault .stock-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .metal-vault .stock-search .form-control { min-width: min(100%, 180px); }
+  .metal-vault .stock-stats { display: flex; gap: 18px; flex-wrap: wrap; }
+  .metal-vault .stock-stats span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700; }
+  .metal-vault .stock-stats strong { color: #0b1220; font-variant-numeric: tabular-nums; }
+  .metal-vault .stock-stats em { font-style: normal; color: #6b6258; font-size: 12px; font-weight: 600; }
+  .metal-vault .metal-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .metal-vault .metal-chips a {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.28); background: #fffaf3; color: #0b1220;
+    text-decoration: none; font-size: 13px; font-weight: 600;
+  }
+  .metal-vault .metal-chips a.is-on { background: #0b1220; color: #e8d5a3; border-color: #0b1220; }
+  .metal-vault .stock-table-wrap {
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 18px; overflow: auto;
+  }
+  .metal-vault .stock-table { width: 100%; border-collapse: collapse; }
+  .metal-vault .stock-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; padding: 12px 14px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .metal-vault .stock-table td { padding: 12px 14px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: top; }
+  .metal-vault .stock-table tr:last-child td { border-bottom: 0; }
+  .metal-vault .stock-table tbody tr:hover { background: rgba(232,213,163,0.18); }
+  .metal-vault .stock-table tr.is-empty { background: rgba(127,29,29,0.04); }
+  .metal-vault .stock-table tr.is-light { background: rgba(201,162,39,0.08); }
+  .metal-vault .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .metal-vault .gold { color: #c9a227; font-weight: 700; }
+  .metal-vault a.house-link { color: inherit; font-weight: 600; text-decoration: none; }
+  .metal-vault a.house-link:hover { color: #c9a227; }
+  .metal-vault .piece-link { text-decoration: none; color: inherit; display: block; }
+  .metal-vault .piece-link strong { display: block; color: #0b1220; }
+  .metal-vault .sub { display: block; color: #6b6258; font-size: 12px; margin-top: 3px; }
+  .metal-vault .metal-cell { display: inline-flex; align-items: center; gap: 8px; }
+  .metal-vault .swatch {
+    width: 12px; height: 12px; border-radius: 4px; border: 1px solid rgba(11,18,32,0.12); display: inline-block;
+  }
+  .metal-vault .pill {
+    display: inline-block; margin-top: 6px; margin-right: 4px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .metal-vault .pill.light { background: rgba(201,162,39,0.18); color: #8a6a12; }
+  .metal-vault .pill.empty { background: #f3eee6; color: #7f1d1d; }
+  .metal-vault .untracked { margin-top: 28px; }
+  .metal-vault .untracked h2 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.35rem; margin: 0 0 4px;
+  }
+  .metal-vault .untracked-list { list-style: none; margin: 12px 0 0; padding: 0; }
+  .metal-vault .untracked-list li {
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+    padding: 12px 14px; background: #fffaf3; border: 1px solid rgba(201,162,39,0.22);
+    border-radius: 14px; margin-bottom: 8px;
+  }
+  .metal-vault .untracked-list strong { display: block; }
+  .metal-vault .untracked-list span { color: #6b6258; font-size: 12px; }
+  .metal-vault .untracked-list .atelier-back { flex-shrink: 0; }
+</style>

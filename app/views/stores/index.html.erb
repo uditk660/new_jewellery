@@ -1,7 +1,208 @@
-<h1>Stores</h1>
-<p><%= link_to 'New Store', new_store_path %></p>
-<ul>
-  <% @stores.each do |s| %>
-    <li><%= s.name %> — <%= s.location %></li>
+<%= render 'shared/atelier_styles' %>
+
+<%
+  rows = @stores || []
+  status = @status.presence || 'all'
+  counts = @status_counts || {}
+  q = @q.to_s
+  tab_path = lambda do |key|
+    stores_path(request.query_parameters.merge(status: key))
+  end
+  empty_copy = case status
+               when 'bare'
+                 { hint: 'Every house already has at least one metal in the vault.' }
+               when 'light'
+                 { hint: 'No house is holding a light metal card (100 g or less).' }
+               when 'empty'
+                 { hint: 'No house has a vault that is entirely at 0 g.' }
+               else
+                 { hint: 'Open a showroom, workshop or named counter. Vault metal is kept per house.' }
+               end
+%>
+
+<div class="atelier-page house-book">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Stock</p>
+      <h1>Stores</h1>
+      <p class="lead">Showrooms and workshops that hold bulk metal. Each house may have one vault card per metal.</p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to 'Metal stock', metal_stocks_path, class: 'atelier-back' %>
+      <%= link_to 'Inventory', inventory_items_path, class: 'atelier-back' %>
+      <%= link_to 'Open a house', new_store_path, class: 'btn-gold' %>
+    </div>
+  </header>
+
+  <nav class="cat-tabs" aria-label="Houses">
+    <%= link_to tab_path.call('all'), class: (status == 'all' ? 'is-active' : nil) do %>
+      All <em><%= counts['all'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('bare'), class: (status == 'bare' ? 'is-active' : nil) do %>
+      No vault <em><%= counts['bare'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('light'), class: (status == 'light' ? 'is-active' : nil) do %>
+      Light <em><%= counts['light'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('empty'), class: (status == 'empty' ? 'is-active' : nil) do %>
+      Empty vault <em><%= counts['empty'].to_i %></em>
+    <% end %>
+  </nav>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag stores_path, method: :get, class: 'stock-search' do %>
+      <%= hidden_field_tag :status, status %>
+      <%= text_field_tag :q, q, class: 'form-control', placeholder: 'Search house or location' %>
+      <button type="submit" class="atelier-back">Search</button>
+      <% if q.present? %>
+        <%= link_to 'Clear', stores_path(status: status), class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="stock-stats">
+      <div>
+        <span>Houses</span>
+        <strong><%= @house_count.to_i %></strong>
+      </div>
+      <div>
+        <span>Grams in vault</span>
+        <strong><%= @total_grams.to_i %> <em>g</em></strong>
+      </div>
+      <div>
+        <span>Vault value</span>
+        <strong><%= format_rupees(@total_value.to_f) %></strong>
+      </div>
+    </div>
+  </div>
+
+  <% if rows.any? %>
+    <div class="house-grid">
+      <% rows.each do |store| %>
+        <% grams = store.vault_grams %>
+        <% metals = store.metal_stocks.map(&:metal).compact %>
+        <%= link_to store_path(store), class: "house-card#{' is-bare' if store.bare?}#{' is-light' if store.light_vault?}#{' is-empty' if store.empty_vault?}" do %>
+          <div class="house-top">
+            <h2><%= store.name %></h2>
+            <span class="loc"><%= store.location_label %></span>
+            <% if store.bare? %>
+              <span class="pill bare">No vault</span>
+            <% elsif store.empty_vault? %>
+              <span class="pill empty">Empty vault</span>
+            <% elsif store.light_vault? %>
+              <span class="pill light">Light</span>
+            <% end %>
+          </div>
+          <div class="house-metals">
+            <% if metals.any? %>
+              <% metals.first(6).each do |metal| %>
+                <span class="chip">
+                  <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
+                  <%= metal.name %>
+                </span>
+              <% end %>
+              <% if metals.size > 6 %>
+                <span class="chip more">+<%= metals.size - 6 %></span>
+              <% end %>
+            <% else %>
+              <span class="muted">No metal cards yet</span>
+            <% end %>
+          </div>
+          <div class="house-foot">
+            <span><strong class="gold"><%= grams %> g</strong> in vault</span>
+            <span class="gold"><%= format_rupees(store.vault_value) %></span>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">
+        <% if q.present? %>
+          Nothing matches “<%= q %>”.
+        <% else %>
+          <%= empty_copy[:hint] %>
+        <% end %>
+      </p>
+      <div class="actions" style="margin-top:16px">
+        <% if q.present? %>
+          <%= link_to 'Clear search', stores_path(status: status), class: 'atelier-back' %>
+        <% else %>
+          <%= link_to 'Open a house', new_store_path, class: 'btn-gold' %>
+        <% end %>
+      </div>
+    </div>
   <% end %>
-</ul>
+</div>
+
+<style>
+  .container:has(.house-book) { max-width: 1240px; }
+  .house-book a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .house-book .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .house-book .cat-tabs {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px;
+  }
+  .house-book .cat-tabs a {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 999px; text-decoration: none;
+    border: 1px solid rgba(201,162,39,0.28); background: #fffaf3; color: #6b6258;
+    font-size: 13px; font-weight: 700;
+  }
+  .house-book .cat-tabs a em {
+    min-width: 18px; text-align: center; font-style: normal;
+    background: rgba(11,18,32,0.06); border-radius: 999px; padding: 0 7px; font-size: 12px;
+  }
+  .house-book .cat-tabs a.is-active {
+    background: #0b1220; color: #e8d5a3; border-color: #0b1220;
+  }
+  .house-book .cat-tabs a.is-active em { background: rgba(232,213,163,0.16); color: #e8d5a3; }
+  .house-book .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .house-book .stock-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .house-book .stock-search .form-control { min-width: min(100%, 280px); }
+  .house-book .stock-stats { display: flex; gap: 18px; flex-wrap: wrap; }
+  .house-book .stock-stats span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700; }
+  .house-book .stock-stats strong { color: #0b1220; font-variant-numeric: tabular-nums; }
+  .house-book .stock-stats em { font-style: normal; color: #6b6258; font-size: 12px; font-weight: 600; }
+  .house-book .house-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;
+  }
+  .house-book .house-card {
+    display: flex; flex-direction: column; gap: 14px;
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28);
+    border-radius: 18px; padding: 16px 16px 14px; text-decoration: none; color: inherit;
+    min-height: 168px;
+  }
+  .house-book .house-card:hover { border-color: #c9a227; background: #fffdf8; }
+  .house-book .house-card.is-bare { background: #fffaf3; }
+  .house-book .house-card.is-light { background: rgba(201,162,39,0.08); }
+  .house-book .house-card.is-empty { background: rgba(127,29,29,0.04); }
+  .house-book .house-top h2 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.45rem;
+    margin: 0 0 4px; font-weight: 600; color: #0b1220;
+  }
+  .house-book .loc { display: block; color: #6b6258; font-size: 13px; }
+  .house-book .pill {
+    display: inline-block; margin-top: 8px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .house-book .pill.bare { background: #f3eee6; color: #6b6258; }
+  .house-book .pill.light { background: rgba(201,162,39,0.18); color: #8a6a12; }
+  .house-book .pill.empty { background: #f3eee6; color: #7f1d1d; }
+  .house-book .house-metals { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+  .house-book .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border-radius: 999px; background: #f7f1e8;
+    border: 1px solid rgba(201,162,39,0.22); font-size: 12px; color: #0b1220;
+  }
+  .house-book .chip.more { color: #6b6258; }
+  .house-book .swatch {
+    width: 10px; height: 10px; border-radius: 3px; border: 1px solid rgba(11,18,32,0.12);
+  }
+  .house-book .muted { color: #6b6258; font-size: 13px; }
+  .house-book .house-foot {
+    display: flex; justify-content: space-between; gap: 10px; margin-top: auto;
+    font-size: 13px; color: #6b6258; font-variant-numeric: tabular-nums;
+  }
+  .house-book .gold { color: #c9a227; font-weight: 700; }
+</style>

@@ -18,7 +18,7 @@
 
   <div class="cat-toolbar atelier-form">
     <%= form_tag customers_path, method: :get, class: 'people-search' do %>
-      <%= text_field_tag :q, @q, class: 'form-control', placeholder: 'Search name, phone, email, Aadhaar, PAN or GST' %>
+      <%= text_field_tag :q, @q, class: 'form-control', placeholder: 'Search name, phone, number, email, Aadhaar, PAN or GST' %>
       <button type="submit" class="atelier-back">Search</button>
       <% if @q.present? %>
         <%= link_to 'Clear', customers_path, class: 'atelier-back' %>
@@ -35,11 +35,14 @@
       <% @customers.each do |c| %>
         <%= link_to customer_path(c), class: 'people-card' do %>
           <div class="people-card-top">
-            <span class="avatar"><%= c.initials %></span>
-            <div>
-              <h2><%= c.full_name.presence || 'Unnamed client' %></h2>
-              <p><%= c.phone.presence || 'No phone' %></p>
+            <div class="people-card-id">
+              <span class="avatar"><%= c.initials %></span>
+              <div>
+                <h2><%= c.full_name.presence || 'Unnamed client' %></h2>
+                <p><%= c.phone.presence || 'No phone' %></p>
+              </div>
             </div>
+            <span class="code-chip"><%= c.client_ref.presence || '—' %></span>
           </div>
           <p class="meta"><%= c.email.presence || 'No email' %></p>
           <p class="meta"><%= c.gst_number.present? ? "GST #{c.gst_number}" : 'No GST on file' %></p>
@@ -53,8 +56,9 @@
         <thead>
           <tr>
             <th>Client</th>
+            <th>Client No.</th>
             <th>Phone</th>
-            <th>GST</th>
+            <th class="gst">GST</th>
             <th class="num">Outstanding</th>
           </tr>
         </thead>
@@ -70,8 +74,9 @@
                   </span>
                 <% end %>
               </td>
+              <td class="code"><span class="code-chip"><%= c.client_ref.presence || '—' %></span></td>
               <td><%= c.phone.presence || '—' %></td>
-              <td><%= c.gst_number.presence || '—' %></td>
+              <td class="gst"><%= c.gst_number.presence || '—' %></td>
               <td class="num <%= 'due' if c.outstanding.positive? %>"><%= format_rupees(c.outstanding) %></td>
             </tr>
           <% end %>
@@ -130,7 +135,16 @@
     padding: 18px; box-shadow: 0 12px 28px rgba(20,17,15,0.05);
   }
   .people-book .people-card:hover { border-color: #c9a227; }
-  .people-book .people-card-top { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+  .people-book .people-card-top { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .people-book .people-card-id { display: flex; gap: 12px; align-items: center; min-width: 0; }
+  .people-book .code-chip {
+    display: inline-block; flex-shrink: 0; align-self: flex-start;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+    color: #0b1220; background: linear-gradient(90deg, #e8d5a3, #c9a227);
+    padding: 4px 8px; border-radius: 999px; white-space: nowrap;
+    box-shadow: 0 4px 10px rgba(201,162,39,0.22);
+  }
+  .people-book .people-list td.code { white-space: nowrap; vertical-align: middle; }
   .people-book .avatar {
     width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
     display: inline-flex; align-items: center; justify-content: center;
@@ -177,8 +191,8 @@
   .people-book.is-cards [data-layout="cards"] { display: grid; }
   @media (max-width: 800px) {
     .people-book .people-hero-actions { width: 100%; }
-    .people-book .people-list th:nth-child(3),
-    .people-book .people-list td:nth-child(3) { display: none; }
+    .people-book .people-list th.gst,
+    .people-book .people-list td.gst { display: none; }
   }
 </style>
 

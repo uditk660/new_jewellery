@@ -1,280 +1,452 @@
-<style>
-/* Home dashboard page-scoped styles */
-.hd { max-width:1400px; margin:36px auto; padding:0 28px; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial; color:#0b1220 }
-.hd-header { display:flex; justify-content:space-between; align-items:center }
-.hd-title { font-size:28px; margin:0; font-weight:700 }
-.hd-sub { color:#475569 }
-.hd-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:24px; margin-top:20px }
-.card { background:#fff; border-radius:12px; padding:18px; box-shadow:0 10px 30px rgba(2,6,23,0.06); border:1px solid rgba(2,6,23,0.03) }
-.card { transform:translateY(0); opacity:1 }
-.card.animated { animation:fadeInUp .6s cubic-bezier(.2,.9,.2,1) both }
-.card:hover { transform:translateY(-6px); box-shadow:0 18px 40px rgba(2,6,23,0.08) }
+<%= render 'shared/atelier_styles' %>
 
-@keyframes fadeInUp { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
-.metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:16px }
-.metric { padding:14px; border-radius:10px; background:linear-gradient(180deg,#ffffff,#fbfdff); border:1px solid #eef2ff }
-.metric .label { font-size:12px; color:#64748b }
-.metric .value { font-size:20px; font-weight:700; margin-top:6px }
-.metric .value .count { display:inline-block; min-width:60px }
-.section-title { font-size:16px; margin:0 0 8px 0 }
-.list { list-style:none; padding:0; margin:0 }
-.list li { padding:10px 0; border-bottom:1px dashed #f1f5f9 }
-.muted { color:#94a3b8 }
-@media(max-width:1000px){ .metrics { grid-template-columns:repeat(2,1fr) } .hd-grid { grid-template-columns:repeat(1,1fr) } }
-</style>
+<%
+  house = @house_name.to_s
+  now = @now || Time.zone.now
+  greeting = if now.hour < 12 then 'Good morning'
+             elsif now.hour < 17 then 'Good afternoon'
+             else 'Good evening'
+             end
+  report = @report
+  week = @week
+  month = @month
+  series = @series || []
+  series_max = @series_max.to_f
+  tray = report.tray
+  vault = report.vault
+  khata = report.khata
+  board = (report.board || []).select { |row| row[:purities].any? }
+  today_bills = report.bills
+  latest = @latest.to_a
+  due = report.due_clients
+  light_pieces = tray[:light] || []
+  vault_alerts = ((vault[:light] || []) + (vault[:empty] || [])).uniq.first(5)
+  word = lambda do |count, one, many|
+    "#{count} #{count == 1 ? one : many}"
+  end
+%>
 
-<div class="hd">
-  <div class="hd-header">
+<div class="atelier-page house-desk" id="house-desk">
+  <header class="atelier-hero">
     <div>
-      <h1 class="hd-title">Dashboard</h1>
-      <div class="hd-sub">Summary of sales, inventory alerts and recent activity</div>
+      <p class="eyebrow">Desk</p>
+      <h1><%= greeting %>, <%= house %></h1>
+      <p class="lead">The house at a glance — today’s bills, the board, the tray and khata, and anything that needs a look before the counter opens fully.</p>
     </div>
-    <div style="text-align:right">
-      <div class="muted">As of</div>
-      <div style="font-weight:600">
-        <span id="dashboard-date"><%= Time.now.in_time_zone('Asia/Kolkata').strftime('%d - %b - %Y').upcase %></span>
-        &nbsp;
-        <span id="dashboard-clock"><%= Time.now.in_time_zone('Asia/Kolkata').strftime('%H:%M:%S') %></span>
-        &nbsp;IST
+    <div class="desk-hero-meta">
+      <div class="desk-clock">
+        <span>As of</span>
+        <strong>
+          <em id="dashboard-date"><%= now.strftime('%d %b %Y') %></em>
+          <b id="dashboard-clock"><%= now.strftime('%H:%M') %></b>
+          IST
+        </strong>
       </div>
+      <div class="stock-hero-actions">
+        <%= link_to 'House report', reports_path, class: 'atelier-back' %>
+        <%= link_to 'Open the counter', pos_path, class: 'btn-gold' %>
+      </div>
+    </div>
+  </header>
+
+  <nav class="desk-go" aria-label="Open a book">
+    <%= link_to 'Raise a bill', new_order_path %>
+    <%= link_to 'Set a rate', new_rate_path %>
+    <%= link_to 'Register a piece', new_jewelry_item_path %>
+    <%= link_to 'Clients', customers_path %>
+    <%= link_to 'Vault', metal_stocks_path %>
+    <%= link_to 'Ledgers', ledgers_path %>
+  </nav>
+
+  <div class="desk-kpis">
+    <div>
+      <span>Today billed</span>
+      <strong class="gold"><%= format_rupees(report.bill_total) %></strong>
+      <em><%= word.call(report.bill_count, 'bill', 'bills') %> · <%= '%.2f' % report.grams %> g</em>
+    </div>
+    <div>
+      <span>House result today</span>
+      <strong class="<%= report.house_result.negative? ? 'is-loss' : 'gold' %>"><%= format_rupees(report.house_result) %></strong>
+      <em>Making after courtesy · <%= '%.0f' % report.margin_percent %>% of taxable</em>
+    </div>
+    <div>
+      <span>This week</span>
+      <strong><%= format_rupees(week.bill_total) %></strong>
+      <em><%= word.call(week.bill_count, 'bill', 'bills') %> · <%= week.pieces %> pcs</em>
+    </div>
+    <div>
+      <span>This month</span>
+      <strong><%= format_rupees(month.bill_total) %></strong>
+      <em><%= month.label %> · <%= format_rupees(month.house_result) %> kept</em>
     </div>
   </div>
 
-  <div class="hd-grid">
-    <div class="card" style="grid-column: span 8">
-      <div class="metrics">
-        <div class="metric" style="background:linear-gradient(90deg,#fff7ed,#fff1e6);border-color:#ffedd5">
-          <div class="label">Today</div>
-          <div class="value">₹<span class="count" data-target="<%= (@today_total || 0).to_f %>">0.00</span></div>
-          <div class="muted">Live</div>
-        </div>
-        <div class="metric" style="background:linear-gradient(90deg,#eef2ff,#eef6ff);border-color:#e0e7ff">
-          <div class="label">This Week</div>
-          <div class="value">₹<span class="count" data-target="<%= (@week_total || 0).to_f %>">0.00</span></div>
-          <div class="muted">Mon - Sun</div>
-        </div>
-        <div class="metric" style="background:linear-gradient(90deg,#ecfdf5,#f0fdf4);border-color:#bbf7d0">
-          <div class="label">This Month</div>
-          <div class="value">₹<span class="count" data-target="<%= (@month_total || 0).to_f %>">0.00</span></div>
-          <div class="muted">Monthly</div>
-        </div>
-        <div class="metric" style="background:linear-gradient(90deg,#fff1f2,#fff4f6);border-color:#fecaca">
-          <div class="label">Low Stock</div>
-          <div class="value"><span class="count" data-target="<%= @low_stock_items.count %>">0</span></div>
-          <div class="muted">Items &le; 5</div>
-        </div>
-      </div>
+  <div class="desk-stand">
+    <div>
+      <span>Tray</span>
+      <strong><%= tray[:live_pcs] %> <i>pcs</i></strong>
+      <em><%= format_rupees(tray[:value]) %> at the board · <%= '%.2f' % tray[:grams] %> g</em>
+      <%= link_to 'Catalogue', jewelry_items_path %>
+    </div>
+    <div>
+      <span>Vault</span>
+      <strong><%= vault[:grams] %> <i>g</i></strong>
+      <em><%= format_rupees(vault[:value]) %> · <%= word.call(vault[:cards], 'card', 'cards') %></em>
+      <%= link_to 'Metal stock', metal_stocks_path %>
+    </div>
+    <div>
+      <span>Receivable</span>
+      <strong class="gold"><%= format_rupees(khata[:receivable]) %></strong>
+      <em><%= word.call(khata[:due], 'khata due', 'khatas due') %> · <%= format_rupees(khata[:advances]) %> advance</em>
+      <%= link_to 'Ledgers', ledgers_path %>
+    </div>
+    <div>
+      <span>Taken today</span>
+      <strong><%= format_rupees(report.receipts) %></strong>
+      <em>GST on today’s bills <%= format_rupees(report.gst) %> · <%= report.open_bills %> still open</em>
+      <%= link_to 'Sales log', sales_log_reports_path %>
+    </div>
+  </div>
 
-      <div style="display:flex;gap:20px;margin-top:18px;align-items:flex-start">
-        <div style="flex:1">
-          <h3 class="section-title">Recent Orders</h3>
-          <ul class="list">
-            <% @recent_orders.each do |o| %>
-              <li>
-                <div style="display:flex;justify-content:space-between">
-                  <div>
-                    <strong><%= o.invoice_number %></strong>
-                    <div class="muted"><%= o.customer.try(:name) || 'Guest' %> • <%= o.sale_date %></div>
-                  </div>
-                  <div style="text-align:right">₹<%= '%.2f' % (o.computed_total || o.total || 0) %></div>
-                </div>
-              </li>
-            <% end %>
-          </ul>
-        </div>
-
-        <div style="width:380px">
-          <h3 class="section-title">Top Items — This Week</h3>
-          <ul class="list">
-            <% @top_items_week.each do |ti| %>
-              <li style="display:flex;justify-content:space-between;align-items:center">
-                <div><%= ti.name %></div>
-                <div class="muted">Qty: <strong><%= ti.qty_sold %></strong></div>
-              </li>
-            <% end %>
-          </ul>
-
-          <div style="margin-top:14px">
-            <h4 class="section-title">Sales (last 7 days)</h4>
-            <% if @sales_values && @sales_values.any? %>
-              <% max_h = 60.0 %>
-              <svg id="sales-spark" width="100%" height="80" viewBox="0 0 100 80" preserveAspectRatio="none" style="display:block;margin-top:8px">
-                <% vals = @sales_values.map { |v| (v.to_f / (@sales_max.nonzero? ? @sales_max : 1.0)) * max_h } %>
-                <% step = 100.0 / ([vals.size,1].max) %>
-                <% pts = vals.each_with_index.map { |h,i| "#{(i * step).round(2)},#{(max_h - h).round(2)}" } %>
-                <polyline id="sales-poly" points="<%= pts.join(' ') %>" fill="none" stroke="#0ea5a4" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-              <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:#64748b">
-                <% @sales_labels.each do |lbl| %>
-                  <div><%= lbl %></div>
-                <% end %>
-              </div>
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>Today at the desk</h2>
+          <p class="hint">
+            <% if report.bill_count.zero? %>
+              No invoice yet today. The list below is the latest work on the book.
             <% else %>
-              <div class="muted">No recent sales data</div>
+              <%= word.call(report.bill_count, 'bill', 'bills') %> raised today —
+              metal <%= format_rupees(report.metal) %>, making <%= format_rupees(report.making) %>,
+              GST <%= format_rupees(report.gst) %> held for government.
             <% end %>
+          </p>
+          <% rows = report.bill_count.positive? ? today_bills : latest.first(6) %>
+          <% if rows.any? %>
+            <div class="stock-table-wrap">
+              <table class="stock-table">
+                <thead>
+                  <tr>
+                    <th>Bill</th>
+                    <th>Client</th>
+                    <th class="num">Net</th>
+                    <th class="num">Total</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% rows.each do |row| %>
+                    <%
+                      if row.is_a?(Hash)
+                        order = row[:order]
+                        invoice = row[:invoice]
+                        when_at = row[:date]
+                        client = row[:client]
+                        grams = row[:grams]
+                        total = row[:total]
+                        status = row[:status]
+                      else
+                        order = row
+                        bill = row.bill_breakdown
+                        invoice = row.invoice_number.presence || "Bill ##{row.id}"
+                        when_at = row.sale_date || row.created_at.to_date
+                        client = row.customer
+                        grams = row.line_items.to_a.sum { |li| li.net_weight.to_f * li.quantity.to_i }
+                        total = bill[:total]
+                        status = row.status
+                      end
+                    %>
+                    <tr>
+                      <td>
+                        <%= link_to order_path(order), class: 'piece-link' do %>
+                          <strong><%= invoice %></strong>
+                          <span class="sku"><%= when_at.strftime('%d %b %Y') %> · <%= status == 'paid' ? 'Settled' : 'Open' %></span>
+                        <% end %>
+                      </td>
+                      <td>
+                        <% if client %>
+                          <%= link_to client.full_name.presence || 'Client', customer_path(client), class: 'piece-link' %>
+                        <% else %>
+                          Walk-in
+                        <% end %>
+                      </td>
+                      <td class="num"><%= '%.2f' % grams %> g</td>
+                      <td class="num gold"><%= format_rupees(total) %></td>
+                      <td><%= link_to 'Bill', order_path(order), class: 'atelier-back' %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% else %>
+            <p class="hint" style="margin:0">The book is quiet. <%= link_to 'Raise a bill', new_order_path %> or <%= link_to 'open the counter', pos_path %>.</p>
+          <% end %>
+        </div>
+      </section>
+
+      <% if series.any? %>
+        <section class="atelier-form" style="margin-top:18px">
+          <div class="section">
+            <h2>Seven days of bills</h2>
+            <p class="hint">Bill totals as written, GST included. Gold marks the busier days.</p>
+            <div class="pl-spark" aria-hidden="true">
+              <% series.each do |point| %>
+                <% height = series_max.positive? ? [(point[:value] / series_max * 100).round, point[:value].positive? ? 8 : 3].max : 3 %>
+                <div class="pl-spark-col" title="<%= point[:hint] %>: <%= format_rupees(point[:value]) %>">
+                  <span style="height: <%= height %>%"></span>
+                  <small><%= point[:label] %></small>
+                </div>
+              <% end %>
+            </div>
           </div>
+        </section>
+      <% end %>
+    </div>
+
+    <aside class="preview">
+      <div class="card-head">
+        <p class="preview-kicker">Today’s board</p>
+        <span class="client-ref"><%= now.strftime('%d %b') %></span>
+      </div>
+      <% if board.any? %>
+        <% board.first(3).each do |metal_row| %>
+          <div class="desk-board-metal">
+            <p class="preview-line" style="margin:10px 0 6px">
+              <i class="swatch" style="background:<%= metal_row[:colour] %>"></i>
+              <%= metal_row[:name] %>
+              <% if metal_row[:locked] %><em>Inactive</em><% end %>
+            </p>
+            <ul class="desk-board-list">
+              <% metal_row[:purities].first(4).each do |purity| %>
+                <li>
+                  <span><%= purity[:name] %></span>
+                  <b><%= purity[:rate].positive? ? "#{format_rupees(purity[:rate])}/g" : '—' %></b>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+      <% else %>
+        <p class="preview-desc">No hallmark is on the board yet. Set ₹ per gram so the catalogue and the counter read the same figure.</p>
+      <% end %>
+      <p class="preview-note" style="margin-top:16px"><%= link_to 'Set today’s rate', new_rate_path, class: 'desk-preview-link' %></p>
+    </aside>
+  </div>
+
+  <% metals_mix = report.by_metal %>
+  <% if metals_mix.any? %>
+    <h2 class="pl-block-title">Metal that moved today</h2>
+    <p class="hint pl-block-hint">Grams on today’s bills. Making is the house share on that metal.</p>
+    <div class="pl-metals">
+      <% metals_mix.each do |row| %>
+        <div class="pl-metal">
+          <span class="swatch" style="background:<%= row[:colour] %>"></span>
+          <div>
+            <strong><%= row[:name] %></strong>
+            <span><%= '%.2f' % row[:grams] %> g · <%= row[:pcs] %> <%= row[:pcs] == 1 ? 'pc' : 'pcs' %></span>
+          </div>
+          <b><%= format_rupees(row[:house]) %></b>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% attention = light_pieces.any? || vault_alerts.any? || tray[:stock_out].to_i.positive? || due.any? || tray[:locked].to_i.positive? %>
+  <h2 class="pl-block-title">Needs a look</h2>
+  <p class="hint pl-block-hint">Light trays, thin vaults, and khatas that still owe the house — before the next bill is raised.</p>
+  <% if attention %>
+    <div class="desk-alert">
+      <div class="atelier-form">
+        <div class="section">
+          <h2>Stock</h2>
+          <% if tray[:stock_out].to_i.positive? || tray[:locked].to_i.positive? %>
+            <p class="hint"><%= tray[:stock_out].to_i %> designs are off the tray. <%= tray[:locked].to_i %> locked by an inactive metal or hallmark.</p>
+          <% end %>
+          <% if light_pieces.any? %>
+            <ul class="report-list">
+              <% light_pieces.each do |item| %>
+                <li><%= link_to item.name, jewelry_item_path(item) %> · <%= item.quantity.to_i %> pcs · <%= item.sku %></li>
+              <% end %>
+            </ul>
+          <% end %>
+          <% if vault_alerts.any? %>
+            <ul class="report-list">
+              <% vault_alerts.each do |card| %>
+                <li>
+                  <%= link_to metal_stock_path(card) do %>
+                    <%= card.metal&.name %> at <%= card.store&.name %>
+                  <% end %>
+                  · <%= card.available_grams.to_i %> g
+                  <%= card.empty? ? '· empty' : '· light' %>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+          <% if light_pieces.empty? && vault_alerts.empty? && tray[:stock_out].to_i.zero? %>
+            <p class="hint" style="margin:0">Tray and vault look steady.</p>
+          <% end %>
+        </div>
+      </div>
+      <div class="atelier-form">
+        <div class="section">
+          <h2>Khatas still due</h2>
+          <% if due.any? %>
+            <ul class="report-facts">
+              <% due.each do |client| %>
+                <li>
+                  <%= link_to client.full_name.presence || 'Client', ledger_path(client) %>
+                  <b><%= format_rupees(client.outstanding) %></b>
+                </li>
+              <% end %>
+            </ul>
+          <% else %>
+            <p class="hint" style="margin:0">No client currently owes the house.</p>
+          <% end %>
         </div>
       </div>
     </div>
-
-    <div class="card" style="grid-column: span 4">
-      <h3 class="section-title">Today's Metal Rates</h3>
-      <% if @today_rates.any? %>
-        <ul class="list">
-          <% @today_rates.each do |r| %>
-            <li>
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <div>
-                  <strong><%= r.metal_type %></strong>
-                  <div class="muted" style="font-size:12px">Date: <%= r.date %></div>
-                </div>
-                <div style="text-align:right">
-                  <div style="font-weight:700;font-size:16px">₹<%= '%.2f' % (r.price_cents_per_gram.to_f / 100.0) %></div>
-                </div>
-              </div>
-            </li>
-          <% end %>
-        </ul>
-      <% else %>
-        <div class="muted">No rates set for today</div>
-      <% end %>
-
-      <div style="margin-top:14px;"> <a href="<%= new_rate_path %>" class="btn">Set Today's Rates</a> </div>
-
+  <% else %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">Tray, vault and khata are quiet. The house is in good order this morning.</p>
     </div>
-
-    <div class="card" style="grid-column: span 4">
-      <h3 class="section-title">Inventory Alerts</h3>
-      <% if @low_stock_items.any? %>
-        <ul class="list">
-          <% @low_stock_items.each do |it| %>
-            <li>
-              <div style="display:flex;justify-content:space-between">
-                <div><strong><%= it.name %></strong><div class="muted">SKU: <%= it.sku %></div></div>
-                <div style="text-align:right">Qty: <strong><%= it.quantity %></strong></div>
-              </div>
-            </li>
-          <% end %>
-        </ul>
-      <% else %>
-        <div class="muted">No low stock items</div>
-      <% end %>
-
-      <div style="margin-top:18px">
-        <a href="<%= inventory_items_path %>" class="btn">Open Inventory</a>
-      </div>
-    </div>
-  </div>
+  <% end %>
 </div>
 
+<style>
+  .container:has(.house-desk) { max-width: 1240px; }
+  .house-desk a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .house-desk .desk-hero-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .house-desk .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .house-desk .desk-clock span {
+    display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700; text-align: right;
+  }
+  .house-desk .desk-clock strong {
+    display: block; color: #0b1220; font-variant-numeric: tabular-nums; font-size: 15px;
+  }
+  .house-desk .desk-clock em { font-style: normal; }
+  .house-desk .desk-clock b { font-weight: 700; color: #c9a227; margin-left: 8px; }
+  .house-desk .desk-go {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 18px;
+  }
+  .house-desk .desk-go a {
+    display: inline-flex; padding: 7px 14px; border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.4); background: #fffaf3;
+    color: #0b1220; text-decoration: none; font-size: 13px; font-weight: 700;
+  }
+  .house-desk .desk-go a:hover { background: #f7f1e8; }
+  .house-desk .desk-kpis {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px;
+  }
+  .house-desk .desk-kpis > div,
+  .house-desk .desk-stand > div {
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 16px; padding: 14px 16px;
+  }
+  .house-desk .desk-kpis span, .house-desk .desk-stand span {
+    display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700;
+  }
+  .house-desk .desk-kpis strong {
+    display: block; margin-top: 6px; font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.55rem; font-weight: 600; color: #0b1220; font-variant-numeric: tabular-nums;
+  }
+  .house-desk .desk-kpis strong.gold, .house-desk .gold { color: #c9a227; }
+  .house-desk .desk-kpis strong.is-loss { color: #7f1d1d; }
+  .house-desk .desk-kpis em, .house-desk .desk-stand em {
+    display: block; margin-top: 4px; font-style: normal; font-size: 12px; color: #6b6258;
+  }
+  .house-desk .desk-stand {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px;
+  }
+  .house-desk .desk-stand strong {
+    display: block; margin-top: 4px; font-size: 1.15rem; color: #0b1220; font-variant-numeric: tabular-nums;
+  }
+  .house-desk .desk-stand strong.gold { color: #c9a227; }
+  .house-desk .desk-stand i { font-style: normal; font-size: 12px; color: #6b6258; font-weight: 600; }
+  .house-desk .desk-stand a {
+    display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 700; color: #0b1220; text-decoration: none;
+    border-bottom: 1px solid rgba(201,162,39,0.5);
+  }
+  .house-desk .stock-table-wrap {
+    background: #fff; border: 1px solid rgba(201,162,39,0.22); border-radius: 14px; overflow: auto;
+  }
+  .house-desk .stock-table { width: 100%; border-collapse: collapse; }
+  .house-desk .stock-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .house-desk .stock-table td { padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: top; }
+  .house-desk .stock-table tr:last-child td { border-bottom: 0; }
+  .house-desk .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .house-desk .piece-link { color: inherit; text-decoration: none; display: block; }
+  .house-desk .piece-link strong { display: block; color: #0b1220; }
+  .house-desk .sku { display: block; color: #6b6258; font-size: 12px; margin-top: 2px; }
+  .house-desk td .atelier-back { padding: 5px 10px; font-size: 12px; }
+  .house-desk .pl-spark { display: flex; align-items: flex-end; gap: 6px; height: 110px; padding-bottom: 22px; }
+  .house-desk .pl-spark-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+  .house-desk .pl-spark-col span {
+    display: block; width: 100%; max-width: 28px; border-radius: 4px 4px 0 0;
+    background: linear-gradient(180deg, #e8d5a3, #c9a227); min-height: 3px;
+  }
+  .house-desk .pl-spark-col small { margin-top: 6px; font-size: 10px; color: #6b6258; letter-spacing: 0.04em; }
+  .house-desk .desk-board-metal .swatch {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
+  }
+  .house-desk .desk-board-list { list-style: none; margin: 0 0 8px; padding: 0; }
+  .house-desk .desk-board-list li {
+    display: flex; justify-content: space-between; gap: 10px; padding: 5px 0;
+    border-bottom: 1px dashed rgba(232,213,163,0.2); font-size: 13px; color: #d6cbb8;
+  }
+  .house-desk .desk-board-list li:last-child { border-bottom: 0; }
+  .house-desk .desk-board-list b { color: #e8d5a3; font-variant-numeric: tabular-nums; }
+  .house-desk .desk-preview-link { color: #e8d5a3; font-weight: 700; text-decoration: none; }
+  .house-desk .pl-block-title {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.4rem; font-weight: 600;
+    margin: 28px 0 0; color: #0b1220;
+  }
+  .house-desk .pl-block-hint { margin: 4px 0 14px; color: #6b6258; }
+  .house-desk .pl-metals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .house-desk .pl-metal {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 14px;
+  }
+  .house-desk .pl-metal .swatch { width: 12px; height: 36px; border-radius: 999px; flex-shrink: 0; }
+  .house-desk .pl-metal strong { display: block; color: #0b1220; }
+  .house-desk .pl-metal span { display: block; font-size: 12px; color: #6b6258; margin-top: 2px; }
+  .house-desk .pl-metal b { margin-left: auto; color: #c9a227; font-variant-numeric: tabular-nums; }
+  .house-desk .desk-alert { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .house-desk .report-list, .house-desk .report-facts { list-style: none; margin: 0; padding: 0; }
+  .house-desk .report-list li, .house-desk .report-facts li {
+    padding: 8px 0; border-bottom: 1px dashed rgba(201,162,39,0.22); font-size: 13px;
+  }
+  .house-desk .report-facts li { display: flex; justify-content: space-between; gap: 12px; }
+  .house-desk .report-list a, .house-desk .report-facts a { color: #0b1220; font-weight: 600; text-decoration: none; }
+  .house-desk .report-facts b { font-variant-numeric: tabular-nums; color: #c9a227; }
+  @media (max-width: 960px) {
+    .house-desk .desk-kpis, .house-desk .desk-stand, .house-desk .desk-alert { grid-template-columns: 1fr 1fr; }
+    .house-desk .desk-hero-meta { align-items: flex-start; width: 100%; }
+  }
+  @media (max-width: 640px) {
+    .house-desk .desk-kpis, .house-desk .desk-stand, .house-desk .desk-alert { grid-template-columns: 1fr; }
+  }
+</style>
+
 <script>
-(function(){
-  function initDashboard(){
-    // stagger card animations
-    document.querySelectorAll('.card').forEach(function(el, idx){
-      el.classList.remove('animated');
-      setTimeout(function(){ el.classList.add('animated'); }, idx * 80);
-    });
-
-    // number counters
-    function animateCount(el, target, duration){
-      target = parseFloat(target) || 0;
-      var start = 0;
-      var startTime = null;
-      function step(ts){
-        if(!startTime) startTime = ts;
-        var progress = Math.min((ts - startTime) / duration, 1);
-        var current = start + (target - start) * progress;
-        if(el.dataset.decimals && el.dataset.decimals != '0'){
-          el.textContent = current.toFixed(parseInt(el.dataset.decimals));
-        } else {
-          el.textContent = Math.round(current);
-        }
-        if(progress < 1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    }
-
-    document.querySelectorAll('.count').forEach(function(span){
-      var tgt = span.getAttribute('data-target');
-      if(!tgt) return;
-      // reset display to 0 so animation always runs
-      if(tgt.indexOf('.') !== -1){ span.dataset.decimals = '2'; span.textContent = '0.00'; }
-      else { span.textContent = '0'; }
-      animateCount(span, tgt, 900);
-    });
-
-    // animate SVG polyline draw
-    var poly = document.getElementById('sales-poly');
-    if(poly){
-      var len = poly.getTotalLength();
-      poly.style.transition = poly.style.WebkitTransition = 'none';
-      poly.style.strokeDasharray = len + ' ' + len;
-      poly.style.strokeDashoffset = len;
-      setTimeout(function(){ poly.style.transition = 'stroke-dashoffset 900ms ease-out'; poly.style.strokeDashoffset = '0'; }, 300);
-    }
-  }
-
-  // Support Turbolinks and Turbo as well as normal loads
-  if(window.Turbolinks){
-    document.addEventListener('turbolinks:load', initDashboard);
-    document.addEventListener('turbolinks:before-cache', function(){ document.querySelectorAll('.card.animated').forEach(function(el){ el.classList.remove('animated'); }); });
-  }
-  if(window.Turbo){
-    document.addEventListener('turbo:load', initDashboard);
-    document.addEventListener('turbo:before-cache', function(){ document.querySelectorAll('.card.animated').forEach(function(el){ el.classList.remove('animated'); }); });
-  }
-
-  document.addEventListener('DOMContentLoaded', initDashboard);
-  if(document.readyState === 'complete' || document.readyState === 'interactive'){
-    setTimeout(initDashboard, 50);
-  }
-  
-  // Live IST clock and date (Turbolinks/Turbo safe)
-  function kolkataNow(){
-    var now = new Date();
-    var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    var kolkataOffset = 5.5 * 60 * 60000; // +5:30
-    return new Date(utc + kolkataOffset);
-  }
-
-  function pad(n){ return (n < 10 ? '0' : '') + n; }
-
-  function updateDashboardDateTime(){
+  (function(){
+    var desk = document.getElementById('house-desk');
+    if (!desk) return;
     var dEl = document.getElementById('dashboard-date');
     var tEl = document.getElementById('dashboard-clock');
-    if(!dEl && !tEl) return;
-    var now = kolkataNow();
-    var day = pad(now.getDate());
-    var months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-    var mon = months[now.getMonth()];
-    var yr = now.getFullYear();
-    if(dEl) dEl.textContent = day + ' - ' + mon + ' - ' + yr;
-    if(tEl){
-      var hh = pad(now.getHours());
-      var mm = pad(now.getMinutes());
-      var ss = pad(now.getSeconds());
-      tEl.textContent = hh + ':' + mm + ':' + ss;
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function pad(n){ return (n < 10 ? '0' : '') + n; }
+    function tick(){
+      var now = new Date();
+      var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      var ist = new Date(utc + (5.5 * 60 * 60000));
+      if (dEl) dEl.textContent = pad(ist.getDate()) + ' ' + months[ist.getMonth()] + ' ' + ist.getFullYear();
+      if (tEl) tEl.textContent = pad(ist.getHours()) + ':' + pad(ist.getMinutes());
     }
-  }
-
-  function startDashboardClock(){
-    // clear any previous timer
-    if(window._dashboardClockInterval) clearInterval(window._dashboardClockInterval);
-    updateDashboardDateTime();
-    window._dashboardClockInterval = setInterval(updateDashboardDateTime, 1000);
-  }
-
-  function stopDashboardClock(){ if(window._dashboardClockInterval){ clearInterval(window._dashboardClockInterval); window._dashboardClockInterval = null; } }
-
-  // ensure the clock starts with the dashboard initialization
-  document.addEventListener('turbolinks:load', startDashboardClock);
-  document.addEventListener('turbo:load', startDashboardClock);
-  document.addEventListener('DOMContentLoaded', startDashboardClock);
-  if(document.readyState === 'complete' || document.readyState === 'interactive') setTimeout(startDashboardClock, 80);
-
-  // clear timers when caching the page
-  if(window.Turbolinks){ document.addEventListener('turbolinks:before-cache', stopDashboardClock); }
-  if(window.Turbo){ document.addEventListener('turbo:before-cache', stopDashboardClock); }
-})();
+    tick();
+    if (window._houseDeskClock) clearInterval(window._houseDeskClock);
+    window._houseDeskClock = setInterval(tick, 30000);
+  })();
 </script>

@@ -1,0 +1,242 @@
+<%= render 'shared/atelier_styles' %>
+
+<%
+  kind = local_assigns[:kind].presence || 'index'
+  house = @house_name.to_s
+  plan = @plan_name.to_s.presence
+  mail = @strucxil_mail.to_s.presence || 'hello@strucxil.com'
+  subject = kind == 'new' ? "House keys — invite a keyholder for #{house}" : "House keys — audit book for #{house}"
+  body = "House: #{house}\n#{plan ? "Present year: #{plan}\n" : ""}Please unseal the house keys (users, roles and the audit book) for this atelier."
+  plans_path = respond_to?(:new_subscription_path) ? new_subscription_path : '/'
+%>
+
+<div class="atelier-page house-keys is-<%= kind %>">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">House · Keys</p>
+      <% if kind == 'new' %>
+        <h1>Invite a keyholder</h1>
+        <p class="lead">A second login, a counter role, a read-only book — this cupboard is held under a separate licence.</p>
+      <% else %>
+        <h1>Users &amp; the audit book</h1>
+        <p class="lead">Who may sign in, what they may touch, and the trail of every unlock. The key cupboard is still sealed.</p>
+      <% end %>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to 'Shop registration', shop_profile_path, class: 'atelier-back' %>
+      <% if kind == 'new' %>
+        <%= link_to 'The audit book', security_index_path, class: 'atelier-back' %>
+      <% else %>
+        <%= link_to 'Invite a keyholder', new_security_path, class: 'atelier-back' %>
+      <% end %>
+    </div>
+  </header>
+
+  <div class="keys-stage">
+    <div class="keys-veil" aria-hidden="true">
+      <% if kind == 'new' %>
+        <div class="keys-ghost-form">
+          <div class="steps">
+            <span class="step"><b>1</b> Name</span>
+            <span class="step"><b>2</b> Role</span>
+            <span class="step"><b>3</b> Desk</span>
+          </div>
+          <div class="ghost-field"><span>Full name</span><i></i></div>
+          <div class="ghost-field"><span>Email</span><i></i></div>
+          <div class="ghost-field"><span>Role at the house</span><i></i></div>
+          <div class="ghost-pills">
+            <em>Counter</em><em>Books</em><em>Vault</em><em>Owner</em>
+          </div>
+        </div>
+      <% else %>
+        <table class="keys-ghost-table">
+          <thead>
+            <tr><th>Keyholder</th><th>Role</th><th>Last unlock</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>This login</strong><span>Owner of <%= house %></span></td>
+              <td>Full house</td>
+              <td>Today</td>
+            </tr>
+            <tr>
+              <td><strong>Counter desk</strong><span>Bills &amp; tray</span></td>
+              <td>Sealed</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><strong>Auditor</strong><span>Books, read only</span></td>
+              <td>Sealed</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      <% end %>
+    </div>
+
+    <aside class="preview keys-seal">
+      <div class="card-head">
+        <p class="preview-kicker">Sealed office</p>
+        <span class="client-ref">House keys</span>
+      </div>
+      <div class="keys-lock" aria-hidden="true">
+        <svg viewBox="0 0 88 88" width="88" height="88">
+          <circle cx="44" cy="44" r="42" fill="#1a1612" stroke="#e8d5a3" stroke-width="1.5"/>
+          <circle cx="44" cy="44" r="34" fill="none" stroke="rgba(201,162,39,0.35)" stroke-width="1"/>
+          <path d="M32 40 V30 a12 12 0 0 1 24 0 V40" fill="none" stroke="#e8d5a3" stroke-width="3.5" stroke-linecap="round"/>
+          <rect x="28" y="40" width="32" height="26" rx="6" fill="url(#keys-gold)"/>
+          <circle cx="44" cy="52" r="4" fill="#0b1220"/>
+          <rect x="42.2" y="54" width="3.6" height="7" rx="1.2" fill="#0b1220"/>
+          <defs>
+            <linearGradient id="keys-gold" x1="28" y1="40" x2="60" y2="66">
+              <stop stop-color="#e8d5a3"/><stop offset="1" stop-color="#c9a227"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h2><%= kind == 'new' ? 'The invitation stays locked' : 'The cupboard is locked' %></h2>
+      <span class="sku-chip"><%= plan.present? ? "#{plan} year" : 'Present year' %></span>
+      <p class="preview-desc">
+        <% if kind == 'new' %>
+          Extra logins are not cut from this year’s key. Only Strucxil can issue another, or a year that already includes the cupboard.
+        <% else %>
+          The counter, the tray and the books are open. The names beside this login, their roles, and the audit of every unlock are not.
+        <% end %>
+      </p>
+      <p class="preview-note">Strucxil PVT LTD keeps the master. This shop login cannot unseal it.</p>
+    </aside>
+  </div>
+
+  <article class="keys-letter">
+    <p class="eyebrow">A note from the house</p>
+    <% if kind == 'new' %>
+      <h2>Another hand at the desk</h2>
+      <p>
+        Inviting a family member to the counter, a manager to the vault, or an auditor to the books
+        is a house-keys matter. The present year for <strong><%= house %></strong>
+        <% if plan.present? %> (<strong><%= plan %></strong>)<% end %>
+        keeps a single login — yours.
+      </p>
+      <p>
+        To cut a second key, lift the house to a year that includes keyholders, or write to
+        <strong>Strucxil PVT LTD</strong>. Name this atelier; they will open the cupboard or tell you which year already holds it.
+      </p>
+    <% else %>
+      <h2>Who holds the house</h2>
+      <p>
+        A jewellery house eventually needs more than one pair of hands — and a quiet book of who signed in,
+        who raised a bill, who touched the vault. That office sits behind a lock that this year’s licence does not open.
+      </p>
+      <p>
+        <strong><%= house %></strong> may work the counter on the present
+        <% if plan.present? %><strong><%= plan %></strong> year<% else %>year<% end %>.
+        To unseal users, roles and the audit trail, choose a year that includes the house keys,
+        or ask <strong>Strucxil PVT LTD</strong> to grant this atelier that desk. They issue the master; we do not.
+      </p>
+    <% end %>
+
+    <ul class="keys-would">
+      <li>
+        <strong>Keyholders</strong>
+        <span>Further logins for family, counter staff or an auditor — each with a role.</span>
+      </li>
+      <li>
+        <strong>Roles at the desk</strong>
+        <span>What they may raise, what they may only read, what stays with the owner.</span>
+      </li>
+      <li>
+        <strong>Audit book</strong>
+        <span>A dated trail of unlocks, bills and changes — for the house, not the shop floor.</span>
+      </li>
+    </ul>
+
+    <div class="actions">
+      <%= link_to 'See the yearly plans', plans_path, class: 'btn-gold' %>
+      <%= mail_to mail, 'Write to Strucxil PVT LTD', subject: subject, body: body, class: 'atelier-back' %>
+    </div>
+    <p class="keys-foot">
+      Address the note to Strucxil PVT LTD · <%= mail %>.
+      Mention <em><%= house %></em> and that you need the house keys unsealed.
+    </p>
+  </article>
+</div>
+
+<style>
+  .container:has(.house-keys) { max-width: 1100px; }
+  .house-keys a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .house-keys .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .house-keys .keys-stage {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+    gap: 22px; align-items: stretch; margin-bottom: 22px;
+  }
+  .house-keys .keys-veil {
+    position: relative; overflow: hidden;
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28);
+    border-radius: 18px; padding: 22px; min-height: 340px;
+  }
+  .house-keys .keys-veil::after {
+    content: ''; position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, rgba(247,241,232,0.15), rgba(247,241,232,0.72) 70%, rgba(247,241,232,0.92)),
+      repeating-linear-gradient(-18deg, transparent, transparent 10px, rgba(201,162,39,0.04) 10px, rgba(201,162,39,0.04) 11px);
+    pointer-events: none;
+  }
+  .house-keys .keys-ghost-table { width: 100%; border-collapse: collapse; filter: blur(1.2px); opacity: 0.55; }
+  .house-keys .keys-ghost-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .house-keys .keys-ghost-table td { padding: 12px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: top; }
+  .house-keys .keys-ghost-table strong { display: block; color: #0b1220; }
+  .house-keys .keys-ghost-table span { display: block; margin-top: 2px; font-size: 12px; color: #6b6258; }
+  .house-keys .keys-ghost-form { filter: blur(1.2px); opacity: 0.55; }
+  .house-keys .ghost-field { margin-bottom: 14px; }
+  .house-keys .ghost-field span {
+    display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; font-weight: 700; margin-bottom: 6px;
+  }
+  .house-keys .ghost-field i {
+    display: block; height: 42px; border-radius: 10px; background: #fff;
+    border: 1px solid #e6dcc8;
+  }
+  .house-keys .ghost-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .house-keys .ghost-pills em {
+    font-style: normal; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.4); font-size: 12px; font-weight: 700; color: #6b6258;
+  }
+  .house-keys .keys-seal { min-height: 0; }
+  .house-keys .keys-lock {
+    height: 120px; border-radius: 14px; margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(120px 80px at 30% 20%, rgba(232,213,163,0.28), transparent 55%),
+      linear-gradient(160deg, #2a2218, #12151c);
+    border: 1px solid rgba(201,162,39,0.25);
+  }
+  .house-keys .keys-letter {
+    background: linear-gradient(180deg, #fffaf3, #f7f1e8);
+    border: 1px solid rgba(201,162,39,0.28); border-radius: 18px;
+    padding: 24px 26px 20px;
+  }
+  .house-keys .keys-letter h2 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.7rem; font-weight: 600;
+    margin: 6px 0 12px; color: #0b1220;
+  }
+  .house-keys .keys-letter p { margin: 0 0 12px; color: #14110f; line-height: 1.65; max-width: 68ch; }
+  .house-keys .keys-would {
+    list-style: none; margin: 18px 0 20px; padding: 0;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
+  }
+  .house-keys .keys-would li {
+    background: #fff; border: 1px solid rgba(201,162,39,0.22); border-radius: 14px; padding: 14px 16px;
+  }
+  .house-keys .keys-would strong { display: block; color: #0b1220; margin-bottom: 4px; }
+  .house-keys .keys-would span { display: block; font-size: 13px; color: #6b6258; line-height: 1.45; }
+  .house-keys .keys-letter .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .house-keys .keys-foot { margin: 14px 0 0; font-size: 13px; color: #6b6258; }
+  .house-keys .keys-foot em { font-style: normal; color: #0b1220; font-weight: 600; }
+  @media (max-width: 880px) {
+    .house-keys .keys-stage, .house-keys .keys-would { grid-template-columns: 1fr; }
+    .house-keys .preview { position: static; }
+  }
+</style>

@@ -1,33 +1,37 @@
-<div class="top">
+<header class="ep-hero">
   <div>
-    <h1>Add a plan</h1>
-    <div class="sub">Price is annual. New store signups can request it immediately.</div>
+    <p class="ep-eyebrow">Catalogue</p>
+    <h1>Add a year</h1>
+    <p class="ep-lead">Price is annual. Once saved, a house can request it from the public plans page.</p>
   </div>
-</div>
+  <div class="ep-actions">
+    <%= link_to '← Plans', staff_plans_path, class: 'btn btn-ghost' %>
+  </div>
+</header>
 
-<div class="card" style="max-width:560px">
+<div class="ep-card ep-narrow">
   <%= form_for @plan, url: staff_plans_path do |f| %>
     <% if @plan.errors.any? %>
-      <div class="flash alert"><%= @plan.errors.full_messages.to_sentence %></div>
+      <div class="ep-flash alert"><%= @plan.errors.full_messages.to_sentence %></div>
     <% end %>
     <label>Name</label>
     <%= f.text_field :name, placeholder: 'Professional' %>
     <label>Tagline</label>
     <%= f.text_field :tagline, placeholder: 'For growing showrooms' %>
     <label>Description</label>
-    <%= f.text_area :description %>
+    <%= f.text_area :description, placeholder: 'What this year includes' %>
     <label>Yearly price (₹)</label>
     <%= number_field_tag :price_rupees, (@plan.price_cents.to_i / 100), min: 0, step: 1 %>
     <label>Features (one per line)</label>
     <%= f.text_area :features, placeholder: "Unlimited invoices\nInventory & rates\nPriority support" %>
     <label>Display order</label>
     <%= f.number_field :position, value: @plan.position || 0 %>
-    <label style="display:flex;gap:8px;align-items:center;color:#e5eef8">
-      <%= f.check_box :active, { checked: true }, '1', '0' %> Visible on signup
+    <label class="ep-check">
+      <%= f.check_box :active, { checked: @plan.active != false }, '1', '0' %> Visible on signup
     </label>
-    <label style="display:flex;gap:8px;align-items:center;color:#e5eef8">
-      <%= f.check_box :featured, {}, '1', '0' %> Highlight as featured
+    <label class="ep-check">
+      <%= f.check_box :featured, {}, '1', '0' %> Mark as most chosen
     </label>
-    <%= f.submit 'Save plan', class: 'btn btn-gold' %>
+    <%= f.submit 'Save this plan', class: 'btn btn-gold' %>
   <% end %>
 </div>

@@ -7,7 +7,7 @@ class CustomersController < ApplicationController
     if @q.present?
       like = "%#{@q}%"
       customers = customers.where(
-        'first_name LIKE :q OR last_name LIKE :q OR email LIKE :q OR phone LIKE :q OR aadhaar_or_pan LIKE :q OR gst_number LIKE :q OR address LIKE :q',
+        'first_name LIKE :q OR last_name LIKE :q OR email LIKE :q OR phone LIKE :q OR aadhaar_or_pan LIKE :q OR gst_number LIKE :q OR address LIKE :q OR COALESCE(client_code, \'\') LIKE :q',
         q: like
       )
     end
@@ -20,6 +20,7 @@ class CustomersController < ApplicationController
 
   def create
     @customer = Customer.new(customer_params)
+    @customer.house_name_for_code = current_house_name
     if @customer.save
       redirect_to @customer, notice: 'Client saved to the book.'
     else
@@ -50,8 +51,8 @@ class CustomersController < ApplicationController
   end
 
   def destroy
-    if @customer.orders.exists?
-      redirect_to @customer, alert: 'This client has bills in the book and cannot be removed.'
+    if @customer.orders.exists? || (Customer.reflect_on_association(:ledger_entries) && @customer.ledger_entries.exists?)
+      redirect_to @customer, alert: 'This client has bills or a khata in the book and cannot be removed.'
     else
       @customer.destroy
       redirect_to customers_path, notice: 'Client removed from the book.'
@@ -66,5 +67,9 @@ class CustomersController < ApplicationController
 
   def customer_params
     params.require(:customer).permit(:first_name, :last_name, :email, :phone, :address, :aadhaar_or_pan, :gst_number)
+  end
+
+  def current_house_name
+    current_user.try(:shop_profile).try(:shop_name).presence || current_user.try(:shop_name)
   end
 end

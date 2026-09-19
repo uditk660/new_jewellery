@@ -1,114 +1,397 @@
 <%= render 'shared/atelier_styles' %>
 
-<div class="atelier-page rates-board">
+<%
+  metals = @metals || []
+  metals_payload = metals.map { |m|
+    {
+      id: m.id,
+      name: m.name,
+      colour: m.chip_colour,
+      purities: m.purities.active.ordered.map { |p|
+        {
+          id: p.id,
+          label: p.hallmark_label,
+          name: p.name,
+          percent: p.trimmed_percent,
+          fineness: p.fineness.to_s.presence,
+          weight: p.available_weight_label,
+          price: rate_rupees_for(m, p).to_f
+        }
+      }
+    }
+  }
+  board_date = @rate&.date || Time.zone.today
+  metal_selected = @selected_metal_id.present?
+  purity_selected = @selected_purity_id.present?
+%>
+
+<script type="application/json" id="rate-metals-json"><%= raw json_escape(metals_payload.to_json) %></script>
+<div class="atelier-page rate-desk" id="rate-desk">
   <header class="atelier-hero">
     <div>
       <p class="eyebrow">Rates</p>
-      <h1>Set a rate</h1>
-      <p class="lead">Choose the metal and hallmark, then enter today’s rupees per gram. This feeds catalogue valuation.</p>
+      <h1>Set today’s rate</h1>
+      <p class="lead">Choose metal and hallmark, then enter rupees per gram. Catalogue valuation and tray value follow this figure the moment it is saved.</p>
     </div>
     <%= link_to '← Today’s board', rates_path, class: 'atelier-back' %>
   </header>
 
-  <div class="atelier-form" style="max-width:640px">
-    <% if flash[:alert].present? %>
-      <div class="errors"><%= flash[:alert] %></div>
-    <% end %>
-    <% if @rate && @rate.errors.any? %>
-      <div class="errors"><%= @rate.errors.full_messages.to_sentence %></div>
-    <% end %>
-
-    <%= form_tag rates_path, method: :post do %>
-      <section class="section">
-        <h2>Hallmark &amp; rate</h2>
-        <p class="hint">One rate per hallmark for the day. Saving again today overwrites the earlier figure.</p>
-        <div class="row">
-          <div class="field">
-            <label for="rate_date">Date</label>
-            <%= date_field_tag 'rate[date]', (@rate&.date || Time.zone.today), class: 'form-control', id: 'rate_date' %>
-          </div>
-          <div class="field">
-            <label for="metal-select">Metal <span class="req">*</span></label>
-            <select id="metal-select" name="metal_id" class="form-control">
-              <option value="">Select metal</option>
-              <% (@metals || []).each do |m| %>
-                <option value="<%= m.id %>" <%= 'selected' if m.id == @selected_metal_id %>><%= m.name %></option>
-              <% end %>
-            </select>
-          </div>
-        </div>
-        <div class="row" style="margin-top:12px">
-          <div class="field">
-            <label for="purity-select">Purity / hallmark <span class="req">*</span></label>
-            <select id="purity-select" name="purity_id" class="form-control">
-              <option value="">Select hallmark</option>
-              <% (@purities_for_metal || []).each do |p| %>
-                <option value="<%= p.id %>" <%= 'selected' if p.id == @selected_purity_id %>><%= p.hallmark_label %></option>
-              <% end %>
-            </select>
-          </div>
-          <div class="field">
-            <label for="price_per_gram">Rate ₹ / g <span class="req">*</span></label>
-            <%= number_field_tag :price_per_gram, (@prefill_price.present? ? ('%.2f' % @prefill_price) : nil), id: 'price_per_gram', class: 'form-control', step: '0.01', min: 0, placeholder: '0.00' %>
-          </div>
-        </div>
-      </section>
-      <div class="actions">
-        <%= submit_tag 'Save rate', class: 'btn-gold', id: 'rate-submit' %>
-        <%= link_to 'Cancel', rates_path, class: 'atelier-back' %>
-      </div>
-    <% end %>
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Board date</span>
+    <span class="step"><b>2</b> Metal &amp; hallmark</span>
+    <span class="step"><b>3</b> ₹ / gram</span>
   </div>
+
+  <% if metals.empty? %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">No active metals yet. Add Gold with 18K, 20K and 22K, then return here to post the board.</p>
+      <div class="actions" style="margin-top:16px">
+        <%= link_to 'Add a metal', new_metal_path, class: 'btn-gold' %>
+        <%= link_to 'Today’s board', rates_path, class: 'atelier-back' %>
+      </div>
+    </div>
+  <% else %>
+    <div class="atelier-grid">
+      <div class="atelier-form">
+        <% if flash[:alert].present? %>
+          <div class="errors"><%= flash[:alert] %></div>
+        <% end %>
+        <% if @rate && @rate.errors.any? %>
+          <div class="errors"><%= @rate.errors.full_messages.to_sentence %></div>
+        <% end %>
+
+        <%= form_tag rates_path, method: :post, id: 'rate-form' do %>
+          <section class="section">
+            <h2>1 · Board date</h2>
+            <p class="hint">One rate per hallmark for this day. Saving again overwrites the earlier figure.</p>
+            <div class="row">
+              <div class="field narrow">
+                <label for="rate_date">Date</label>
+                <%= date_field_tag 'rate[date]', board_date, class: 'form-control', id: 'rate_date' %>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>2 · Metal &amp; hallmark</h2>
+            <p class="hint">Pick the metal first. Hallmarks belong only to that metal — Gold may offer 18K, 20K and 22K.</p>
+            <div class="row">
+              <div class="field">
+                <label for="metal-select">Metal <span class="req">*</span></label>
+                <div class="metal-pick">
+                  <span class="swatch" id="metal-swatch" aria-hidden="true"></span>
+                  <select id="metal-select" name="metal_id" class="form-control">
+                    <option value="">Select metal</option>
+                    <% metals.each do |m| %>
+                      <option value="<%= m.id %>" <%= 'selected' if m.id == @selected_metal_id %>><%= m.name %></option>
+                    <% end %>
+                  </select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="purity-select">Purity / hallmark <span class="req">*</span></label>
+                <select id="purity-select" name="purity_id" class="form-control" <%= 'disabled' unless metal_selected %>>
+                  <option value=""><%= metal_selected ? 'Select hallmark' : 'Select metal first' %></option>
+                  <% (@purities_for_metal || []).each do |p| %>
+                    <option value="<%= p.id %>" <%= 'selected' if p.id == @selected_purity_id %>><%= p.hallmark_label %></option>
+                  <% end %>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>3 · Today’s rupees per gram</h2>
+            <p class="hint">Enter the house rate in rupees. This is what every catalogue piece of this hallmark is valued at.</p>
+            <div class="row">
+              <div class="field">
+                <label for="price_per_gram">Rate ₹ / g <span class="req">*</span></label>
+                <div class="rate-entry">
+                  <span class="rupee" aria-hidden="true">₹</span>
+                  <%= number_field_tag :price_per_gram, (@prefill_price.present? ? ('%.2f' % @prefill_price) : nil), id: 'price_per_gram', class: 'form-control', step: '0.01', min: 0, placeholder: '0.00', readonly: !purity_selected %>
+                  <span class="per">/ g</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="actions">
+            <%= submit_tag 'Save rate', class: 'btn-gold', id: 'rate-submit' %>
+            <%= link_to 'Cancel', rates_path, class: 'atelier-back' %>
+          </div>
+        <% end %>
+      </div>
+
+      <aside class="preview" id="rate-preview" aria-live="polite">
+        <p class="preview-kicker">Board preview</p>
+        <div class="gem rate-gem" aria-hidden="true">
+          <span class="swatch large" id="preview-swatch"></span>
+        </div>
+        <h2 id="preview-metal">Choose a metal</h2>
+        <span class="sku-chip" id="preview-hallmark">Hallmark</span>
+        <div class="chips" id="preview-chips"></div>
+        <div class="preview-price" id="preview-price">₹ —</div>
+        <p class="preview-line" id="preview-was">Current board rate appears here</p>
+        <p class="preview-line" id="preview-ten">10 g at this rate · ₹ —</p>
+        <p class="preview-desc" id="preview-note">Select metal and hallmark, then enter today’s rupees per gram.</p>
+        <p class="preview-note">This card is how the rate reads on today’s board before it is saved.</p>
+      </aside>
+    </div>
+  <% end %>
 </div>
 
+<style>
+  .container:has(.rate-desk) { max-width: 1100px; }
+  .rate-desk a.btn-gold,
+  .rate-desk a.btn-gold:visited,
+  .rate-desk input.btn-gold {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    white-space: nowrap;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .rate-desk .metal-pick {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rate-desk .metal-pick .form-control { flex: 1; }
+  .rate-desk .swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid rgba(201,162,39,0.4);
+    background: #c9a227;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+  }
+  .rate-desk .swatch.large {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    border: 1px solid rgba(232,213,163,0.45);
+  }
+  .rate-desk .rate-gem {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .rate-desk .rate-entry {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid #e6dcc8;
+    border-radius: 12px;
+    padding: 4px 14px 4px 16px;
+  }
+  .rate-desk .rate-entry:focus-within {
+    border-color: #c9a227;
+    box-shadow: 0 0 0 3px rgba(201,162,39,0.18);
+  }
+  .rate-desk .rate-entry .rupee {
+    color: #c9a227;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.7rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .rate-desk .rate-entry .form-control {
+    border: 0;
+    box-shadow: none;
+    padding: 14px 4px;
+    font-size: 1.45rem;
+    font-weight: 600;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    color: #0b1220;
+    background: transparent;
+  }
+  .rate-desk .rate-entry .form-control:focus {
+    box-shadow: none;
+    border: 0;
+  }
+  .rate-desk .rate-entry .per {
+    color: #6b6258;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .rate-desk .rate-entry.is-locked {
+    background: #f3eee6;
+  }
+  .rate-desk .preview-price { min-height: 2.4rem; }
+  .rate-desk .preview-price .unit {
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+    margin-left: 6px;
+    color: #e8d5a3;
+    font-family: Inter, system-ui, sans-serif;
+    font-weight: 600;
+  }
+</style>
+
 <script>
-  (function(){
-    var metalSelect = document.getElementById('metal-select');
-    var puritySelect = document.getElementById('purity-select');
-    var priceEl = document.getElementById('price_per_gram');
-    var submitEl = document.getElementById('rate-submit');
-    var purities = {};
-    <% (@metals || []).each do |m| %>
-      purities['<%= m.id %>'] = <%= m.purities.ordered.map { |p| { id: p.id, label: p.hallmark_label, price: p.updated_price.to_f } }.to_json.html_safe %>;
-    <% end %>
-    function rebuild(mid, keep){
-      var list = purities[mid] || [];
-      var prev = keep || (puritySelect && puritySelect.value);
-      puritySelect.innerHTML = '';
-      var blank = document.createElement('option');
-      blank.value = ''; blank.text = 'Select hallmark';
-      puritySelect.appendChild(blank);
-      list.forEach(function(item){
-        var opt = document.createElement('option');
-        opt.value = item.id; opt.text = item.label;
-        puritySelect.appendChild(opt);
-      });
-      if(prev){
-        var still = Array.prototype.slice.call(puritySelect.options).some(function(o){ return String(o.value) === String(prev); });
-        if(still) puritySelect.value = prev;
+(function(){
+  var jsonEl = document.getElementById('rate-metals-json');
+  var metals = [];
+  try { metals = JSON.parse((jsonEl && jsonEl.textContent) || '[]'); } catch(e) { metals = []; }
+  var byId = {};
+  metals.forEach(function(m){ byId[String(m.id)] = m; });
+
+  var metalSelect = document.getElementById('metal-select');
+  var puritySelect = document.getElementById('purity-select');
+  var priceEl = document.getElementById('price_per_gram');
+  var dateEl = document.getElementById('rate_date');
+  var submitEl = document.getElementById('rate-submit');
+  var metalSwatch = document.getElementById('metal-swatch');
+  var previewSwatch = document.getElementById('preview-swatch');
+  var previewMetal = document.getElementById('preview-metal');
+  var previewHallmark = document.getElementById('preview-hallmark');
+  var previewChips = document.getElementById('preview-chips');
+  var previewPrice = document.getElementById('preview-price');
+  var previewWas = document.getElementById('preview-was');
+  var previewTen = document.getElementById('preview-ten');
+  var previewNote = document.getElementById('preview-note');
+  var rateEntry = priceEl && priceEl.closest('.rate-entry');
+
+  function rupees(n){
+    var v = Number(n);
+    if(isNaN(v)) return '₹ —';
+    return '₹' + v.toFixed(2);
+  }
+
+  function currentMetal(){
+    if(!metalSelect || !metalSelect.value) return null;
+    return byId[String(metalSelect.value)] || null;
+  }
+
+  function currentPurity(){
+    var metal = currentMetal();
+    if(!metal || !puritySelect || !puritySelect.value) return null;
+    var list = metal.purities || [];
+    var id = String(puritySelect.value);
+    for(var i = 0; i < list.length; i++){
+      if(String(list[i].id) === id) return list[i];
+    }
+    return null;
+  }
+
+  function fillHallmarks(keepId){
+    if(!puritySelect) return;
+    var metal = currentMetal();
+    var list = (metal && metal.purities) || [];
+    var want = keepId == null ? '' : String(keepId);
+    puritySelect.innerHTML = '';
+    var blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = metal ? 'Select hallmark' : 'Select metal first';
+    puritySelect.appendChild(blank);
+    list.forEach(function(item){
+      var opt = document.createElement('option');
+      opt.value = String(item.id);
+      opt.textContent = item.label;
+      puritySelect.appendChild(opt);
+    });
+    puritySelect.disabled = !metal;
+    if(want && list.some(function(item){ return String(item.id) === want; })){
+      puritySelect.value = want;
+    } else if(list.length === 1){
+      puritySelect.value = String(list[0].id);
+    } else {
+      puritySelect.value = '';
+    }
+  }
+
+  function applyRateFromPair(){
+    if(!priceEl) return;
+    var purity = currentPurity();
+    var ready = !!(currentMetal() && purity);
+    priceEl.readOnly = !ready;
+    if(rateEntry) rateEntry.classList.toggle('is-locked', !ready);
+    if(!ready){
+      priceEl.value = '';
+      return;
+    }
+    var price = Number(purity.price || 0);
+    priceEl.value = price > 0 ? price.toFixed(2) : '';
+  }
+
+  function paint(){
+    var metal = currentMetal();
+    var purity = currentPurity();
+    var colour = (metal && metal.colour) || '#c9a227';
+    var entered = parseFloat(priceEl && priceEl.value);
+    var hasRate = !isNaN(entered) && entered > 0;
+    var dateLabel = 'Today';
+    if(dateEl && dateEl.value){
+      var bits = String(dateEl.value).split('-');
+      if(bits.length === 3) dateLabel = bits[2] + ' · ' + bits[1] + ' · ' + bits[0];
+    }
+
+    if(metalSwatch) metalSwatch.style.background = colour;
+    if(previewSwatch) previewSwatch.style.background = colour;
+
+    if(!metal){
+      if(previewMetal) previewMetal.textContent = 'Choose a metal';
+      if(previewHallmark) previewHallmark.textContent = 'Hallmark';
+      if(previewChips) previewChips.innerHTML = '';
+      if(previewPrice) previewPrice.innerHTML = '₹ —';
+      if(previewWas) previewWas.textContent = 'Current board rate appears here';
+      if(previewTen) previewTen.textContent = '10 g at this rate · ₹ —';
+      if(previewNote) previewNote.textContent = 'Select metal and hallmark together to load today’s rupees per gram.';
+    } else {
+      if(previewMetal) previewMetal.textContent = metal.name;
+      if(previewHallmark) previewHallmark.textContent = purity ? (purity.label || 'Hallmark') : 'Choose a hallmark';
+      var chips = [];
+      chips.push(dateLabel);
+      if(purity && purity.weight) chips.push(purity.weight);
+      if(purity && purity.percent) chips.push(purity.percent + '%');
+      if(previewChips){
+        previewChips.innerHTML = chips.map(function(c){ return '<span class="chip">' + c + '</span>'; }).join('');
       }
+      if(previewPrice){
+        previewPrice.innerHTML = hasRate ? (rupees(entered) + '<span class="unit">/ g</span>') : '₹ —';
+      }
+      if(purity){
+        var board = Number(purity.price || 0);
+        if(previewWas){
+          previewWas.textContent = board > 0 ? ('On the board now · ' + rupees(board) + '/g') : 'No rate on the board yet for this hallmark.';
+        }
+        if(previewNote) previewNote.textContent = hasRate ? ('Saving posts this rate for ' + metal.name + ' ' + (purity.name || '') + '.') : 'Enter today’s rupees per gram to post the board.';
+      } else {
+        if(previewWas) previewWas.textContent = 'Current board rate appears here';
+        if(previewNote) previewNote.textContent = 'Choose a hallmark to load the rate for this metal.';
+      }
+      if(previewTen) previewTen.textContent = hasRate ? ('10 g at this rate · ' + rupees(entered * 10)) : '10 g at this rate · ₹ —';
     }
-    function sync(){
-      var ready = metalSelect.value && puritySelect.value && parseFloat(priceEl.value) > 0;
-      if(submitEl) submitEl.disabled = !ready;
-    }
-    if(metalSelect){
-      metalSelect.addEventListener('change', function(){
-        rebuild(this.value, '');
-        var first = (purities[this.value] || [])[0];
-        if(first && priceEl && !priceEl.value) priceEl.value = first.price > 0 ? first.price.toFixed(2) : '';
-        sync();
-      });
-    }
-    if(puritySelect){
-      puritySelect.addEventListener('change', function(){
-        var list = purities[metalSelect.value] || [];
-        var hit = list.filter(function(p){ return String(p.id) === String(puritySelect.value); })[0];
-        if(hit && priceEl) priceEl.value = hit.price > 0 ? hit.price.toFixed(2) : '';
-        sync();
-      });
-    }
-    if(priceEl) priceEl.addEventListener('input', sync);
-    sync();
-  })();
+
+    if(submitEl) submitEl.disabled = !(metal && purity && hasRate);
+  }
+
+  if(metalSelect){
+    metalSelect.addEventListener('change', function(){
+      fillHallmarks(null);
+      applyRateFromPair();
+      paint();
+    });
+  }
+  if(puritySelect){
+    puritySelect.addEventListener('change', function(){
+      applyRateFromPair();
+      paint();
+    });
+  }
+  if(priceEl) priceEl.addEventListener('input', paint);
+  if(dateEl) dateEl.addEventListener('change', paint);
+
+  fillHallmarks(puritySelect && puritySelect.value);
+  applyRateFromPair();
+  paint();
+})();
 </script>

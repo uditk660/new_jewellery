@@ -1,18 +1,25 @@
-<% content_for :title, 'Create your jewellery store' %>
-<main class="auth-viewport">
-  <section class="auth-card" role="main">
-    <header class="auth-header">
-      <div class="brand-mark" aria-hidden="true">💎</div>
-      <h1 class="brand-name">Open your store</h1>
-      <p class="brand-sub">Create an account, then choose a yearly subscription</p>
-    </header>
-    <div class="auth-body">
-      <% if resource.errors.any? %>
-        <div class="error-box">
-          <%= resource.errors.full_messages.to_sentence %>
-        </div>
-      <% end %>
-      <%= form_for(resource, as: resource_name, url: registration_path(resource_name)) do |f| %>
+<% content_for :title, 'Open a house · Strucxil' %>
+
+<section class="auth-card is-wide" aria-labelledby="signup-heading">
+  <header class="auth-header">
+    <div class="brand-mark" aria-hidden="true">S</div>
+    <p>Strucxil</p>
+    <h1 id="signup-heading">Open your store</h1>
+    <p class="brand-sub">Create an account, then choose a yearly subscription</p>
+  </header>
+
+  <div class="auth-body">
+    <nav class="auth-tabs" aria-label="Account">
+      <%= link_to 'Sign in', new_user_session_path, data: { turbolinks: false } %>
+      <%= link_to 'Open a house', new_user_registration_path, class: 'is-on', data: { turbolinks: false } %>
+    </nav>
+
+    <% if resource.errors.any? %>
+      <div class="error-box"><%= resource.errors.full_messages.to_sentence %></div>
+    <% end %>
+
+    <%= form_for(resource, as: resource_name, url: registration_path(resource_name)) do |f| %>
+      <div class="auth-row">
         <div class="form-group">
           <%= f.label :shop_name, 'Store name' %>
           <%= f.text_field :shop_name, autofocus: true, placeholder: 'e.g. Meena Jewellers' %>
@@ -21,14 +28,18 @@
           <%= f.label :full_name, 'Your name' %>
           <%= f.text_field :full_name, placeholder: 'Owner / manager name' %>
         </div>
+      </div>
+      <div class="auth-row">
         <div class="form-group">
           <%= f.label :phone, 'Phone' %>
-          <%= f.text_field :phone, placeholder: '10-digit mobile' %>
+          <%= f.text_field :phone, placeholder: '10-digit mobile', inputmode: 'tel' %>
         </div>
         <div class="form-group">
           <%= f.label :email %>
           <%= f.email_field :email, autocomplete: 'email', placeholder: 'store@example.com' %>
         </div>
+      </div>
+      <div class="auth-row">
         <div class="form-group">
           <%= f.label :password %>
           <%= f.password_field :password, autocomplete: 'new-password', placeholder: 'At least 6 characters' %>
@@ -37,11 +48,12 @@
           <%= f.label :password_confirmation, 'Confirm password' %>
           <%= f.password_field :password_confirmation, autocomplete: 'new-password' %>
         </div>
-        <%= f.submit 'Continue to plans', class: 'btn-primary' %>
-      <% end %>
-      <div class="footer-note">
-        Already registered? <%= link_to 'Sign in', new_user_session_path %>
       </div>
+      <%= f.submit 'Continue to plans', class: 'btn-primary' %>
+    <% end %>
+
+    <div class="footer-note">
+      Already registered? <%= link_to 'Sign in', new_user_session_path, data: { turbolinks: false } %>
     </div>
-  </section>
-</main>
+  </div>
+</section>

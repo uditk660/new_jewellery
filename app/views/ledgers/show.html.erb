@@ -1,0 +1,151 @@
+<%= render 'shared/atelier_styles' %>
+
+<%
+  customer = @customer
+  lines = @lines || []
+  cents = @cents.to_i
+  amount = cents / 100.0
+%>
+
+<div class="atelier-page khata-card">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Khata</p>
+      <h1><%= customer.full_name.presence || 'Client' %></h1>
+      <p class="lead"><%= [customer.phone.presence, customer.email.presence].compact.join(' · ').presence || 'No contact noted yet.' %></p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to '← Ledgers', ledgers_path, class: 'atelier-back' %>
+      <%= link_to 'Client card', customer_path(customer), class: 'atelier-back' %>
+      <%= link_to 'New bill', new_order_path(customer_id: customer.id), class: 'atelier-back' %>
+      <%= link_to 'Post an entry', new_ledger_path(customer_id: customer.id), class: 'btn-gold' %>
+    </div>
+  </header>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag ledger_path(customer), method: :get, class: 'stock-search' do %>
+      <%= date_field_tag :from, @from, class: 'form-control' %>
+      <%= date_field_tag :to, @to, class: 'form-control' %>
+      <button type="submit" class="atelier-back">Filter</button>
+      <% if @from || @to %>
+        <%= link_to 'Clear', ledger_path(customer), class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="stock-stats">
+      <div>
+        <span>Lines</span>
+        <strong><%= lines.size %></strong>
+      </div>
+      <div>
+        <span><%= cents.negative? ? 'Advance' : 'Outstanding' %></span>
+        <strong><%= format_rupees(cents.negative? ? -amount : amount) %></strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>Statement</h2>
+          <p class="hint">Read top to bottom, oldest first. Each line’s balance is after that line. Receipts sit on the time they were taken, against their bill.</p>
+          <% if lines.any? %>
+            <div class="stock-table-wrap">
+              <table class="stock-table">
+                <thead>
+                  <tr>
+                    <th class="seq">#</th>
+                    <th>When</th>
+                    <th>Particulars</th>
+                    <th class="num">Debit</th>
+                    <th class="num">Credit</th>
+                    <th class="num">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% lines.each do |line| %>
+                    <tr class="<%= 'is-brought' if line[:kind] == 'brought' %>">
+                      <td class="seq"><%= line[:no] %></td>
+                      <td>
+                        <% at = line[:occurred_at] || line[:occurred] %>
+                        <span class="when-day"><%= at.strftime('%d %b %Y') %></span>
+                        <% if line[:kind] != 'brought' && at.respond_to?(:strftime) && at.respond_to?(:hour) %>
+                          <span class="sku"><%= at.strftime('%H:%M') %></span>
+                        <% end %>
+                      </td>
+                      <td>
+                        <% if line[:href].present? %>
+                          <%= link_to line[:href], class: 'piece-link' do %>
+                            <strong><%= line[:label] %></strong>
+                            <span class="sku"><%= line[:note] %></span>
+                          <% end %>
+                        <% else %>
+                          <strong><%= line[:label] %></strong>
+                          <span class="sku"><%= line[:note] %></span>
+                        <% end %>
+                      </td>
+                      <td class="num"><%= line[:debit].to_f.positive? ? format_rupees(line[:debit]) : '—' %></td>
+                      <td class="num"><%= line[:credit].to_f.positive? ? format_rupees(line[:credit]) : '—' %></td>
+                      <td class="num gold"><%= format_rupees(line[:balance]) %></td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% else %>
+            <p class="hint" style="margin:0">No lines in this window. Post an opening or raise a bill.</p>
+          <% end %>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <div class="card-head">
+        <p class="preview-kicker">Khata</p>
+        <% if customer.client_ref.present? %>
+          <span class="client-ref"><%= customer.client_ref %></span>
+        <% end %>
+      </div>
+      <%= render 'customers/cameo', gid: 'ledger-cameo-gold' %>
+      <h2><%= customer.card_name %></h2>
+      <span class="sku-chip"><%= customer.phone.presence || 'No phone' %></span>
+      <div class="preview-price"><%= format_rupees(cents.negative? ? -amount : amount) %></div>
+      <p class="preview-line"><%= cents.negative? ? 'Advance with the house' : (cents.positive? ? 'Outstanding on the book' : 'Settled') %></p>
+      <p class="preview-desc">Bill payments still happen on the invoice. Use journal entries for opening balances and cash taken on account.</p>
+      <p class="preview-note">POS reads this outstanding as due when the figure is above zero.</p>
+    </aside>
+  </div>
+</div>
+
+<style>
+  .khata-card a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .khata-card .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .khata-card .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .khata-card .stock-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .khata-card .stock-stats { display: flex; gap: 18px; flex-wrap: wrap; }
+  .khata-card .stock-stats span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700; }
+  .khata-card .stock-stats strong { color: #0b1220; font-variant-numeric: tabular-nums; }
+  .khata-card .stock-table-wrap {
+    background: #fff; border: 1px solid rgba(201,162,39,0.22); border-radius: 14px; overflow: auto;
+  }
+  .khata-card .stock-table { width: 100%; border-collapse: collapse; }
+  .khata-card .stock-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .khata-card .stock-table td { padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: top; }
+  .khata-card .stock-table tr:last-child td { border-bottom: 0; }
+  .khata-card .seq { width: 36px; text-align: right; color: #6b6258; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .khata-card .when-day { display: block; }
+  .khata-card tr.is-brought td { background: #f7f1e8; }
+  .khata-card .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .khata-card .gold { color: #c9a227; font-weight: 700; }
+  .khata-card .piece-link { text-decoration: none; color: inherit; display: block; }
+  .khata-card .piece-link strong, .khata-card td > strong { display: block; color: #0b1220; }
+  .khata-card .sku { display: block; color: #6b6258; font-size: 12px; margin-top: 2px; }
+  .khata-card .client-gem { position: relative; overflow: hidden; }
+  .khata-card .cameo { width: 92px; height: 92px; display: block; }
+</style>

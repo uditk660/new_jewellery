@@ -72,7 +72,7 @@
     box-shadow: 0 10px 24px rgba(201,162,39,0.28), inset 0 1px 0 rgba(255,255,255,0.55);
   }
   .btn-gold::after {
-    content: ""; position: absolute; inset: 0;
+    content: ""; position: absolute; inset: 0; pointer-events: none;
     background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.45), transparent 70%);
     transform: translateX(-120%); animation: sheen 4.5s ease-in-out infinite;
   }
@@ -261,6 +261,5 @@
     .split.reverse .copy { order: 0; }
     .hero { min-height: 82vh; }
     .photo-frame img, .card img { height: 280px; }
-    .maison-actions .btn-ghost { display: none; }
   }
 </style>

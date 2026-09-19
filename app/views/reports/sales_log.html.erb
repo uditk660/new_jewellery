@@ -1,141 +1,374 @@
-<style>
-/* Professional Sales Log (page-scoped) */
-.sales-page { max-width:1400px; margin:36px auto; padding:0 28px; font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; color:#0f172a }
-.sl-header { display:flex; justify-content:space-between; align-items:center; gap:12px }
-.sl-title { font-size:28px; margin:0; font-weight:700 }
-.sl-sub { color:#475569; margin-top:6px }
-.sl-grid { display:grid; grid-template-columns:repeat(12, 1fr); gap:28px; margin-top:28px }
-.card { grid-column: span 12; background:#fff; border-radius:14px; padding:26px; box-shadow:0 14px 40px rgba(2,6,23,0.06); border:1px solid rgba(2,6,23,0.03) }
-.metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:22px }
-.metric { padding:18px; border-radius:12px; background:linear-gradient(180deg,#ffffff,#fbfdff); text-align:left; border:1px solid #eef2ff; min-height:84px }
-.metric .label { font-size:12px; color:#64748b }
-.metric .value { font-size:20px; font-weight:700; color:#0b1220; margin-top:6px }
-.metric .delta { font-size:12px; color:#10b981; margin-top:6px }
-.panel { display:flex; gap:28px; margin-top:24px; align-items:flex-start }
-.panel .left { flex:1 }
-.panel .right { width:480px }
-.top-table { width:100%; border-collapse:collapse; margin-top:12px }
-.top-table thead th { text-align:left; font-size:13px; color:#334155; padding:12px 14px; border-bottom:1px solid #eef2ff }
-.top-table tbody td { padding:12px 14px; border-bottom:1px solid #f8fafc }
-.top-table tbody tr:nth-child(odd) { background: #ffffff }
-.top-table tbody tr:nth-child(even) { background: #fbfdff }
-.table-scroll { max-height:320px; overflow-y:auto; padding-right:6px; margin-top:8px }
-.muted { color:#94a3b8 }
-.range-form { display:flex; gap:8px; align-items:center }
-.btn { padding:8px 12px; border-radius:8px; border:1px solid #e2e8f0; background:#fff; cursor:pointer }
-.cta { background:#0ea5a4; color:#fff; border:none }
-@media(max-width:1000px){ .metrics { grid-template-columns:repeat(2,1fr) } .panel { flex-direction:column } .panel .right { width:100% } }
-</style>
+<%= render 'shared/atelier_styles' %>
 
-<div class="sales-page">
-  <div class="sl-header">
+<%
+  log = @log
+  house = @house_name.to_s
+  metals = @metals || []
+  window = @window
+  snapshots = @snapshots || []
+  pieces = @pieces || []
+  entries = @entries || []
+  series = @series || []
+  series_max = @series_max.to_f
+  today_snap = snapshots.find { |row| row[:key] == 'today' } || {}
+  yesterday_snap = snapshots.find { |row| row[:key] == 'yesterday' } || {}
+  delta = today_snap[:total].to_f - yesterday_snap[:total].to_f
+  tab_path = lambda do |key|
+    sales_log_reports_path(request.query_parameters.merge(window: key).except('from', 'to'))
+  end
+  word = lambda do |count, one, many|
+    "#{count} #{count == 1 ? one : many}"
+  end
+%>
+
+<div class="atelier-page sales-log">
+  <header class="atelier-hero">
     <div>
-      <h1 class="sl-title">Sales Log</h1>
-      <div class="sl-sub">Overview of sales performance — use the custom range to drill down.</div>
+      <p class="eyebrow">Books</p>
+      <h1>Sales log</h1>
+      <p class="lead">The desk’s diary — every bill raised in the window, with metal, making and the amount written on the invoice.</p>
     </div>
-    <div style="text-align:right">
-      <div style="font-size:13px;color:#64748b">Report generated</div>
-      <div style="font-weight:600">As of <%= Time.now.in_time_zone('Asia/Kolkata').strftime('%Y-%m-%d %H:%M') %> IST</div>
+    <div class="stock-hero-actions">
+      <%= link_to 'House report', reports_path(window: window, from: (log.from if window == 'custom'), to: (log.to if window == 'custom'), metal_id: log.metal_id), class: 'atelier-back' %>
+      <%= link_to 'Bills', orders_path, class: 'atelier-back' %>
+      <%= link_to 'Raise a bill', new_order_path, class: 'btn-gold' %>
+    </div>
+  </header>
+
+  <div class="log-snaps" aria-label="At a glance">
+    <% snapshots.each do |snap| %>
+      <%= link_to tab_path.call(snap[:key]), class: "log-snap #{'is-on' if window == snap[:key]}" do %>
+        <span><%= snap[:label] %></span>
+        <strong><%= format_rupees(snap[:total]) %></strong>
+        <em><%= word.call(snap[:bills], 'bill', 'bills') %> · <%= '%.2f' % snap[:grams] %> g</em>
+      <% end %>
+    <% end %>
+  </div>
+
+  <nav class="cat-tabs" aria-label="Window">
+    <%= link_to 'Today', tab_path.call('today'), class: (window == 'today' ? 'is-active' : nil) %>
+    <%= link_to 'Yesterday', tab_path.call('yesterday'), class: (window == 'yesterday' ? 'is-active' : nil) %>
+    <%= link_to 'Week', tab_path.call('week'), class: (window == 'week' ? 'is-active' : nil) %>
+    <%= link_to 'Month', tab_path.call('month'), class: (window == 'month' ? 'is-active' : nil) %>
+    <%= link_to 'Year', tab_path.call('year'), class: (window == 'year' ? 'is-active' : nil) %>
+    <%= link_to 'Dates', sales_log_reports_path(window: 'custom', from: log.from, to: log.to, metal_id: log.metal_id), class: (window == 'custom' ? 'is-active' : nil) %>
+  </nav>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag sales_log_reports_path, method: :get, class: 'stock-search' do %>
+      <%= hidden_field_tag :window, window == 'custom' ? 'custom' : window %>
+      <%= date_field_tag :from, log.from, class: 'form-control' %>
+      <%= date_field_tag :to, log.to, class: 'form-control' %>
+      <%= select_tag :metal_id, options_from_collection_for_select(metals, :id, :name, log.metal_id), include_blank: 'All metals', class: 'form-control' %>
+      <button type="submit" class="atelier-back" name="window" value="custom">Read</button>
+      <% if log.metal_id.present? || window == 'custom' %>
+        <%= link_to 'Clear', sales_log_reports_path, class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="stock-stats">
+      <div>
+        <span>Bills</span>
+        <strong><%= log.bill_count %></strong>
+      </div>
+      <div>
+        <span>Pieces</span>
+        <strong><%= log.pieces %></strong>
+      </div>
+      <div>
+        <span>Net weight</span>
+        <strong><%= '%.2f' % log.grams %> <em>g</em></strong>
+      </div>
     </div>
   </div>
 
-  <div class="sl-grid">
-  <div class="card" style="grid-column: span 8">
-      <div class="metrics">
-        <div class="metric">
-          <div class="label">Today</div>
-          <div class="value">₹<%= '%.2f' % (@today_total || 0) %></div>
-        </div>
-        <div class="metric">
-          <div class="label">Yesterday</div>
-          <div class="value">₹<%= '%.2f' % (@yesterday_total || 0) %></div>
-        </div>
-        <div class="metric">
-          <div class="label">This Week</div>
-          <div class="value">₹<%= '%.2f' % (@week_total || 0) %></div>
-        </div>
-        <div class="metric">
-          <div class="label">This Month</div>
-          <div class="value">₹<%= '%.2f' % (@month_total || 0) %></div>
-        </div>
+  <div class="pl-hero-strip">
+    <div class="pl-hero-copy">
+      <p class="pl-kicker"><%= log.label %><% if log.metal_filter %> · <%= log.metal_filter.name %><% end %></p>
+      <p class="pl-figure"><%= format_rupees(log.bill_total) %></p>
+      <p class="pl-caption">
+        <% if log.bill_count.zero? %>
+          No invoice in this window. Raise a bill at the desk, or open another span.
+        <% else %>
+          <%= word.call(log.bill_count, 'bill', 'bills') %> covering
+          <%= word.call(log.pieces, 'piece', 'pieces') %>
+          (<%= '%.2f' % log.grams %> g net).
+          Metal at the board <%= format_rupees(log.metal) %>;
+          making <%= format_rupees(log.making) %>;
+          GST <%= format_rupees(log.gst) %> held for government.
+          <%= log.paid_bills %> settled, <%= log.open_bills %> still open.
+          <% if window == 'today' %>
+            <% if delta.positive? %>
+              <%= format_rupees(delta) %> ahead of yesterday.
+            <% elsif delta.negative? %>
+              <%= format_rupees(-delta) %> behind yesterday.
+            <% else %>
+              Level with yesterday.
+            <% end %>
+          <% end %>
+        <% end %>
+      </p>
+    </div>
+    <% if series.any? && series_max.positive? %>
+      <div class="pl-spark" aria-hidden="true">
+        <% series.each do |point| %>
+          <% height = [(point[:value] / series_max * 100).round, point[:value].positive? ? 6 : 2].max %>
+          <div class="pl-spark-col" title="<%= point[:hint] %>: <%= format_rupees(point[:value]) %>">
+            <span style="height: <%= height %>%"></span>
+          </div>
+        <% end %>
       </div>
+    <% end %>
+  </div>
 
-      <div class="panel">
-        <div class="left">
-          <h3 style="margin:0">Top Items — This Week</h3>
-          <div class="muted" style="margin-top:6px">Items ranked by quantity sold</div>
-
-          <% if @top_items_week.any? %>
-            <div class="table-scroll">
-              <table class="top-table">
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>The log</h2>
+          <p class="hint">
+            Newest first. Totals are as written on the invoice, GST included.
+            <% if @truncated %>Showing the latest 80 bills in this span.<% end %>
+          </p>
+          <% if entries.any? %>
+            <div class="stock-table-wrap">
+              <table class="stock-table">
                 <thead>
-                  <tr><th>Item</th><th style="width:110px">Qty Sold</th><th style="width:140px">Sales Amount</th></tr>
+                  <tr>
+                    <th>Bill</th>
+                    <th>Client</th>
+                    <th class="num">Net</th>
+                    <th class="num">Metal</th>
+                    <th class="num">Making</th>
+                    <th class="num">Total</th>
+                    <th></th>
+                  </tr>
                 </thead>
                 <tbody>
-                  <% @top_items_week.each do |ti| %>
+                  <% entries.each do |row| %>
                     <tr>
-                      <td><%= ti.name %></td>
-                      <td style="font-weight:600;text-align:center"><%= ti.qty_sold %></td>
-                      <td style="text-align:right">₹<%= '%.2f' % ti.sales_amount %></td>
+                      <td>
+                        <%= link_to order_path(row[:order]), class: 'piece-link' do %>
+                          <strong><%= row[:invoice] %></strong>
+                          <span class="sku"><%= row[:date].strftime('%d %b %Y') %> · <%= row[:status] == 'paid' ? 'Settled' : 'Open' %></span>
+                        <% end %>
+                      </td>
+                      <td>
+                        <% if row[:client] %>
+                          <%= link_to row[:client].full_name.presence || 'Client', customer_path(row[:client]), class: 'piece-link' %>
+                        <% else %>
+                          Walk-in
+                        <% end %>
+                      </td>
+                      <td class="num"><%= '%.2f' % row[:grams] %> g</td>
+                      <td class="num"><%= format_rupees(row[:metal]) %></td>
+                      <td class="num"><%= format_rupees(row[:making]) %></td>
+                      <td class="num gold"><%= format_rupees(row[:total]) %></td>
+                      <td><%= link_to 'Bill', order_path(row[:order]), class: 'atelier-back' %></td>
                     </tr>
                   <% end %>
                 </tbody>
               </table>
             </div>
           <% else %>
-            <div class="muted" style="margin-top:8px">No items sold this week</div>
+            <p class="hint" style="margin:0">Nothing on the diary for these dates. <%= link_to 'Raise a bill', new_order_path %> or <%= link_to 'open the counter', pos_path %>.</p>
           <% end %>
         </div>
-
-        <div class="right">
-          <div class="card" style="padding:14px; margin:0">
-            <h4 style="margin:0 0 6px 0">Yearly Total</h4>
-            <div class="muted">Current fiscal year</div>
-            <div style="font-weight:700;font-size:20px;margin-top:10px">₹<%= '%.2f' % (@year_total || 0) %></div>
-          </div>
-
-          <div class="card" style="padding:12px; margin:14px 0 0 0">
-            <h4 style="margin:0 0 6px 0">Custom Range</h4>
-            <form method="get" action="<%= sales_log_reports_path %>" class="range-form" style="margin-top:8px">
-              <input type="date" name="from" value="<%= @custom_range ? @custom_range[0] : '' %>" />
-              <input type="date" name="to" value="<%= @custom_range ? @custom_range[1] : '' %>" />
-              <button class="btn cta" type="submit">Apply</button>
-            </form>
-
-            <% if defined?(@custom_total) && @custom_total %>
-              <div style="margin-top:10px">Custom Total: <strong>₹<%= '%.2f' % @custom_total %></strong></div>
-            <% end %>
-          </div>
-        </div>
-      </div>
+      </section>
     </div>
 
-  <div class="card" style="grid-column: span 4">
-      <% if @custom_range %>
-        <h3 style="margin:0">Top Items — Custom Range</h3>
-        <div class="muted">(<%= @custom_range[0] %> → <%= @custom_range[1] %>)</div>
-        <% if @top_items_custom && @top_items_custom.any? %>
-          <table class="top-table" style="margin-top:10px">
-            <thead>
-              <tr><th>Item</th><th>Qty</th><th>Sales</th></tr>
-            </thead>
-            <tbody>
-              <% @top_items_custom.each do |ti| %>
-                <tr>
-                  <td><%= ti.name %></td>
-                  <td><%= ti.qty_sold %></td>
-                  <td>₹<%= '%.2f' % ti.sales_amount %></td>
-                </tr>
-              <% end %>
-            </tbody>
-          </table>
-        <% else %>
-          <div class="muted" style="margin-top:8px">No items in this range</div>
+    <aside class="preview">
+      <div class="card-head">
+        <p class="preview-kicker">This window</p>
+        <span class="client-ref"><%= log.label %></span>
+      </div>
+      <p class="preview-line" style="margin-top:0"><%= house %></p>
+      <div class="preview-price"><%= format_rupees(log.bill_total) %></div>
+      <p class="preview-line">Bill total · <%= log.paid_bills %> settled</p>
+      <div class="chips">
+        <span class="chip"><%= format_rupees(log.metal) %> metal</span>
+        <span class="chip"><%= format_rupees(log.making) %> making</span>
+        <span class="chip"><%= format_rupees(log.gst) %> GST</span>
+      </div>
+      <p class="preview-desc">A sales log follows the bill date. Open invoices still belong here — they left the tray. House result is making after courtesy; this gold figure is what the client was billed.</p>
+      <p class="preview-note">Credit sales sit as Open until a receipt is taken. That does not remove them from the diary.</p>
+    </aside>
+  </div>
+
+  <% if pieces.any? %>
+    <h2 class="pl-block-title">Pieces that moved</h2>
+    <p class="hint pl-block-hint">Ranked by amount on the bills in this window.</p>
+    <div class="stock-table-wrap">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>Piece</th>
+            <th>Hallmark</th>
+            <th class="num">Pcs</th>
+            <th class="num">Net</th>
+            <th class="num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% pieces.each do |row| %>
+            <tr>
+              <td>
+                <% if row[:item] %>
+                  <%= link_to jewelry_item_path(row[:item]), class: 'piece-link' do %>
+                    <strong><%= row[:name] %></strong>
+                    <span class="sku"><%= row[:sku] %></span>
+                  <% end %>
+                <% else %>
+                  <strong><%= row[:name] %></strong>
+                <% end %>
+              </td>
+              <td><%= [row[:metal], row[:purity]].compact.join(' · ').presence || '—' %></td>
+              <td class="num"><%= row[:pcs] %></td>
+              <td class="num"><%= '%.2f' % row[:grams] %> g</td>
+              <td class="num gold"><%= format_rupees(row[:amount]) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <% metals_mix = log.by_metal %>
+  <% if metals_mix.any? %>
+    <h2 class="pl-block-title">By metal</h2>
+    <p class="hint pl-block-hint">Grams that left on bills. Open a card to read only that metal.</p>
+    <div class="pl-metals">
+      <% metals_mix.each do |row| %>
+        <%
+          metal_params = request.query_parameters.merge('window' => window)
+          metal_params = metal_params.except('from', 'to') unless window == 'custom'
+          selected = log.metal_id.to_s == row[:id].to_s
+          if selected || !row[:id].to_i.positive?
+            metal_params = metal_params.except('metal_id')
+          else
+            metal_params['metal_id'] = row[:id]
+          end
+        %>
+        <%= link_to sales_log_reports_path(metal_params), class: "pl-metal #{'is-on' if selected}" do %>
+          <span class="swatch" style="background:<%= row[:colour] %>"></span>
+          <div>
+            <strong><%= row[:name] %></strong>
+            <span><%= '%.2f' % row[:grams] %> g · <%= row[:pcs] %> <%= row[:pcs] == 1 ? 'pc' : 'pcs' %></span>
+          </div>
+          <b><%= format_rupees(row[:metal]) %></b>
         <% end %>
-      <% else %>
-        <h3 style="margin:0">Top Items — Custom Range</h3>
-        <div class="muted" style="margin-top:6px">Pick a range to see item-wise performance</div>
       <% end %>
     </div>
-  </div>
+  <% end %>
 </div>
+
+<style>
+  .container:has(.sales-log) { max-width: 1240px; }
+  .sales-log a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .sales-log .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sales-log .log-snaps {
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px;
+  }
+  .sales-log .log-snap {
+    display: block; padding: 12px 14px; border-radius: 14px; text-decoration: none; color: inherit;
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28);
+  }
+  .sales-log .log-snap span {
+    display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700;
+  }
+  .sales-log .log-snap strong {
+    display: block; margin-top: 4px; font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.35rem; font-weight: 600; color: #c9a227; font-variant-numeric: tabular-nums;
+  }
+  .sales-log .log-snap em { display: block; margin-top: 2px; font-style: normal; font-size: 12px; color: #6b6258; }
+  .sales-log .log-snap.is-on, .sales-log .log-snap:hover {
+    border-color: #c9a227; background: #fff;
+    box-shadow: 0 0 0 3px rgba(201,162,39,0.16);
+  }
+  .sales-log .cat-tabs {
+    display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px;
+    margin: 0 0 16px; padding: 3px; border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.4); background: #fff;
+  }
+  .sales-log .cat-tabs a {
+    display: inline-flex; padding: 7px 14px; border-radius: 999px;
+    color: #6b6258; text-decoration: none; font-size: 13px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .sales-log .cat-tabs a.is-active {
+    background: linear-gradient(90deg, #e8d5a3, #c9a227); color: #0b1220;
+  }
+  .sales-log .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .sales-log .stock-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .sales-log .stock-search .form-control { width: auto; min-width: 140px; }
+  .sales-log .stock-stats { display: flex; gap: 18px; flex-wrap: wrap; }
+  .sales-log .stock-stats span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700; }
+  .sales-log .stock-stats strong { color: #0b1220; font-variant-numeric: tabular-nums; }
+  .sales-log .stock-stats em { font-style: normal; font-size: 12px; color: #6b6258; font-weight: 600; }
+  .sales-log .pl-hero-strip {
+    display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(220px, 0.9fr); gap: 22px;
+    align-items: end; margin-bottom: 22px; padding: 22px 24px;
+    background: linear-gradient(180deg, #fffaf3, #f7f1e8);
+    border: 1px solid rgba(201,162,39,0.28); border-radius: 18px;
+  }
+  .sales-log .pl-kicker {
+    margin: 0; color: #c9a227; font-size: 12px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .sales-log .pl-figure {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 3rem; font-weight: 600; letter-spacing: -0.03em; margin: 4px 0 8px;
+    font-variant-numeric: tabular-nums; color: #c9a227;
+  }
+  .sales-log .pl-caption { margin: 0; color: #6b6258; max-width: 62ch; line-height: 1.55; }
+  .sales-log .pl-spark { display: flex; align-items: flex-end; gap: 3px; height: 88px; padding-bottom: 4px; }
+  .sales-log .pl-spark-col { flex: 1; min-width: 4px; height: 100%; display: flex; align-items: flex-end; }
+  .sales-log .pl-spark-col span {
+    display: block; width: 100%; border-radius: 3px 3px 0 0;
+    background: linear-gradient(180deg, #e8d5a3, #c9a227); min-height: 2px;
+  }
+  .sales-log .pl-block-title {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.4rem; font-weight: 600;
+    margin: 28px 0 0; color: #0b1220;
+  }
+  .sales-log .pl-block-hint { margin: 4px 0 14px; color: #6b6258; }
+  .sales-log .stock-table-wrap {
+    background: #fff; border: 1px solid rgba(201,162,39,0.22); border-radius: 14px; overflow: auto;
+  }
+  .sales-log .stock-table { width: 100%; border-collapse: collapse; }
+  .sales-log .stock-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .sales-log .stock-table td { padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: top; }
+  .sales-log .stock-table tr:last-child td { border-bottom: 0; }
+  .sales-log .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sales-log .gold { color: #c9a227; font-weight: 700; }
+  .sales-log .piece-link { color: inherit; text-decoration: none; display: block; }
+  .sales-log .piece-link strong, .sales-log td > strong { display: block; color: #0b1220; }
+  .sales-log .sku { display: block; color: #6b6258; font-size: 12px; margin-top: 2px; }
+  .sales-log td .atelier-back { padding: 5px 10px; font-size: 12px; }
+  .sales-log .pl-metals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .sales-log .pl-metal {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 14px;
+    text-decoration: none; color: inherit;
+  }
+  .sales-log .pl-metal.is-on, .sales-log .pl-metal:hover { border-color: #c9a227; background: #fff; }
+  .sales-log .pl-metal .swatch { width: 12px; height: 36px; border-radius: 999px; flex-shrink: 0; }
+  .sales-log .pl-metal strong { display: block; color: #0b1220; }
+  .sales-log .pl-metal span { display: block; font-size: 12px; color: #6b6258; margin-top: 2px; }
+  .sales-log .pl-metal b { margin-left: auto; color: #c9a227; font-variant-numeric: tabular-nums; }
+  @media (max-width: 960px) {
+    .sales-log .log-snaps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .sales-log .pl-hero-strip { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .sales-log .log-snaps { grid-template-columns: 1fr 1fr; }
+    .sales-log .stock-table th:nth-child(4),
+    .sales-log .stock-table td:nth-child(4),
+    .sales-log .stock-table th:nth-child(5),
+    .sales-log .stock-table td:nth-child(5) { display: none; }
+  }
+</style>

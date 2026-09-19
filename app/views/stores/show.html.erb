@@ -1,0 +1,168 @@
+<%= render 'shared/atelier_styles' %>
+
+<%
+  store = @store
+  vaults = @vaults || []
+  missing = @missing || []
+  grams = store.vault_grams
+%>
+
+<div class="atelier-page house-card-page">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">House</p>
+      <h1><%= store.name %></h1>
+      <p class="lead"><%= store.location_label %></p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to '← Stores', stores_path, class: 'atelier-back' %>
+      <%= link_to 'Metal stock', metal_stocks_path(store_id: store.id), class: 'atelier-back' %>
+      <%= link_to 'Amend house', edit_store_path(store), class: 'btn-gold' %>
+    </div>
+  </header>
+
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>On the book</h2>
+          <dl class="piece-dl">
+            <div><dt>House</dt><dd><%= store.name %></dd></div>
+            <div><dt>Location</dt><dd><%= store.location_label %></dd></div>
+            <div><dt>Vault metals</dt><dd><%= vaults.size %></dd></div>
+            <div><dt>Grams</dt><dd class="gold"><%= grams %> g</dd></div>
+            <div><dt>Vault value</dt><dd class="gold"><%= format_rupees(store.vault_value) %></dd></div>
+          </dl>
+          <% if store.bare? %>
+            <p class="hint warn">No metal cards yet. Open gold, silver or another metal at this house.</p>
+          <% elsif store.empty_vault? %>
+            <p class="hint warn">Every vault card here is at 0 g. Receive weight before issuing.</p>
+          <% elsif store.light_vault? %>
+            <p class="hint warn">At least one metal here is at or below 100 g.</p>
+          <% end %>
+        </div>
+      </section>
+
+      <section class="atelier-form" style="margin-top:16px">
+        <div class="section">
+          <h2>Vault at this house</h2>
+          <p class="hint">Bulk grams by metal. Piece stock lives on Inventory.</p>
+          <% if vaults.any? %>
+            <ul class="vault-list">
+              <% vaults.each do |ms| %>
+                <li>
+                  <%= link_to metal_stock_path(ms) do %>
+                    <span class="metal-cell">
+                      <% if ms.metal %>
+                        <span class="swatch" style="background:<%= ms.metal.chip_colour %>"></span>
+                        <%= ms.metal.name %>
+                      <% else %>
+                        Metal
+                      <% end %>
+                      <% if ms.empty? %>
+                        <em class="pill empty">Empty</em>
+                      <% elsif ms.light? %>
+                        <em class="pill light">Light</em>
+                      <% end %>
+                    </span>
+                    <span class="fig">
+                      <strong><%= ms.available_grams.to_i %> g</strong>
+                      <small><%= ms.price_cents_per_gram.to_i.positive? ? format_rupees(ms.price_per_gram) + '/g' : 'No rate' %></small>
+                    </span>
+                  <% end %>
+                </li>
+              <% end %>
+            </ul>
+          <% else %>
+            <p class="hint" style="margin:0">This house has no vault cards.</p>
+          <% end %>
+        </div>
+      </section>
+
+      <% if missing.any? %>
+        <section class="atelier-form" style="margin-top:16px">
+          <div class="section">
+            <h2>Not yet in the vault</h2>
+            <p class="hint">Metals without a card at <%= store.name %>.</p>
+            <ul class="missing-list">
+              <% missing.each do |metal| %>
+                <li>
+                  <span class="metal-cell">
+                    <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
+                    <%= metal.name %>
+                  </span>
+                  <%= link_to 'Open card', new_metal_stock_path(metal_id: metal.id, store_id: store.id), class: 'atelier-back' %>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        </section>
+      <% end %>
+    </div>
+
+    <aside class="preview">
+      <p class="preview-kicker">House card</p>
+      <div class="gem" aria-hidden="true">🏛️</div>
+      <h2><%= store.name %></h2>
+      <span class="sku-chip"><%= store.location_label %></span>
+      <div class="chips">
+        <% vaults.first(4).each do |ms| %>
+          <span class="chip"><%= ms.metal&.name || 'Metal' %> · <%= ms.available_grams.to_i %> g</span>
+        <% end %>
+      </div>
+      <div class="preview-price"><%= grams %> g</div>
+      <p class="preview-line gold-line"><%= format_rupees(store.vault_value) %></p>
+      <p class="preview-desc">
+        <% if store.bare? %>
+          Open a vault card so this house can receive bulk metal.
+        <% else %>
+          <%= vaults.size %> metal <%= vaults.size == 1 ? 'card' : 'cards' %> on the vault.
+        <% end %>
+      </p>
+      <p class="preview-note">Catalogue and POS fall back to a vault ₹/g when hallmark has no board rate.</p>
+    </aside>
+  </div>
+</div>
+
+<style>
+  .house-card-page a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .house-card-page .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .house-card-page .piece-dl {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; margin: 0;
+  }
+  .house-card-page .piece-dl dt {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700;
+  }
+  .house-card-page .piece-dl dd { margin: 4px 0 0; font-weight: 600; }
+  .house-card-page .gold { color: #c9a227; }
+  .house-card-page .hint.warn { color: #7f1d1d; }
+  .house-card-page .vault-list, .house-card-page .missing-list { list-style: none; margin: 0; padding: 0; }
+  .house-card-page .vault-list li { border-bottom: 1px solid rgba(201,162,39,0.16); }
+  .house-card-page .vault-list li:last-child { border-bottom: 0; }
+  .house-card-page .vault-list a {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 10px 0; text-decoration: none; color: inherit;
+  }
+  .house-card-page .vault-list a:hover strong { color: #c9a227; }
+  .house-card-page .metal-cell { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+  .house-card-page .swatch {
+    width: 12px; height: 12px; border-radius: 4px; border: 1px solid rgba(11,18,32,0.12); display: inline-block;
+  }
+  .house-card-page .fig { text-align: right; }
+  .house-card-page .fig strong { display: block; font-variant-numeric: tabular-nums; }
+  .house-card-page .fig small { color: #6b6258; font-size: 12px; }
+  .house-card-page .pill {
+    font-style: normal; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .house-card-page .pill.light { background: rgba(201,162,39,0.18); color: #8a6a12; }
+  .house-card-page .pill.empty { background: #f3eee6; color: #7f1d1d; }
+  .house-card-page .missing-list li {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid rgba(201,162,39,0.16);
+  }
+  .house-card-page .missing-list li:last-child { border-bottom: 0; }
+  .house-card-page .gold-line { color: #e8d5a3; }
+  @media (max-width: 640px) {
+    .house-card-page .piece-dl { grid-template-columns: 1fr; }
+  }
+</style>

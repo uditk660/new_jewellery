@@ -15,6 +15,7 @@
     <div class="piece-hero-actions">
       <%= link_to '← Clients', customers_path, class: 'atelier-back' %>
       <%= link_to 'Amend client', edit_customer_path(@customer), class: 'atelier-back' %>
+      <%= link_to 'Khata', ledger_path(@customer), class: 'atelier-back' %>
       <%= link_to 'New bill', new_order_path(customer_id: @customer.id), class: 'btn-gold' %>
       <% unless @customer.orders.exists? %>
         <%= button_to 'Remove from the book', customer_path(@customer), method: :delete, class: 'atelier-back', form: { style: 'margin:0', data: { confirm: 'Remove this client from the book?' } } %>
@@ -29,6 +30,7 @@
           <h2>Client details</h2>
           <p class="hint">Papers and address as they should appear on invoices.</p>
           <dl class="piece-dl">
+            <div><dt>House no.</dt><dd><%= @customer.client_ref.presence || '—' %></dd></div>
             <div><dt>Phone</dt><dd><%= @customer.phone.presence || '—' %></dd></div>
             <div><dt>Email</dt><dd><%= @customer.email.presence || '—' %></dd></div>
             <div><dt>Aadhaar / PAN</dt><dd><%= @customer.aadhaar_or_pan.presence || '—' %></dd></div>
@@ -86,11 +88,16 @@
     </div>
 
     <aside class="preview" aria-label="Client card">
-      <p class="preview-kicker">Client card</p>
-      <div class="gem avatar-lg" aria-hidden="true"><%= @customer.initials %></div>
-      <h2><%= name %></h2>
+      <div class="card-head">
+        <p class="preview-kicker">Client card</p>
+        <% if @customer.client_ref.present? %>
+          <span class="client-ref"><%= @customer.client_ref %></span>
+        <% end %>
+      </div>
+      <%= render 'customers/cameo', gid: 'client-show-gold' %>
+      <h2><%= @customer.card_name %></h2>
       <span class="sku-chip"><%= @customer.phone.presence || 'No phone' %></span>
-      <div class="preview-price"><%= format_rupees(@customer.outstanding) %></div>
+      <div class="preview-price"><%= format_rupees(@customer.live_outstanding) %></div>
       <div class="preview-desc">Outstanding on the book</div>
       <p class="preview-note">
         <% if @customer.orders.exists? %>
@@ -130,10 +137,8 @@
   .client-show .client-bills a { color: #0b1220; }
   .client-show .sub { display: block; font-size: 12px; color: #6b6258; }
   .client-show .num { text-align: right; color: #c9a227; font-weight: 600; white-space: nowrap; }
-  .client-show .avatar-lg {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 28px; font-weight: 700; letter-spacing: 0.08em; color: #e8d5a3;
-  }
+  .client-show .client-gem { position: relative; overflow: hidden; }
+  .client-show .cameo { width: 92px; height: 92px; display: block; }
   @media (max-width: 880px) {
     .client-show .piece-dl > div { grid-template-columns: 1fr; }
     .client-show .piece-hero-actions { width: 100%; }

@@ -1,2 +1,193 @@
-<h1>Ledger (placeholder)</h1>
-<p>This will be replaced by the Ledger UI in Phase 2.</p>
+<%= render 'shared/atelier_styles' %>
+
+<%
+  rows = @khatas || []
+  status = @status.presence || 'all'
+  counts = @status_counts || {}
+  q = @q.to_s
+  tab_path = lambda do |key|
+    ledgers_path(request.query_parameters.merge(status: key))
+  end
+  empty_copy = case status
+               when 'due'
+                 { hint: 'No client currently owes the house.' }
+               when 'advance'
+                 { hint: 'No on-account advance is sitting on a khata.' }
+               when 'settled'
+                 { hint: 'No settled khata in this list.' }
+               else
+                 { hint: 'Raise a bill or post an opening on a client to open their khata.' }
+               end
+%>
+
+<div class="atelier-page khata-book">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Books</p>
+      <h1>Ledgers</h1>
+      <p class="lead">Each client’s khata — bills, receipts, and journal entries. Outstanding here is what the counter also reads as due.</p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to 'Clients', customers_path, class: 'atelier-back' %>
+      <%= link_to 'Post an entry', new_ledger_path, class: 'btn-gold' %>
+    </div>
+  </header>
+
+  <nav class="cat-tabs" aria-label="Khatas">
+    <%= link_to tab_path.call('all'), class: (status == 'all' ? 'is-active' : nil) do %>
+      All <em><%= counts['all'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('due'), class: (status == 'due' ? 'is-active' : nil) do %>
+      Due <em><%= counts['due'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('advance'), class: (status == 'advance' ? 'is-active' : nil) do %>
+      Advance <em><%= counts['advance'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('settled'), class: (status == 'settled' ? 'is-active' : nil) do %>
+      Settled <em><%= counts['settled'].to_i %></em>
+    <% end %>
+  </nav>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag ledgers_path, method: :get, class: 'stock-search' do %>
+      <%= hidden_field_tag :status, status %>
+      <%= text_field_tag :q, q, class: 'form-control', placeholder: 'Search client, phone or email' %>
+      <button type="submit" class="atelier-back">Search</button>
+      <% if q.present? %>
+        <%= link_to 'Clear', ledgers_path(status: status), class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="stock-stats">
+      <div>
+        <span>Khatas</span>
+        <strong><%= @house_count.to_i %></strong>
+      </div>
+      <div>
+        <span>Receivable</span>
+        <strong><%= format_rupees(@receivable.to_f) %></strong>
+      </div>
+      <div>
+        <span>Advances</span>
+        <strong><%= format_rupees(@advances.to_f) %></strong>
+      </div>
+    </div>
+  </div>
+
+  <% if rows.any? %>
+    <div class="stock-table-wrap">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Last bill</th>
+            <th>Last receipt</th>
+            <th class="num">Bills</th>
+            <th class="num">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.each do |row| %>
+            <% customer = row[:customer] %>
+            <% cents = row[:cents].to_i %>
+            <tr class="<%= 'is-due' if cents.positive? %><%= ' is-advance' if cents.negative? %>">
+              <td>
+                <%= link_to ledger_path(customer), class: 'piece-link' do %>
+                  <strong><%= customer.full_name.presence || 'Unnamed client' %></strong>
+                  <span class="sku"><%= customer.phone.presence || 'No phone' %></span>
+                  <% if cents.positive? %>
+                    <span class="pill due">Due</span>
+                  <% elsif cents.negative? %>
+                    <span class="pill advance">Advance</span>
+                  <% else %>
+                    <span class="pill settled">Settled</span>
+                  <% end %>
+                <% end %>
+              </td>
+              <td><%= row[:last_bill] ? row[:last_bill].strftime('%d %b %Y') : '—' %></td>
+              <td><%= row[:last_pay] ? row[:last_pay].in_time_zone.strftime('%d %b %Y') : '—' %></td>
+              <td class="num"><%= row[:bills].to_i %></td>
+              <td class="num <%= cents.positive? ? 'gold' : (cents.negative? ? 'credit' : '') %>">
+                <% if cents.negative? %>
+                  <%= format_rupees(-row[:amount]) %> cr
+                <% else %>
+                  <%= format_rupees(row[:amount]) %>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">
+        <% if q.present? %>
+          Nothing matches “<%= q %>”.
+        <% else %>
+          <%= empty_copy[:hint] %>
+        <% end %>
+      </p>
+      <div class="actions" style="margin-top:16px">
+        <% if q.present? %>
+          <%= link_to 'Clear search', ledgers_path(status: status), class: 'atelier-back' %>
+        <% else %>
+          <%= link_to 'Post an entry', new_ledger_path, class: 'btn-gold' %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .container:has(.khata-book) { max-width: 1240px; }
+  .khata-book a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .khata-book .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .khata-book .cat-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .khata-book .cat-tabs a {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 999px; text-decoration: none;
+    border: 1px solid rgba(201,162,39,0.28); background: #fffaf3; color: #6b6258;
+    font-size: 13px; font-weight: 700;
+  }
+  .khata-book .cat-tabs a em {
+    min-width: 18px; text-align: center; font-style: normal;
+    background: rgba(11,18,32,0.06); border-radius: 999px; padding: 0 7px; font-size: 12px;
+  }
+  .khata-book .cat-tabs a.is-active { background: #0b1220; color: #e8d5a3; border-color: #0b1220; }
+  .khata-book .cat-tabs a.is-active em { background: rgba(232,213,163,0.16); color: #e8d5a3; }
+  .khata-book .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .khata-book .stock-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .khata-book .stock-search .form-control { min-width: min(100%, 280px); }
+  .khata-book .stock-stats { display: flex; gap: 18px; flex-wrap: wrap; }
+  .khata-book .stock-stats span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700; }
+  .khata-book .stock-stats strong { color: #0b1220; font-variant-numeric: tabular-nums; }
+  .khata-book .stock-table-wrap {
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 18px; overflow: auto;
+  }
+  .khata-book .stock-table { width: 100%; border-collapse: collapse; }
+  .khata-book .stock-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; padding: 12px 14px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .khata-book .stock-table td { padding: 12px 14px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: top; }
+  .khata-book .stock-table tr:last-child td { border-bottom: 0; }
+  .khata-book .stock-table tbody tr:hover { background: rgba(232,213,163,0.18); }
+  .khata-book .stock-table tr.is-due { background: rgba(127,29,29,0.04); }
+  .khata-book .stock-table tr.is-advance { background: rgba(201,162,39,0.08); }
+  .khata-book .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .khata-book .gold { color: #c9a227; font-weight: 700; }
+  .khata-book .credit { color: #6b6258; font-weight: 700; }
+  .khata-book .piece-link { text-decoration: none; color: inherit; display: block; }
+  .khata-book .piece-link strong { display: block; color: #0b1220; }
+  .khata-book .sku { display: block; color: #6b6258; font-size: 12px; letter-spacing: 0.06em; margin-top: 2px; }
+  .khata-book .pill {
+    display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .khata-book .pill.due { background: #f3eee6; color: #7f1d1d; }
+  .khata-book .pill.advance { background: rgba(201,162,39,0.18); color: #8a6a12; }
+  .khata-book .pill.settled { background: #f3eee6; color: #6b6258; }
+</style>

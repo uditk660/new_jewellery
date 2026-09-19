@@ -1,0 +1,189 @@
+<%= render 'shared/atelier_styles' %>
+
+<%
+  row = @metal_stock
+  movements = @movements || []
+  grams = row.available_grams.to_i
+  metal = row.metal
+  store = row.store
+%>
+
+<div class="atelier-page vault-card" id="vault-card" data-grams="<%= grams %>">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Vault card</p>
+      <h1><%= metal&.name || 'Metal' %></h1>
+      <p class="lead">
+        <% if store %>
+          <%= link_to store.name, store_path(store), class: "house-link" %><%= store.location.present? ? " · #{store.location}" : '' %>
+        <% end %>
+      </p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to '← Metal stock', metal_stocks_path, class: 'atelier-back' %>
+      <%= link_to 'Inventory', inventory_items_path, class: 'atelier-back' %>
+    </div>
+  </header>
+
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>In the vault</h2>
+          <dl class="piece-dl">
+            <div><dt>Metal</dt><dd><%= metal&.name || '—' %></dd></div>
+            <div><dt>Store</dt><dd><%= store ? link_to(store.name, store_path(store)) : '—' %></dd></div>
+            <div><dt>Grams</dt><dd class="gold"><%= grams %> g</dd></div>
+            <div><dt>₹ / g</dt><dd class="gold"><%= row.price_cents_per_gram.to_i.positive? ? format_rupees(row.price_per_gram) : 'No rate' %></dd></div>
+            <div><dt>Value</dt><dd class="gold"><%= format_rupees(row.stock_value) %></dd></div>
+            <div><dt>Location</dt><dd><%= store&.location.presence || 'House store' %></dd></div>
+          </dl>
+          <% if row.empty? %>
+            <p class="hint warn">This vault has 0 g. Receive weight before issuing.</p>
+          <% elsif row.light? %>
+            <p class="hint warn">Light — remaining grams are at or below 100 g.</p>
+          <% end %>
+        </div>
+      </section>
+
+      <section class="atelier-form" style="margin-top:16px">
+        <div class="section">
+          <h2>Vault rate ₹ / g</h2>
+          <p class="hint">Used when a hallmark has no board rate. Does not change grams.</p>
+          <%= form_for row, url: metal_stock_path(row), method: :patch do |f| %>
+            <div class="row">
+              <div class="field narrow">
+                <%= f.label :price_per_gram, 'Rate ₹ / g' %>
+                <%= f.number_field :price_per_gram, value: ('%.2f' % row.price_per_gram), class: 'form-control', min: 0, step: 0.01 %>
+              </div>
+            </div>
+            <div class="actions" style="margin-top:14px">
+              <%= f.submit 'Save rate', class: 'btn-gold' %>
+            </div>
+          <% end %>
+        </div>
+      </section>
+
+      <section class="atelier-form" style="margin-top:16px">
+        <div class="section">
+          <h2>Record a movement</h2>
+          <p class="hint">Receive adds grams. Issue subtracts. Adjustment takes the sign you type. The vault will not go below 0 g.</p>
+          <%= form_tag do_adjust_metal_stock_path(row), method: :post, id: 'move-form' do %>
+            <div class="row">
+              <div class="field">
+                <label for="metal_stock_movement_type">Kind</label>
+                <%= select_tag 'metal_stock[movement_type]', options_for_select([['Receive (in)', 'in'], ['Issue (out)', 'out'], ['Adjustment', 'adjustment']], 'in'), class: 'form-control', id: 'metal_stock_movement_type' %>
+              </div>
+              <div class="field">
+                <label for="metal_stock_change_grams">Grams</label>
+                <%= number_field_tag 'metal_stock[change_grams]', nil, class: 'form-control', id: 'metal_stock_change_grams', step: 1, placeholder: '0' %>
+              </div>
+            </div>
+            <div class="row" style="margin-top:12px">
+              <div class="field">
+                <label for="metal_stock_note">Note</label>
+                <%= text_field_tag 'metal_stock[note]', nil, class: 'form-control', id: 'metal_stock_note', placeholder: 'Purchase, issue to making, weighment…' %>
+              </div>
+            </div>
+            <p class="hint" id="move-preview" style="margin:12px 0 0">Enter grams to see the resulting vault weight.</p>
+            <div class="actions" style="margin-top:14px">
+              <%= submit_tag 'Post movement', class: 'btn-gold', id: 'move-submit', disabled: true %>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <p class="preview-kicker">Movements</p>
+      <% if movements.any? %>
+        <ol class="move-log">
+          <% movements.each do |m| %>
+            <% delta = m.change_grams.to_i %>
+            <li>
+              <span class="when"><%= m.created_at.in_time_zone.strftime('%d %b %Y · %H:%M') %></span>
+              <strong class="<%= delta.negative? ? 'out' : 'in' %>"><%= delta.positive? ? '+' : '' %><%= delta %> g</strong>
+              <span class="kind"><%= m.movement_type %></span>
+              <% if m.note.present? %>
+                <span class="note"><%= m.note %></span>
+              <% end %>
+            </li>
+          <% end %>
+        </ol>
+      <% else %>
+        <p class="preview-desc">No movements yet. Post a receive, issue or adjustment to start the ledger.</p>
+      <% end %>
+      <p class="preview-note">Piece stock lives on Inventory. This vault is bulk metal by store.</p>
+    </aside>
+  </div>
+</div>
+
+<style>
+  .vault-card a.btn-gold, .vault-card input.btn-gold { text-decoration: none; }
+  .vault-card .house-link, .vault-card .piece-dl a { color: inherit; }
+  .vault-card .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .vault-card .piece-dl {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; margin: 0;
+  }
+  .vault-card .piece-dl dt {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700;
+  }
+  .vault-card .piece-dl dd { margin: 4px 0 0; font-weight: 600; }
+  .vault-card .gold { color: #c9a227; }
+  .vault-card .hint.warn { color: #7f1d1d; }
+  .vault-card .preview { min-height: 280px; }
+  .vault-card .move-log { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow: auto; }
+  .vault-card .move-log li {
+    padding: 10px 0; border-bottom: 1px solid rgba(232,213,163,0.14);
+  }
+  .vault-card .move-log .when { display: block; color: #b7aa98; font-size: 11px; letter-spacing: 0.06em; }
+  .vault-card .move-log strong { display: inline-block; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .vault-card .move-log strong.in { color: #e8d5a3; }
+  .vault-card .move-log strong.out { color: #f3c1b6; }
+  .vault-card .move-log .kind { margin-left: 8px; color: #d6cbb8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .vault-card .move-log .note { display: block; color: #b7aa98; font-size: 12px; margin-top: 2px; }
+  @media (max-width: 640px) {
+    .vault-card .piece-dl { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('vault-card');
+  if(!root) return;
+  var current = parseInt(root.getAttribute('data-grams') || '0', 10) || 0;
+  var typeEl = document.getElementById('metal_stock_movement_type');
+  var gramsEl = document.getElementById('metal_stock_change_grams');
+  var preview = document.getElementById('move-preview');
+  var submit = document.getElementById('move-submit');
+
+  function delta(){
+    var n = parseInt((gramsEl && gramsEl.value) || '0', 10) || 0;
+    var type = (typeEl && typeEl.value) || 'adjustment';
+    if(type === 'out') return -Math.abs(n);
+    if(type === 'in' || type === 'return') return Math.abs(n);
+    return n;
+  }
+
+  function paint(){
+    var d = delta();
+    var next = current + d;
+    if(!d){
+      if(preview) preview.textContent = 'Enter grams to see the resulting vault weight.';
+      if(submit) submit.disabled = true;
+      return;
+    }
+    if(next < 0){
+      if(preview) preview.textContent = 'This issue would take the vault below 0 g. Reduce the grams.';
+      if(submit) submit.disabled = true;
+      return;
+    }
+    if(preview) preview.textContent = 'Vault will read ' + next + ' g (' + (d > 0 ? '+' : '') + d + ' g).';
+    if(submit) submit.disabled = false;
+  }
+
+  if(typeEl) typeEl.addEventListener('change', paint);
+  if(gramsEl) gramsEl.addEventListener('input', paint);
+  paint();
+})();
+</script>

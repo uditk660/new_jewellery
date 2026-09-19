@@ -1,36 +1,49 @@
-<div class="top">
+<header class="ep-hero">
   <div>
-    <h1>Approval queue</h1>
-    <div class="sub">Stores cannot use the dashboard until you approve a one-year subscription.</div>
+    <p class="ep-eyebrow">Houses</p>
+    <h1>Waiting for a year</h1>
+    <p class="ep-lead">A store cannot open the counter until a one-year licence is approved here. Review the house, then grant or decline.</p>
   </div>
-</div>
+</header>
 
-<div class="card">
+<div class="ep-card">
   <% if @requests.empty? %>
-    <p class="sub">Queue is clear.</p>
+    <div class="ep-empty">
+      <h2>The queue is clear</h2>
+      <p class="ep-hint">No house is waiting. If a showroom should open without a request, grant a year from the desk.</p>
+      <div class="ep-actions" style="margin-top:16px">
+        <%= link_to 'Grant a year', new_staff_subscription_path, class: 'btn btn-gold' %>
+      </div>
+    </div>
   <% else %>
-    <table>
-      <thead>
-        <tr>
-          <th>Store</th>
-          <th>Plan</th>
-          <th>Requested</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% @requests.each do |sub| %>
+    <p class="ep-hint" style="margin-top:0"><%= @requests.size %> <%= @requests.size == 1 ? 'house waits' : 'houses wait' %>.</p>
+    <div class="ep-table-wrap">
+      <table class="ep-table">
+        <thead>
           <tr>
-            <td>
-              <strong><%= sub.user.display_name %></strong>
-              <div class="sub"><%= sub.user.email %> · <%= sub.user.phone %></div>
-            </td>
-            <td><%= sub.plan.name %><div class="sub"><%= format_rupees(sub.plan.price_cents, cents: true) %>/year</div></td>
-            <td><%= (sub.requested_at || sub.created_at).in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M') %></td>
-            <td><%= link_to 'Review', staff_subscription_request_path(sub), class: 'btn btn-gold' %></td>
+            <th>House</th>
+            <th>Plan</th>
+            <th>Asked</th>
+            <th></th>
           </tr>
-        <% end %>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <% @requests.each do |sub| %>
+            <tr>
+              <td>
+                <strong><%= sub.user.display_name %></strong>
+                <span class="ep-sub"><%= [sub.user.email, sub.user.phone.presence].compact.join(' · ') %></span>
+              </td>
+              <td>
+                <%= sub.plan.name %>
+                <span class="ep-sub"><%= format_rupees(sub.plan.price_cents, cents: true) %> / year</span>
+              </td>
+              <td><%= ist_stamp(sub.requested_at || sub.created_at) %> IST</td>
+              <td><%= link_to 'Review', staff_subscription_request_path(sub), class: 'btn btn-gold' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
   <% end %>
 </div>

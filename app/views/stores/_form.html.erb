@@ -1,0 +1,120 @@
+<%
+  store = @store
+  editing = store.persisted?
+  names = @existing_names || []
+%>
+
+<script type="application/json" id="house-names-json"><%= raw json_escape(names.to_json) %></script>
+
+<div class="atelier-page house-open" id="house-open" data-current-name="<%= store.name.to_s.downcase %>">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">House book</p>
+      <h1><%= editing ? 'Amend the house' : 'Open a house' %></h1>
+      <p class="lead">A showroom, workshop or named counter. Vault metal is kept here, one card per metal.</p>
+    </div>
+    <%= link_to (editing ? "← #{store.name}" : '← Stores'), (editing ? store_path(store) : stores_path), class: 'atelier-back' %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> House name</span>
+    <span class="step"><b>2</b> Location</span>
+  </div>
+
+  <div class="atelier-grid">
+    <div class="atelier-form">
+      <%= form_for store do |f| %>
+        <% if store.errors.any? %>
+          <div class="errors"><%= store.errors.full_messages.to_sentence %></div>
+        <% end %>
+
+        <section class="section">
+          <h2>1 · House name</h2>
+          <p class="hint">The name the counter uses — Main showroom, Workshop, or a branch.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :name do %>Name <span class="req">*</span><% end %>
+              <%= f.text_field :name, class: 'form-control', id: 'store_name', maxlength: 80, placeholder: 'Main showroom' %>
+            </div>
+          </div>
+          <p class="hint" id="name-hint" style="margin-top:12px">Names must be unique on the house book.</p>
+        </section>
+
+        <section class="section">
+          <h2>2 · Location</h2>
+          <p class="hint">Floor, city, or a short house shorthand. Optional.</p>
+          <div class="row">
+            <div class="field">
+              <%= f.label :location, 'Location' %>
+              <%= f.text_field :location, class: 'form-control', id: 'store_location', maxlength: 120, placeholder: 'Ground floor, MG Road' %>
+            </div>
+          </div>
+        </section>
+
+        <div class="actions">
+          <%= f.submit (editing ? 'Save house' : 'Open house'), class: 'btn-gold', id: 'house-submit' %>
+          <%= link_to 'Cancel', (editing ? store_path(store) : stores_path), class: 'atelier-back' %>
+        </div>
+      <% end %>
+    </div>
+
+    <aside class="preview" id="house-preview" aria-live="polite">
+      <p class="preview-kicker">House card</p>
+      <div class="gem" aria-hidden="true">🏛️</div>
+      <h2 id="preview-name">Name the house</h2>
+      <span class="sku-chip" id="preview-loc">Location</span>
+      <p class="preview-desc" id="preview-note">The vault at this house will hold one card per metal — gold, silver, platinum.</p>
+      <p class="preview-note">After you save, open vault cards for the metals it keeps.</p>
+    </aside>
+  </div>
+</div>
+
+<style>
+  .house-open a.btn-gold, .house-open input.btn-gold { text-decoration: none; }
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('house-open');
+  if(!root) return;
+  var jsonEl = document.getElementById('house-names-json');
+  var names = [];
+  try { names = JSON.parse((jsonEl && jsonEl.textContent) || '[]'); } catch(e) { names = []; }
+  names = names.map(function(n){ return String(n || '').toLowerCase(); });
+  var current = (root.getAttribute('data-current-name') || '').toLowerCase();
+  var nameEl = document.getElementById('store_name');
+  var locEl = document.getElementById('store_location');
+  var prevName = document.getElementById('preview-name');
+  var prevLoc = document.getElementById('preview-loc');
+  var noteEl = document.getElementById('preview-note');
+  var hintEl = document.getElementById('name-hint');
+  var submit = document.getElementById('house-submit');
+
+  function taken(name){
+    var key = name.toLowerCase();
+    if(!key) return false;
+    if(current && key === current) return false;
+    return names.indexOf(key) !== -1;
+  }
+
+  function paint(){
+    var name = (nameEl && nameEl.value.trim()) || '';
+    var loc = (locEl && locEl.value.trim()) || 'House store';
+    if(prevName) prevName.textContent = name || 'Name the house';
+    if(prevLoc) prevLoc.textContent = loc;
+    if(taken(name)){
+      if(hintEl) hintEl.textContent = 'That name is already on the house book.';
+      if(noteEl) noteEl.textContent = 'Choose another name — each house appears once.';
+      if(submit) submit.disabled = true;
+      return;
+    }
+    if(submit) submit.disabled = !name;
+    if(hintEl) hintEl.textContent = name ? (name + ' is free on the house book.') : 'Names must be unique on the house book.';
+    if(noteEl) noteEl.textContent = 'The vault at this house will hold one card per metal — gold, silver, platinum.';
+  }
+
+  if(nameEl) nameEl.addEventListener('input', paint);
+  if(locEl) locEl.addEventListener('input', paint);
+  paint();
+})();
+</script>

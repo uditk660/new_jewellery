@@ -1,19 +1,17 @@
-<h3>Adjust Inventory</h3>
+<%# Kept for any leftover render; the stock card now posts movements inline. %>
 <%= form_tag stock_movements_path, method: :post do %>
   <%= hidden_field_tag :inventory_item_id, @inventory_item.id %>
-  <div>
-    <label>Change (grams)</label>
-    <%= number_field_tag :change_grams, 0 %>
+  <div class="field">
+    <label for="change_grams">Grams</label>
+    <%= number_field_tag :change_grams, 0, class: 'form-control', id: 'change_grams' %>
   </div>
-  <div>
-    <label>Type</label>
-    <%= select_tag :movement_type, options_for_select([['in','in'],['out','out'],['adjustment','adjustment']]) %>
+  <div class="field">
+    <label for="movement_type">Kind</label>
+    <%= select_tag :movement_type, options_for_select([['Receive (in)', 'in'], ['Issue (out)', 'out'], ['Adjustment', 'adjustment']]), class: 'form-control', id: 'movement_type' %>
   </div>
-  <div>
-    <label>Note</label>
-    <%= text_field_tag :note %>
+  <div class="field">
+    <label for="note">Note</label>
+    <%= text_field_tag :note, nil, class: 'form-control', id: 'note' %>
   </div>
-  <div>
-    <%= submit_tag 'Apply' %>
-  </div>
+  <%= submit_tag 'Post movement', class: 'btn-gold' %>
 <% end %>

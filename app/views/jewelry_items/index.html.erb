@@ -2,14 +2,34 @@
 
 <%
   items = @items || []
-  tray_value = items.sum { |it| it.respond_to?(:catalogue_amount) ? it.catalogue_amount.to_f : 0 }
+  line_price = lambda do |item|
+    item.respond_to?(:stock_amount) ? item.stock_amount.to_f : 0.0
+  end
+  tray_value = items.sum { |it| line_price.call(it) }
   q = params[:q].to_s
+  status = @status.presence || 'all'
+  counts = @status_counts || {}
+  tab_path = lambda do |key|
+    jewelry_items_path(request.query_parameters.merge(status: key, page: 1))
+  end
   sort_for = lambda do |key, label|
     next_dir = (params[:sort] == key && params[:direction] != 'asc') ? 'asc' : 'desc'
     active = params[:sort] == key
     arrow = active ? (params[:direction] == 'asc' ? ' ↑' : ' ↓') : ''
     link_to "#{label}#{arrow}", jewelry_items_path(request.query_parameters.merge(sort: key, direction: next_dir, page: 1)), class: (active ? 'sort-link is-active' : 'sort-link')
   end
+  empty_copy = case status
+               when 'stock_out'
+                 { eyebrow: 'Stock out', title: 'None out of stock', hint: 'Every live piece still has quantity on the tray.' }
+               when 'archived'
+                 { eyebrow: 'Archive', title: 'No archived pieces', hint: 'Archive a piece from its page to keep it off the live tray.' }
+               when 'locked'
+                 { eyebrow: 'Locked', title: 'No locked pieces', hint: 'Pieces appear here when their metal or hallmark is inactive.' }
+               when 'available'
+                 { eyebrow: 'Empty tray', title: 'No pieces available', hint: 'Register a piece — metal, hallmark and weight — to open the showroom tray.' }
+               else
+                 { eyebrow: 'Catalogue', title: 'No live pieces', hint: 'Register a piece — metal, hallmark and weight — to open the showroom.' }
+               end
 %>
 
 <div class="atelier-page catalogue-index">
@@ -22,14 +42,33 @@
     <%= link_to 'Register a piece', new_jewelry_item_path, class: 'btn-gold' %>
   </header>
 
-  <div class="cat-toolbar atelier-form">
+  <nav class="cat-tabs" aria-label="Catalogue">
+    <%= link_to tab_path.call('all'), class: (status == 'all' ? 'is-active' : nil) do %>
+      All <em><%= counts['all'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('available'), class: (status == 'available' ? 'is-active' : nil) do %>
+      Available <em><%= counts['available'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('stock_out'), class: (status == 'stock_out' ? 'is-active' : nil) do %>
+      Stock Out <em><%= counts['stock_out'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('archived'), class: (status == 'archived' ? 'is-active' : nil) do %>
+      Archived <em><%= counts['archived'].to_i %></em>
+    <% end %>
+    <%= link_to tab_path.call('locked'), class: (status == 'locked' ? 'is-active' : nil) do %>
+      Locked <em><%= counts['locked'].to_i %></em>
+    <% end %>
+  </nav>
+
+  <div class="cat-toolbar">
     <%= form_tag jewelry_items_path, method: :get, class: 'cat-search' do %>
+      <%= hidden_field_tag :status, status %>
       <%= hidden_field_tag :sort, params[:sort] if params[:sort].present? %>
       <%= hidden_field_tag :direction, params[:direction] if params[:direction].present? %>
       <%= text_field_tag :q, q, class: 'form-control', placeholder: 'Search name, SKU, metal, purity or category' %>
       <button type="submit" class="atelier-back">Search</button>
       <% if q.present? %>
-        <%= link_to 'Clear', jewelry_items_path, class: 'atelier-back' %>
+        <%= link_to 'Clear', jewelry_items_path(status: status), class: 'atelier-back' %>
       <% end %>
     <% end %>
     <div class="cat-stats">
@@ -50,8 +89,9 @@
         <thead>
           <tr>
             <th>Piece</th>
+            <th class="col-status">Status</th>
             <th>Metal &amp; hallmark</th>
-            <th class="col-weight"><%= sort_for.call('weight', 'Weight') %></th>
+            <th class="col-weight"><%= sort_for.call('weight', 'Weight/Each') %></th>
             <th class="col-price"><%= sort_for.call('price', 'Price') %></th>
             <th class="col-tray"><%= sort_for.call('available', 'Tray') %></th>
           </tr>
@@ -59,6 +99,7 @@
         <tbody>
           <% items.each do |item| %>
             <% qty = item.quantity.to_i %>
+            <% price = line_price.call(item) %>
             <tr>
               <td>
                 <%= link_to jewelry_item_path(item), class: 'piece-link' do %>
@@ -72,6 +113,13 @@
                   </span>
                 <% end %>
               </td>
+              <td class="col-status">
+                <% if item.sale_locked? %>
+                  <span class="status-pill is-locked">Locked</span>
+                <% else %>
+                  <span class="status-pill is-active">Active</span>
+                <% end %>
+              </td>
               <td>
                 <div class="marks">
                   <% if item.metal %><span class="mark"><%= item.metal.name %></span><% end %>
@@ -83,7 +131,7 @@
                 <span class="wt"><span class="wt-val"><%= '%.2f' % item.weight_grams.to_f %></span><span class="wt-unit">g</span></span>
               </td>
               <td class="col-price price">
-                <%= format_rupees(item.computed_price) %>
+                <%= format_rupees(price) %>
                 <% if item.effective_price_per_gram.present? %>
                   <span class="rate-line"><%= format_rupees(item.effective_price_per_gram) %>/g</span>
                 <% end %>
@@ -114,19 +162,19 @@
     <% end %>
   <% else %>
     <div class="atelier-form empty">
-      <p class="eyebrow">Empty tray</p>
-      <h2>No pieces yet</h2>
+      <p class="eyebrow"><%= empty_copy[:eyebrow] %></p>
+      <h2><%= q.present? ? 'No matches' : empty_copy[:title] %></h2>
       <p class="hint">
         <% if q.present? %>
-          Nothing matches “<%= q %>”. Try another name, SKU or metal.
+          Nothing matches “<%= q %>” in this list. Try another name, SKU or metal.
         <% else %>
-          Register the first catalogue piece — metal, hallmark and weight — to open the showroom tray.
+          <%= empty_copy[:hint] %>
         <% end %>
       </p>
       <div class="actions" style="margin-top:16px">
         <% if q.present? %>
-          <%= link_to 'Clear search', jewelry_items_path, class: 'atelier-back' %>
-        <% else %>
+          <%= link_to 'Clear search', jewelry_items_path(status: status), class: 'atelier-back' %>
+        <% elsif status == 'available' || status == 'all' %>
           <%= link_to 'Register a piece', new_jewelry_item_path, class: 'btn-gold' %>
         <% end %>
       </div>
@@ -135,7 +183,63 @@
 </div>
 
 <style>
-  .catalogue-index a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .catalogue-index .atelier-hero {
+    background: transparent;
+    color: #14110f;
+  }
+  .catalogue-index .eyebrow { color: #c9a227; }
+  .catalogue-index h1 { color: #0b1220; }
+  .catalogue-index .lead { color: #6b6258; }
+  .catalogue-index .cat-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin: -6px 0 16px;
+    padding: 3px;
+    border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.4);
+    background: #fff;
+  }
+  .catalogue-index .cat-tabs a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    color: #6b6258;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .catalogue-index .cat-tabs a em {
+    font-style: normal;
+    min-width: 1.4em;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: #f7f1e8;
+    color: #0b1220;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .catalogue-index .cat-tabs a.is-active {
+    background: linear-gradient(90deg, #e8d5a3, #c9a227);
+    color: #0b1220;
+  }
+  .catalogue-index .cat-tabs a.is-active em {
+    background: rgba(11,18,32,0.12);
+  }
+  .catalogue-index a.btn-gold,
+  .catalogue-index a.btn-gold:visited,
+  .catalogue-index a.btn-gold:hover {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(90deg, #e8d5a3, #c9a227);
+    color: #0b1220;
+    -webkit-text-fill-color: #0b1220;
+  }
   .catalogue-index .cat-toolbar {
     display: flex;
     justify-content: space-between;
@@ -143,6 +247,10 @@
     gap: 18px;
     margin-bottom: 18px;
     padding: 16px 18px;
+    background: #fff;
+    border: 1px solid rgba(201, 162, 39, 0.28);
+    border-radius: 18px;
+    box-shadow: 0 12px 28px rgba(20, 17, 15, 0.05);
   }
   .catalogue-index .cat-search { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; }
   .catalogue-index .cat-search .form-control { max-width: 420px; }
@@ -167,10 +275,10 @@
     background: #fffaf3;
     border: 1px solid rgba(201,162,39,0.28);
     border-radius: 18px;
-    overflow: hidden;
+    overflow: auto;
     box-shadow: 0 18px 40px rgba(20,17,15,0.06);
   }
-  .catalogue-index .cat-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .catalogue-index .cat-table { width: 100%; min-width: 920px; border-collapse: collapse; table-layout: fixed; }
   .catalogue-index .cat-table th {
     text-align: left;
     font-size: 11px;
@@ -190,9 +298,9 @@
     color: #14110f;
   }
   .catalogue-index .cat-table th:nth-child(1),
-  .catalogue-index .cat-table td:nth-child(1) { width: 38%; }
-  .catalogue-index .cat-table th:nth-child(2),
-  .catalogue-index .cat-table td:nth-child(2) { width: 24%; }
+  .catalogue-index .cat-table td:nth-child(1) { width: 32%; }
+  .catalogue-index .cat-table th:nth-child(3),
+  .catalogue-index .cat-table td:nth-child(3) { width: 22%; }
   .catalogue-index .cat-table th.col-weight,
   .catalogue-index .cat-table td.col-weight {
     width: 118px;
@@ -202,14 +310,20 @@
   }
   .catalogue-index .cat-table th.col-price,
   .catalogue-index .cat-table td.col-price {
-    width: 140px;
+    width: 128px;
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
   .catalogue-index .cat-table th.col-tray,
   .catalogue-index .cat-table td.col-tray {
-    width: 120px;
+    width: 110px;
     text-align: right;
+  }
+  .catalogue-index .cat-table th.col-status,
+  .catalogue-index .cat-table td.col-status {
+    width: 86px;
+    text-align: left;
+    white-space: nowrap;
   }
   .catalogue-index .wt {
     display: inline-flex;
@@ -261,6 +375,27 @@
     font-size: 1.2rem;
     font-weight: 600;
     color: #0b1220;
+  }
+  .catalogue-index .status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+  .catalogue-index .status-pill.is-active {
+    background: #3f5d3a;
+    color: #eef6e8;
+    border: 1px solid rgba(63,93,58,0.55);
+  }
+  .catalogue-index .status-pill.is-locked {
+    background: #5c1c16;
+    color: #f3e0a8;
+    border: 1px solid #c9a227;
   }
   .catalogue-index .sku {
     display: inline-block;

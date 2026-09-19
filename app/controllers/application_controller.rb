@@ -57,13 +57,18 @@ class ApplicationController < ActionController::Base
   def layout_by_resource
     if staff_controller?
       'staff'
-    elsif devise_controller? && try(:resource_name) == :employee
+    elsif employee_auth?
       'staff_auth'
     elsif devise_controller?
       'devise'
     else
       'application'
     end
+  end
+
+  def employee_auth?
+    return true if devise_controller? && try(:resource_name).to_s == 'employee'
+    request.path.start_with?('/employee')
   end
 
   def after_sign_in_path_for(resource)

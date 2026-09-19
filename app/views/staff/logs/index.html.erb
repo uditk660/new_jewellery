@@ -1,42 +1,60 @@
-<div class="top">
+<header class="ep-hero">
   <div>
-    <h1>Activity logs</h1>
-    <div class="sub">Every approval, rejection, grant, cancel, and suspend is recorded.</div>
+    <p class="ep-eyebrow">House</p>
+    <h1>Activity</h1>
+    <p class="ep-lead">Every approval, decline, grant, lock and restore is dated here — with the employee who signed it.</p>
   </div>
-</div>
+</header>
 
-<div class="filters" style="margin-bottom:12px">
-  <%= link_to 'All', staff_logs_path, class: (params[:action_filter].blank? ? 'on' : nil) %>
+<nav class="ep-tabs" aria-label="Actions">
+  <%= link_to 'All', staff_logs_path, class: (params[:action_filter].blank? ? 'is-on' : nil) %>
   <% %w[approved rejected granted cancelled suspended reactivated created_plan].each do |act| %>
-    <%= link_to act.humanize, staff_logs_path(action_filter: act), class: (params[:action_filter] == act ? 'on' : nil) %>
+    <%= link_to act.humanize, staff_logs_path(action_filter: act), class: (params[:action_filter] == act ? 'is-on' : nil) %>
   <% end %>
-</div>
+</nav>
 
-<div class="card">
-  <table>
-    <thead>
-      <tr>
-        <th>When</th>
-        <th>Employee</th>
-        <th>Action</th>
-        <th>Store</th>
-        <th>Plan</th>
-        <th>Notes</th>
-        <th>IP</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% @logs.each do |log| %>
-        <tr>
-          <td><%= log.created_at.in_time_zone('Asia/Kolkata').strftime('%d %b %Y, %H:%M') %></td>
-          <td><%= log.employee&.name || '—' %></td>
-          <td><%= log.action.humanize %></td>
-          <td><%= log.user&.display_name || '—' %></td>
-          <td><%= log.plan&.name || '—' %></td>
-          <td><%= log.notes %></td>
-          <td class="sub"><%= log.ip_address %></td>
-        </tr>
-      <% end %>
-    </tbody>
-  </table>
+<div class="ep-card">
+  <% if @logs.empty? %>
+    <div class="ep-empty">
+      <h2>No lines in this trail</h2>
+      <p class="ep-hint">Nothing matches this filter yet.</p>
+    </div>
+  <% else %>
+    <div class="ep-table-wrap">
+      <table class="ep-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Employee</th>
+            <th>Action</th>
+            <th>House</th>
+            <th>Plan</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @logs.each do |log| %>
+            <tr>
+              <td>
+                <%= ist_stamp(log.created_at) %>
+                <span class="ep-sub"><%= log.ip_address.presence || '—' %></span>
+              </td>
+              <td><%= log.employee&.name || '—' %></td>
+              <td><%= log.action.humanize %></td>
+              <td>
+                <% if log.user %>
+                  <strong><%= log.user.display_name %></strong>
+                  <span class="ep-sub"><%= log.user.email %></span>
+                <% else %>
+                  —
+                <% end %>
+              </td>
+              <td><%= log.plan&.name || '—' %></td>
+              <td><%= log.notes.presence || '—' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
 </div>

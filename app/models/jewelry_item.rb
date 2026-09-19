@@ -11,6 +11,7 @@ class JewelryItem < ActiveRecord::Base
   belongs_to :metal, optional: true
   belongs_to :purity, optional: true
   belongs_to :jewellery_category, optional: true
+  has_one :inventory_item
 
   before_validation :normalize_weight
   before_validation :set_sku, on: :create
@@ -22,7 +23,44 @@ class JewelryItem < ActiveRecord::Base
   around_save :apply_purity_stock_change
   around_destroy :restore_purity_stock_on_destroy
 
-  scope :available_for_sale, -> { where('quantity > 0') }
+  scope :kept, -> { column_names.include?('archived') ? where(archived: false) : all }
+  scope :archived_only, -> { column_names.include?('archived') ? where(archived: true) : none }
+  scope :on_tray, -> { kept.where('quantity > 0') }
+  scope :stock_out, -> { kept.where('COALESCE(quantity, 0) <= 0') }
+  scope :available_for_sale, -> {
+    rel = on_tray
+    rel = rel.joins(:metal).where(metals: { active: true }) if Metal.column_names.include?('active')
+    rel = rel.joins(:purity).where(purities: { active: true }) if Purity.column_names.include?('active')
+    rel
+  }
+  scope :with_inactive_master, -> {
+    rel = left_joins(:metal, :purity)
+    parts = []
+    parts << 'metals.active = 0' if Metal.column_names.include?('active')
+    parts << 'purities.active = 0' if Purity.column_names.include?('active')
+    parts.any? ? rel.where(parts.join(' OR ')) : none
+  }
+
+  def sale_locked?
+    metal&.rate_board_locked? || purity&.rate_board_locked?
+  end
+
+  def archived?
+    has_attribute?(:archived) && self[:archived]
+  end
+
+  def amendable?
+    return false if archived?
+    return false if sale_locked?
+    true
+  end
+
+  def sellable?
+    return false if quantity.to_i <= 0
+    return false if archived?
+    return false if sale_locked?
+    true
+  end
 
   def sync_metal_from_purity
     self.metal_id = purity.metal_id if purity
@@ -91,6 +129,14 @@ class JewelryItem < ActiveRecord::Base
     (unit_amount * valuation_quantity).round(2)
   end
 
+  # Tray value at the current board: rate × weight (g) × pieces on tray.
+  def stock_amount
+    qty = quantity.to_i
+    return 0.0 if qty <= 0
+
+    (unit_amount * qty).round(2)
+  end
+
   def computed_price
     unit_amount.positive? ? unit_amount : price.to_f
   end
@@ -131,7 +177,10 @@ class JewelryItem < ActiveRecord::Base
       price_per_gram: effective_price_per_gram.to_f,
       making_percent: default_making_percent,
       metal: metal&.name.to_s,
+      metal_id: metal_id,
+      colour: metal&.try(:chip_colour).presence || '#c9a227',
       purity: purity&.name.to_s,
+      purity_label: purity&.try(:hallmark_label).to_s,
       category: jewellery_category&.try(:display_name).to_s
     }
   end

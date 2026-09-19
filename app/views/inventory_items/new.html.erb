@@ -1,18 +1,156 @@
-<h1>New Inventory Item</h1>
-<%= form_for @inventory_item, url: inventory_items_path do |f| %>
-  <div>
-    <%= f.label :jewelry_item_id, 'Item' %><br>
-    <%= f.collection_select :jewelry_item_id, @items, :id, :name %>
+<%= render 'shared/atelier_styles' %>
+
+<%
+  items = @items || []
+  payload = @items_payload || []
+%>
+
+<script type="application/json" id="stock-pieces-json"><%= raw json_escape(payload.to_json) %></script>
+
+<div class="atelier-page stock-open" id="stock-open">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Stock book</p>
+      <h1>Open a stock card</h1>
+      <p class="lead">Name the catalogue piece and where it sits. Opening grams default to weight × tray quantity.</p>
+    </div>
+    <%= link_to '← Inventory', inventory_items_path, class: 'atelier-back' %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Catalogue piece</span>
+    <span class="step"><b>2</b> Location</span>
+    <span class="step"><b>3</b> Opening grams</span>
   </div>
-  <div>
-    <%= f.label :available_grams %><br>
-    <%= f.number_field :available_grams %>
-  </div>
-  <div>
-    <%= f.label :location %><br>
-    <%= f.text_field :location %>
-  </div>
-  <div>
-    <%= f.submit 'Create' %>
-  </div>
-<% end %>
+
+  <% if items.empty? %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">Every live catalogue piece already has a stock card, or the tray is empty.</p>
+      <div class="actions" style="margin-top:16px">
+        <%= link_to 'Inventory', inventory_items_path, class: 'btn-gold' %>
+        <%= link_to 'Register a piece', new_jewelry_item_path, class: 'atelier-back' %>
+      </div>
+    </div>
+  <% else %>
+    <div class="atelier-grid">
+      <div class="atelier-form">
+        <%= form_for @inventory_item, url: inventory_items_path do |f| %>
+          <% if @inventory_item.errors.any? %>
+            <div class="errors"><%= @inventory_item.errors.full_messages.to_sentence %></div>
+          <% end %>
+
+          <section class="section">
+            <h2>1 · Catalogue piece</h2>
+            <p class="hint">Only pieces not already on the stock book appear here.</p>
+            <div class="row">
+              <div class="field">
+                <%= f.label :jewelry_item_id do %>Piece <span class="req">*</span><% end %>
+                <%= f.collection_select :jewelry_item_id, items, :id, :name, { include_blank: 'Select a piece' }, { class: 'form-control', id: 'inventory_item_jewelry_item_id' } %>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>2 · Location</h2>
+            <p class="hint">Tray, safe, or a named cupboard — short house shorthand is enough.</p>
+            <div class="row">
+              <div class="field">
+                <%= f.label :location, 'Location' %>
+                <%= f.text_field :location, class: 'form-control', id: 'inventory_item_location', placeholder: 'Main tray' %>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>3 · Opening grams</h2>
+            <p class="hint">Whole grams on this card. The figure pre-fills from the piece weight × tray count; you may amend it.</p>
+            <div class="row">
+              <div class="field narrow">
+                <%= f.label :available_grams do %>Grams <span class="req">*</span><% end %>
+                <%= f.number_field :available_grams, class: 'form-control', id: 'inventory_item_available_grams', min: 0, step: 1 %>
+              </div>
+            </div>
+          </section>
+
+          <div class="actions">
+            <%= f.submit 'Open stock card', class: 'btn-gold' %>
+            <%= link_to 'Cancel', inventory_items_path, class: 'atelier-back' %>
+          </div>
+        <% end %>
+      </div>
+
+      <aside class="preview" id="stock-preview" aria-live="polite">
+        <p class="preview-kicker">Stock card</p>
+        <div class="gem" aria-hidden="true">⚖️</div>
+        <h2 id="preview-name">Choose a piece</h2>
+        <span class="sku-chip" id="preview-sku">SKU</span>
+        <div class="chips" id="preview-chips"></div>
+        <div class="preview-price" id="preview-grams">0 g</div>
+        <p class="preview-line" id="preview-loc">Location appears here</p>
+        <p class="preview-desc" id="preview-note">Select a catalogue piece to see metal, hallmark and suggested opening weight.</p>
+        <p class="preview-note">Opening posts an “in” movement for the grams you save.</p>
+      </aside>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .stock-open a.btn-gold, .stock-open input.btn-gold { text-decoration: none; }
+</style>
+
+<script>
+(function(){
+  var jsonEl = document.getElementById('stock-pieces-json');
+  var pieces = [];
+  try { pieces = JSON.parse((jsonEl && jsonEl.textContent) || '[]'); } catch(e) { pieces = []; }
+  var byId = {};
+  pieces.forEach(function(p){ byId[String(p.id)] = p; });
+  var sel = document.getElementById('inventory_item_jewelry_item_id');
+  var gramsEl = document.getElementById('inventory_item_available_grams');
+  var locEl = document.getElementById('inventory_item_location');
+  var nameEl = document.getElementById('preview-name');
+  var skuEl = document.getElementById('preview-sku');
+  var chipsEl = document.getElementById('preview-chips');
+  var gramsPreview = document.getElementById('preview-grams');
+  var locPreview = document.getElementById('preview-loc');
+  var noteEl = document.getElementById('preview-note');
+  var userEditedGrams = !!(gramsEl && gramsEl.value);
+
+  function paint(){
+    var it = sel ? byId[String(sel.value)] : null;
+    var grams = parseInt((gramsEl && gramsEl.value) || '0', 10) || 0;
+    var loc = (locEl && locEl.value.trim()) || 'Main tray';
+    if(!it){
+      if(nameEl) nameEl.textContent = 'Choose a piece';
+      if(skuEl) skuEl.textContent = 'SKU';
+      if(chipsEl) chipsEl.innerHTML = '';
+      if(gramsPreview) gramsPreview.textContent = grams + ' g';
+      if(locPreview) locPreview.textContent = loc;
+      if(noteEl) noteEl.textContent = 'Select a catalogue piece to see metal, hallmark and suggested opening weight.';
+      return;
+    }
+    if(nameEl) nameEl.textContent = it.name;
+    if(skuEl) skuEl.textContent = it.sku || 'SKU';
+    if(chipsEl){
+      var chips = [it.metal, it.purity, Number(it.weight).toFixed(2) + ' g each', it.quantity + ' pcs'].filter(Boolean);
+      chipsEl.innerHTML = chips.map(function(c){ return '<span class="chip">' + c + '</span>'; }).join('');
+    }
+    if(gramsPreview) gramsPreview.textContent = grams + ' g';
+    if(locPreview) locPreview.textContent = loc;
+    if(noteEl) noteEl.textContent = 'Suggested opening is ' + it.opening + ' g (weight × tray). Amend if the house holds a different figure.';
+  }
+
+  if(sel){
+    sel.addEventListener('change', function(){
+      var it = byId[String(sel.value)];
+      if(it && gramsEl && !userEditedGrams) gramsEl.value = it.opening;
+      paint();
+    });
+  }
+  if(gramsEl){
+    gramsEl.addEventListener('input', function(){ userEditedGrams = true; paint(); });
+  }
+  if(locEl) locEl.addEventListener('input', paint);
+  paint();
+})();
+</script>

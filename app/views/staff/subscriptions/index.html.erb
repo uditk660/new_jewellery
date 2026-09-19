@@ -1,45 +1,60 @@
-<div class="top">
+<header class="ep-hero">
   <div>
-    <h1>Subscriptions</h1>
-    <div class="sub">Cancel or suspend live stores. Grant a plan directly when needed.</div>
+    <p class="ep-eyebrow">Houses</p>
+    <h1>Years on the book</h1>
+    <p class="ep-lead">Every licence Strucxil has granted, suspended or closed. Open a house to lock the desk or restore it.</p>
   </div>
-  <%= link_to 'Add subscription', new_staff_subscription_path, class: 'btn btn-gold' %>
-</div>
+  <div class="ep-actions">
+    <%= link_to 'Grant a year', new_staff_subscription_path, class: 'btn btn-gold' %>
+  </div>
+</header>
 
-<div class="filters" style="margin-bottom:12px">
-  <%= link_to 'All', staff_subscriptions_path, class: (params[:status].blank? ? 'on' : nil) %>
+<nav class="ep-tabs" aria-label="Status">
+  <%= link_to 'All', staff_subscriptions_path, class: (params[:status].blank? ? 'is-on' : nil) %>
   <% %w[pending active suspended cancelled rejected].each do |st| %>
-    <%= link_to st.titleize, staff_subscriptions_path(status: st), class: (params[:status] == st ? 'on' : nil) %>
+    <%= link_to st.titleize, staff_subscriptions_path(status: st), class: (params[:status] == st ? 'is-on' : nil) %>
   <% end %>
-</div>
+</nav>
 
-<div class="card">
-  <table>
-    <thead>
-      <tr>
-        <th>Store</th>
-        <th>Plan</th>
-        <th>Status</th>
-        <th>Term</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      <% @subscriptions.each do |sub| %>
-        <tr>
-          <td><strong><%= sub.user.display_name %></strong><div class="sub"><%= sub.user.email %></div></td>
-          <td><%= sub.plan.name %></td>
-          <td><span class="pill st-<%= sub.effective_status %>"><%= sub.effective_status %></span></td>
-          <td>
-            <% if sub.starts_at && sub.ends_at %>
-              <%= sub.starts_at.to_date %> → <%= sub.ends_at.to_date %>
-            <% else %>
-              —
-            <% end %>
-          </td>
-          <td><%= link_to 'Manage', staff_subscription_path(sub) %></td>
-        </tr>
-      <% end %>
-    </tbody>
-  </table>
+<div class="ep-card">
+  <% if @subscriptions.empty? %>
+    <div class="ep-empty">
+      <h2>No years in this list</h2>
+      <p class="ep-hint">Nothing matches this status. Grant a year, or clear the filter.</p>
+    </div>
+  <% else %>
+    <div class="ep-table-wrap">
+      <table class="ep-table">
+        <thead>
+          <tr>
+            <th>House</th>
+            <th>Plan</th>
+            <th>Status</th>
+            <th>Term</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @subscriptions.each do |sub| %>
+            <tr>
+              <td>
+                <strong><%= sub.user.display_name %></strong>
+                <span class="ep-sub"><%= sub.user.email %></span>
+              </td>
+              <td><%= sub.plan.name %></td>
+              <td><span class="pill st-<%= sub.effective_status %>"><%= sub.effective_status %></span></td>
+              <td>
+                <% if sub.starts_at && sub.ends_at %>
+                  <%= sub.starts_at.to_date.strftime('%d %b %Y') %> → <%= sub.ends_at.to_date.strftime('%d %b %Y') %>
+                <% else %>
+                  <span class="ep-sub">Not started</span>
+                <% end %>
+              </td>
+              <td><%= link_to 'Open', staff_subscription_path(sub), class: 'ep-link' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
 </div>

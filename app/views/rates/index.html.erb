@@ -2,25 +2,48 @@
 
 <%
   today = @today || Time.zone.today
+  stock_items = @stock_items || []
+  total_stock = @total_stock_value.to_f
+  tray_pcs = @stock_piece_count.to_i
+  tray_grams = @stock_weight_grams.to_f
 %>
 
-<div class="atelier-page rates-board is-cards" id="rates-view">
+<div class="atelier-page rates-board is-list" id="rates-view">
   <header class="atelier-hero">
     <div>
       <p class="eyebrow">Rates</p>
       <h1>Today’s board</h1>
-      <p class="lead">Set ₹ per gram for each hallmark. Catalogue valuation uses these rates the moment they are saved.</p>
+      <p class="lead">Set ₹ per gram for each hallmark. Tray value below follows these rates the moment they are saved.</p>
     </div>
     <div class="rates-hero-actions">
       <div class="view-toggle" role="group" aria-label="Layout">
-        <button type="button" class="view-btn is-active" data-view="cards" aria-pressed="true">Cards</button>
-        <button type="button" class="view-btn" data-view="list" aria-pressed="false">List</button>
+        <button type="button" class="view-btn" data-view="cards" aria-pressed="false">Cards</button>
+        <button type="button" class="view-btn is-active" data-view="list" aria-pressed="true">List</button>
       </div>
-      <%= link_to 'Set a rate', new_rate_path, class: 'atelier-back' %>
+      <%= link_to 'Set a rate', new_rate_path, class: 'btn-gold' %>
     </div>
   </header>
 
   <p class="hint" style="margin:0 0 16px">Board date: <%= today.strftime('%d %b %Y') %>.</p>
+
+  <div class="stock-summary">
+    <div class="stock-chip is-total">
+      <span>Stock value</span>
+      <strong><%= format_rupees(total_stock) %></strong>
+    </div>
+    <div class="stock-chip">
+      <span>On the tray</span>
+      <strong><%= tray_pcs %> <em>pcs</em></strong>
+    </div>
+    <div class="stock-chip">
+      <span>Weight</span>
+      <strong><%= '%.2f' % tray_grams %> <em>g</em></strong>
+    </div>
+    <div class="stock-chip">
+      <span>Pieces</span>
+      <strong><%= stock_items.size %></strong>
+    </div>
+  </div>
 
   <% if @metals.any? %>
     <div class="rate-cards" data-layout="cards">
@@ -32,25 +55,36 @@
               <h2><%= metal.name %></h2>
               <p><%= metal.code.presence || metal.base_unit.presence || 'gram' %></p>
             </div>
+            <% if metal.rate_board_locked? %><span class="lock-pill">Inactive</span><% end %>
           </div>
           <% purities = metal.purities.ordered %>
           <% if purities.any? %>
             <ul class="rate-rows">
               <% purities.each do |purity| %>
+                <% locked = purity.rate_board_locked? %>
                 <li class="rate-row">
                   <div class="hallmark">
                     <strong><%= purity.name %></strong>
                     <span><%= [purity.trimmed_percent && "#{purity.trimmed_percent}%", purity.fineness.presence, purity.available_weight_label].compact.join(' · ') %></span>
                   </div>
-                  <%= form_tag rates_path, method: :post, class: 'rate-inline' do %>
-                    <%= hidden_field_tag :metal_id, metal.id %>
-                    <%= hidden_field_tag :purity_id, purity.id %>
-                    <%= hidden_field_tag 'rate[date]', today %>
-                    <label class="sr-only" for="price_<%= purity.id %>">₹ / g</label>
-                    <span class="rupee">₹</span>
-                    <%= number_field_tag :price_per_gram, (purity.updated_price.present? ? ('%.2f' % purity.updated_price) : nil), id: "price_#{purity.id}", step: '0.01', min: 0, class: 'form-control', placeholder: '0.00' %>
-                    <span class="per">/g</span>
-                    <%= submit_tag 'Save', class: 'btn-gold' %>
+                  <% if locked %>
+                    <div class="rate-locked">
+                      <span class="rupee">₹</span>
+                      <strong><%= purity.updated_price.present? ? ('%.2f' % purity.updated_price) : '—' %></strong>
+                      <span class="per">/g</span>
+                      <span class="lock-pill">Locked</span>
+                    </div>
+                  <% else %>
+                    <%= form_tag rates_path, method: :post, class: 'rate-inline' do %>
+                      <%= hidden_field_tag :metal_id, metal.id %>
+                      <%= hidden_field_tag :purity_id, purity.id %>
+                      <%= hidden_field_tag 'rate[date]', today %>
+                      <label class="sr-only" for="price_<%= purity.id %>">₹ / g</label>
+                      <span class="rupee">₹</span>
+                      <%= number_field_tag :price_per_gram, (purity.updated_price.present? ? ('%.2f' % purity.updated_price) : nil), id: "price_#{purity.id}", step: '0.01', min: 0, class: 'form-control rate-input', placeholder: '0.00' %>
+                      <span class="per">/g</span>
+                      <%= submit_tag 'Save', class: 'btn-gold' %>
+                    <% end %>
                   <% end %>
                 </li>
               <% end %>
@@ -68,33 +102,45 @@
           <tr>
             <th>Metal</th>
             <th>Hallmark</th>
-            <th>Weight</th>
-            <th>₹ / g</th>
+            <th class="col-weight">Weight</th>
+            <th class="col-rate">₹ / g</th>
           </tr>
         </thead>
         <tbody>
           <% @metals.each do |metal| %>
             <% metal.purities.ordered.each do |purity| %>
+              <% locked = purity.rate_board_locked? %>
               <tr>
                 <td>
                   <span class="metal-cell">
                     <span class="swatch small" style="background:<%= metal.chip_colour %>"></span>
                     <%= metal.name %>
                   </span>
+                  <% if metal.rate_board_locked? %><span class="sub">Inactive</span><% end %>
                 </td>
                 <td>
                   <strong><%= purity.name %></strong>
-                  <span class="sub"><%= [purity.trimmed_percent && "#{purity.trimmed_percent}%", purity.fineness.presence].compact.join(' · ') %></span>
+                  <span class="sub"><%= [purity.trimmed_percent && "#{purity.trimmed_percent}%", purity.fineness.presence, (!purity.active? ? 'Inactive' : nil)].compact.join(' · ') %></span>
                 </td>
-                <td class="num"><%= purity.available_weight_label %></td>
-                <td>
-                  <%= form_tag rates_path, method: :post, class: 'rate-inline' do %>
-                    <%= hidden_field_tag :metal_id, metal.id %>
-                    <%= hidden_field_tag :purity_id, purity.id %>
-                    <%= hidden_field_tag 'rate[date]', today %>
-                    <span class="rupee">₹</span>
-                    <%= number_field_tag :price_per_gram, (purity.updated_price.present? ? ('%.2f' % purity.updated_price) : nil), step: '0.01', min: 0, class: 'form-control', placeholder: '0.00' %>
-                    <%= submit_tag 'Save', class: 'btn-gold' %>
+                <td class="col-weight"><%= purity.available_weight_label %></td>
+                <td class="col-rate">
+                  <% if locked %>
+                    <div class="rate-locked">
+                      <span class="rupee">₹</span>
+                      <strong><%= purity.updated_price.present? ? ('%.2f' % purity.updated_price) : '—' %></strong>
+                      <span class="per">/g</span>
+                      <span class="lock-pill">Locked</span>
+                    </div>
+                  <% else %>
+                    <%= form_tag rates_path, method: :post, class: 'rate-inline' do %>
+                      <%= hidden_field_tag :metal_id, metal.id %>
+                      <%= hidden_field_tag :purity_id, purity.id %>
+                      <%= hidden_field_tag 'rate[date]', today %>
+                      <span class="rupee">₹</span>
+                      <%= number_field_tag :price_per_gram, (purity.updated_price.present? ? ('%.2f' % purity.updated_price) : nil), step: '0.01', min: 0, class: 'form-control rate-input', placeholder: '0.00' %>
+                      <span class="per">/g</span>
+                      <%= submit_tag 'Save', class: 'btn-gold' %>
+                    <% end %>
                   <% end %>
                 </td>
               </tr>
@@ -120,16 +166,120 @@
       <div class="actions" style="margin-top:16px"><%= link_to 'Add a metal', new_metal_path, class: 'btn-gold' %></div>
     </div>
   <% end %>
+
+  <section class="stock-ledger">
+    <div class="stock-ledger-head">
+      <div>
+        <h2>Stock by piece</h2>
+        <p class="hint">Each catalogue piece at the hallmark rate on this board.</p>
+      </div>
+      <%= link_to 'Open catalogue', jewelry_items_path, class: 'atelier-back' %>
+    </div>
+
+    <% if stock_items.any? %>
+      <div class="stock-table-wrap">
+        <table class="stock-table">
+          <thead>
+            <tr>
+              <th>Piece</th>
+              <th>Metal &amp; hallmark</th>
+              <th class="num">Weight</th>
+              <th class="num">Tray</th>
+              <th class="num">₹ / g</th>
+              <th class="num">Stock value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% stock_items.each do |item| %>
+              <%
+                qty = item.quantity.to_i
+                rate = item.effective_price_per_gram
+                value = item.stock_amount
+              %>
+              <tr>
+                <td>
+                  <%= link_to jewelry_item_path(item), class: 'piece-link' do %>
+                    <strong><%= item.name %></strong>
+                    <span class="sku"><%= item.sku %></span>
+                    <% if item.jewellery_category %>
+                      <span class="sub"><%= item.jewellery_category.name %></span>
+                    <% end %>
+                  <% end %>
+                </td>
+                <td>
+                  <span class="metal-cell">
+                    <% if item.metal %>
+                      <span class="swatch small" style="background:<%= item.metal.chip_colour %>"></span>
+                      <%= item.metal.name %>
+                    <% else %>
+                      —
+                    <% end %>
+                  </span>
+                  <% if item.purity %>
+                    <span class="sub"><%= item.purity.name %></span>
+                  <% end %>
+                </td>
+                <td class="num"><%= '%.2f' % item.weight_grams.to_f %> g</td>
+                <td class="num">
+                  <% if qty > 0 %>
+                    <span class="stock in"><%= qty %> pcs</span>
+                  <% else %>
+                    <span class="stock out">Out of tray</span>
+                  <% end %>
+                </td>
+                <td class="num">
+                  <% if rate.present? %>
+                    <%= format_rupees(rate) %>
+                  <% else %>
+                    <span class="muted">No rate</span>
+                  <% end %>
+                </td>
+                <td class="num gold"><%= format_rupees(value) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+          <tfoot>
+            <tr>
+              <th>House total</th>
+              <th></th>
+              <th class="num"><%= '%.2f' % tray_grams %> g</th>
+              <th class="num"><%= tray_pcs %> pcs</th>
+              <th></th>
+              <th class="num gold"><%= format_rupees(total_stock) %></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    <% else %>
+      <div class="atelier-form empty">
+        <p class="hint" style="margin:0">No catalogue pieces yet. Register a piece to see tray value at today’s board.</p>
+        <div class="actions" style="margin-top:16px"><%= link_to 'Register a piece', new_jewelry_item_path, class: 'btn-gold' %></div>
+      </div>
+    <% end %>
+  </section>
 </div>
 
 <style>
+  .container:has(.rates-board) { max-width: 1240px; }
+  .rates-board a.btn-gold,
+  .rates-board a.btn-gold:visited,
+  .rates-board input.btn-gold {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    white-space: nowrap;
+    cursor: pointer;
+    font-family: inherit;
+  }
   .rates-board .rates-hero-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .rates-board .view-toggle {
     display: inline-flex;
     padding: 3px;
     border-radius: 999px;
     border: 1px solid rgba(201,162,39,0.4);
-    background: #fffaf3;
+    background: #fff;
   }
   .rates-board .view-btn {
     appearance: none; border: 0; background: transparent; color: #6b6258;
@@ -142,11 +292,11 @@
   }
   .rates-board .rate-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: 16px;
   }
   .rates-board .rate-card {
-    background: #fffaf3;
+    background: #fff;
     border: 1px solid rgba(201,162,39,0.28);
     border-radius: 18px;
     padding: 18px;
@@ -162,12 +312,11 @@
   .rates-board .rate-card-top p { margin: 2px 0 0; color: #6b6258; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
   .rates-board .rate-rows { list-style: none; margin: 0; padding: 0; }
   .rates-board .rate-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 16px;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 0;
+    padding: 12px 0;
     border-top: 1px solid rgba(201,162,39,0.16);
   }
   .rates-board .hallmark strong { display: block; color: #0b1220; }
@@ -175,24 +324,54 @@
   .rates-board .rate-inline {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
+    flex-wrap: nowrap;
+    margin: 0;
   }
-  .rates-board .rate-inline .form-control { width: 120px; }
-  .rates-board .rate-inline .btn-gold { padding: 10px 14px; font-size: 13px; }
-  .rates-board .rupee { color: #c9a227; font-weight: 700; }
-  .rates-board .per { color: #6b6258; font-size: 12px; }
+  .rates-board .rate-inline .rate-input,
+  .rates-board .rate-inline input[type="number"] {
+    width: 108px !important;
+    min-width: 108px;
+    max-width: 108px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding: 8px 10px;
+    height: 40px;
+    box-sizing: border-box;
+    -moz-appearance: textfield;
+  }
+  .rates-board .rate-inline input[type="number"]::-webkit-outer-spin-button,
+  .rates-board .rate-inline input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .rates-board .rate-inline .btn-gold {
+    height: 40px;
+    padding: 0 16px;
+    font-size: 13px;
+    border-radius: 10px;
+    flex: 0 0 auto;
+  }
+  .rates-board .rupee { color: #c9a227; font-weight: 700; line-height: 40px; }
+  .rates-board .per { color: #6b6258; font-size: 12px; font-weight: 600; line-height: 40px; }
   .rates-board .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0,0,0,0); border: 0;
   }
   .rates-board .rate-list-wrap {
-    background: #fffaf3;
+    background: #fff;
     border: 1px solid rgba(201,162,39,0.28);
     border-radius: 18px;
-    overflow: hidden;
+    overflow: auto;
     box-shadow: 0 12px 28px rgba(20,17,15,0.05);
   }
-  .rates-board .rate-list { width: 100%; border-collapse: collapse; }
+  .rates-board .rate-list {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
   .rates-board .rate-list th {
     text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
     color: #6b6258; font-weight: 700; padding: 14px 16px;
@@ -202,18 +381,202 @@
     padding: 12px 16px; border-bottom: 1px solid rgba(201,162,39,0.12);
     vertical-align: middle; font-size: 14px; color: #14110f;
   }
+  .rates-board .rate-list th:nth-child(1),
+  .rates-board .rate-list td:nth-child(1) { width: 22%; }
+  .rates-board .rate-list th:nth-child(2),
+  .rates-board .rate-list td:nth-child(2) { width: 24%; }
+  .rates-board .rate-list .col-weight {
+    width: 16%;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: #6b6258;
+  }
+  .rates-board .rate-list .col-rate {
+    width: 38%;
+    text-align: right;
+  }
   .rates-board .rate-list tbody tr:last-child td { border-bottom: 0; }
-  .rates-board .metal-cell { display: inline-flex; align-items: center; gap: 8px; }
-  .rates-board .sub { display: block; margin-top: 2px; font-size: 12px; color: #6b6258; }
-  .rates-board .num { white-space: nowrap; color: #6b6258; font-variant-numeric: tabular-nums; }
+  .rates-board .rate-list tbody tr:hover { background: rgba(232,213,163,0.18); }
+  .rates-board .metal-cell { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #0b1220; }
+  .rates-board .sub { display: block; margin-top: 2px; font-size: 12px; color: #6b6258; font-weight: 500; }
+  .rates-board .rate-card-top .lock-pill { margin-left: auto; }
+  .rates-board .rate-locked {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-height: 40px;
+  }
+  .rates-board .rate-locked strong {
+    font-variant-numeric: tabular-nums;
+    color: #0b1220;
+  }
+  .rates-board .lock-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.45);
+    background: #0b1220;
+    color: #e8d5a3;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
   .rates-board.is-list [data-layout="cards"] { display: none; }
   .rates-board.is-list [data-layout="list"] { display: block; }
   .rates-board.is-cards [data-layout="list"] { display: none; }
   .rates-board.is-cards [data-layout="cards"] { display: grid; }
+  .rates-board .stock-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 14px;
+  }
+  .rates-board .stock-chip {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 12px;
+    min-height: 44px;
+    padding: 7px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(201,162,39,0.28);
+    background: #fffaf3;
+    box-shadow: 0 6px 14px rgba(20,17,15,0.04);
+  }
+  .rates-board .stock-chip.is-total {
+    background: #0b1220;
+    border-color: #c9a227;
+    box-shadow: 0 8px 18px rgba(20,17,15,0.16);
+  }
+  .rates-board .stock-chip span {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6258;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .rates-board .stock-chip.is-total span { color: #e8d5a3; }
+  .rates-board .stock-chip strong {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.18rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #0b1220;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .rates-board .stock-chip.is-total strong { color: #e8d5a3; }
+  .rates-board .stock-chip em {
+    font-style: normal;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #6b6258;
+    margin-left: 3px;
+  }
+  .rates-board .stock-chip.is-total em { color: #c9a227; }
+  .rates-board .stock-ledger { margin-top: 28px; }
+  .rates-board .stock-ledger-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .rates-board .stock-ledger h2 {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.6rem;
+    margin: 0;
+    font-weight: 600;
+    color: #0b1220;
+  }
+  .rates-board .stock-ledger-head .hint { margin: 4px 0 0; }
+  .rates-board .stock-ledger a.atelier-back { text-decoration: none; }
+  .rates-board .stock-table-wrap {
+    background: #fff;
+    border: 1px solid rgba(201,162,39,0.28);
+    border-radius: 18px;
+    overflow: auto;
+    box-shadow: 0 12px 28px rgba(20,17,15,0.05);
+  }
+  .rates-board .stock-table {
+    width: 100%;
+    min-width: 860px;
+    border-collapse: collapse;
+  }
+  .rates-board .stock-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6258; font-weight: 700; padding: 14px 16px;
+    border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .rates-board .stock-table td {
+    padding: 12px 16px; border-bottom: 1px solid rgba(201,162,39,0.12);
+    vertical-align: middle; font-size: 14px; color: #14110f;
+  }
+  .rates-board .stock-table .num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .rates-board .stock-table .gold { color: #c9a227; font-weight: 700; }
+  .rates-board .stock-table tbody tr:hover { background: rgba(232,213,163,0.18); }
+  .rates-board .stock-table tfoot th {
+    background: #fffaf3;
+    color: #0b1220;
+    border-bottom: 0;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.05rem;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .rates-board .stock-table tfoot .gold { font-size: 1.15rem; }
+  .rates-board .piece-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+  }
+  .rates-board .piece-link strong {
+    display: block;
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #0b1220;
+  }
+  .rates-board .sku {
+    display: inline-block;
+    margin-top: 2px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #6b6258;
+    text-transform: uppercase;
+  }
+  .rates-board .muted { color: #6b6258; }
+  .rates-board .stock {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .rates-board .stock.in { background: #0b1220; color: #e8d5a3; }
+  .rates-board .stock.out { background: #f3eee6; color: #6b6258; }
+  @media (max-width: 900px) {
+    .rates-board .stock-summary { grid-template-columns: 1fr 1fr; }
+    .rates-board .stock-chip.is-total { grid-column: 1 / -1; }
+    .rates-board .stock-ledger-head { flex-direction: column; align-items: flex-start; }
+  }
   @media (max-width: 800px) {
     .rates-board .rates-hero-actions { width: 100%; }
-    .rates-board .rate-list th:nth-child(3),
-    .rates-board .rate-list td:nth-child(3) { display: none; }
+    .rates-board .rate-row { grid-template-columns: 1fr; }
+    .rates-board .rate-inline { justify-content: flex-start; }
   }
 </style>
 
@@ -222,7 +585,7 @@
     var wrap = document.getElementById('rates-view');
     if(!wrap) return;
     var buttons = wrap.querySelectorAll('.view-btn');
-    var key = 'rates-view';
+    var key = 'rates-view-v2';
     function apply(view){
       var mode = view === 'list' ? 'list' : 'cards';
       wrap.classList.remove('is-list', 'is-cards');
@@ -237,8 +600,8 @@
     buttons.forEach(function(btn){
       btn.addEventListener('click', function(){ apply(btn.getAttribute('data-view')); });
     });
-    var saved = 'cards';
-    try { saved = localStorage.getItem(key) || 'cards'; } catch(e){}
+    var saved = 'list';
+    try { saved = localStorage.getItem(key) || 'list'; } catch(e){}
     apply(saved);
   })();
 </script>

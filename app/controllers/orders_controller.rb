@@ -310,6 +310,14 @@ class OrdersController < ApplicationController
       elsif line[:quantity] > line[:item].quantity.to_i
         @order.errors.add(:base, "Piece #{n}: qty cannot exceed the #{line[:item].quantity.to_i} pcs remaining of #{name}.")
       end
+      unless line[:item].sellable?
+        if line[:item].archived?
+          @order.errors.add(:base, "Piece #{n}: #{name} is archived and cannot be sold until it is restored.")
+        else
+          locked = line[:item].metal&.rate_board_locked? ? line[:item].metal.name : 'this hallmark'
+          @order.errors.add(:base, "Piece #{n}: #{name} cannot be sold while #{locked} is inactive.")
+        end
+      end
       @order.errors.add(:base, "Piece #{n}: net weight must be greater than 0 g.") if line[:net_weight] <= 0
       @order.errors.add(:base, "Piece #{n}: gross weight cannot be less than net weight.") if line[:gross_weight] < line[:net_weight]
       @order.errors.add(:base, "Piece #{n}: set a rupee-per-gram rate.") if line[:rate_per_gram] <= 0

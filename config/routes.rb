@@ -4,7 +4,7 @@ Rails.application.routes.draw do
   rescue LoadError
   end
 
-  devise_for :employees, path: 'employee', skip: [:registrations]
+  devise_for :employees, path: 'employee', skip: [:registrations], controllers: { sessions: 'employees/sessions' }
   devise_for :users, controllers: { registrations: 'users/registrations' }
 
   namespace :staff, path: 'employee' do
@@ -24,6 +24,7 @@ Rails.application.routes.draw do
     end
     resources :plans, only: [:index, :new, :create]
     resources :logs, only: [:index]
+    resource :earnings, only: [:show], controller: 'earnings'
   end
 
   resource :subscription, only: [:new, :create] do
@@ -41,7 +42,12 @@ Rails.application.routes.draw do
   get 'i/:token', to: 'orders#shared_invoice', as: :shared_invoice, constraints: { token: /[A-Za-z0-9\-_]{16,64}/ }
   get 'r/:token', to: 'payments#shared_invoice', as: :shared_receipt, constraints: { token: /[A-Za-z0-9\-_]{16,64}/ }
 
-  resources :jewelry_items
+  resources :jewelry_items do
+    member do
+      post :archive
+      post :unarchive
+    end
+  end
   resources :orders, only: [:index, :show, :new, :create] do
     member do
       post :record_payment
@@ -55,7 +61,8 @@ Rails.application.routes.draw do
 
   resources :rates, only: [:index, :new, :create, :edit, :update]
   resources :inventory_items, only: [:index, :show, :new, :create]
-  resources :ledgers, only: [:index, :new]
+  resources :stock_movements, only: [:create]
+  resources :ledgers, only: [:index, :show, :new, :create]
   resources :profit_losses, only: [:index, :new]
   resources :reports, only: [:index, :new]
   get 'reports/sales_log', to: 'reports#sales_log', as: :sales_log_reports
@@ -70,8 +77,8 @@ Rails.application.routes.draw do
     end
   end
   resources :jewellery_categories, only: [:index, :new, :create]
-  resources :stores, only: [:index, :new, :create]
-  resources :metal_stocks, only: [:index, :new, :create] do
+  resources :stores, only: [:index, :new, :create, :show, :edit, :update]
+  resources :metal_stocks, only: [:index, :new, :create, :show, :update] do
     member do
       get :adjust
       post :do_adjust

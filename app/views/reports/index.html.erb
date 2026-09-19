@@ -1,2 +1,710 @@
-<h1>Reports (placeholder)</h1>
-<p>Collection of reports will appear here.</p>
+<%= render 'shared/atelier_styles' %>
+
+<%
+  report = @report
+  book = report.book
+  house = @house_name.to_s
+  metals = @metals || []
+  window = book.window
+  tray = report.tray
+  vault = report.vault
+  khata = report.khata
+  hallmarks = report.hallmarks
+  payments = report.payments
+  returns = report.returns
+  mix = report.mix
+  series = report.series
+  series_max = report.series_max
+  result = report.house_result
+  loss = result.negative?
+  tab_path = lambda do |key|
+    reports_path(request.query_parameters.merge(window: key).except('from', 'to'))
+  end
+  dates_path = if window == 'custom'
+                 reports_path(window: 'custom', from: book.from, to: book.to, metal_id: book.metal_id)
+               else
+                 new_report_path(window: 'custom', from: book.from, to: book.to, metal_id: book.metal_id)
+               end
+  word = lambda do |count, one, many|
+    "#{count} #{count == 1 ? one : many}"
+  end
+%>
+
+<div class="atelier-page house-report">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Books</p>
+      <h1>House report</h1>
+      <p class="lead">A single reading of <%= house %> — bills in this window, metal recovered, making kept, GST held aside, and what still sits on the tray, in the vault, and on khata.</p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to 'House result', profit_losses_path(window: window, from: (book.from if window == 'custom'), to: (book.to if window == 'custom'), metal_id: book.metal_id), class: 'atelier-back' %>
+      <%= link_to 'Sales log', sales_log_reports_path, class: 'atelier-back' %>
+      <%= link_to 'Compose a window', new_report_path(window: window, from: book.from, to: book.to, metal_id: book.metal_id), class: 'btn-gold' %>
+    </div>
+  </header>
+
+  <nav class="cat-tabs" aria-label="Window">
+    <%= link_to 'Today', tab_path.call('today'), class: (window == 'today' ? 'is-active' : nil) %>
+    <%= link_to 'Yesterday', tab_path.call('yesterday'), class: (window == 'yesterday' ? 'is-active' : nil) %>
+    <%= link_to 'Week', tab_path.call('week'), class: (window == 'week' ? 'is-active' : nil) %>
+    <%= link_to 'Month', tab_path.call('month'), class: (window == 'month' ? 'is-active' : nil) %>
+    <%= link_to 'Year', tab_path.call('year'), class: (window == 'year' ? 'is-active' : nil) %>
+    <%= link_to 'Dates', dates_path, class: (window == 'custom' ? 'is-active' : nil) %>
+  </nav>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag reports_path, method: :get, class: 'stock-search' do %>
+      <%= hidden_field_tag :window, window %>
+      <% if window == 'custom' %>
+        <%= date_field_tag :from, book.from, class: 'form-control' %>
+        <%= date_field_tag :to, book.to, class: 'form-control' %>
+      <% end %>
+      <%= select_tag :metal_id, options_from_collection_for_select(metals, :id, :name, book.metal_id), include_blank: 'All metals', class: 'form-control' %>
+      <button type="submit" class="atelier-back">Read</button>
+      <% if book.metal_id.present? || window == 'custom' %>
+        <%= link_to 'Clear', reports_path(window: window == 'custom' ? 'month' : window), class: 'atelier-back' %>
+      <% end %>
+    <% end %>
+    <div class="stock-stats">
+      <div>
+        <span>Bills</span>
+        <strong><%= book.bill_count %></strong>
+      </div>
+      <div>
+        <span>Net weight</span>
+        <strong><%= '%.2f' % book.grams %> <em>g</em></strong>
+      </div>
+      <div>
+        <span>As of</span>
+        <strong><%= report.generated_at.strftime('%d %b, %H:%M') %></strong>
+      </div>
+    </div>
+  </div>
+
+  <article class="report-letter">
+    <p class="pl-kicker">House note · <%= book.label %><% if book.metal_filter %> · <%= book.metal_filter.name %><% end %></p>
+    <h2>How <%= house %> stands</h2>
+    <% if book.bill_count.zero? %>
+      <p>No invoice was raised in this window. The standing books below still show the tray, the vault and khata as they are this moment. Raise a bill at the desk, or compose another span of dates.</p>
+    <% else %>
+      <p>
+        In this window the house raised <strong><%= word.call(book.bill_count, 'bill', 'bills') %></strong>
+        covering <strong><%= word.call(book.pieces, 'piece', 'pieces') %></strong>
+        of <strong><%= '%.2f' % book.grams %> g</strong> net.
+        Metal recovered at the board was <strong><%= format_rupees(book.metal) %></strong> —
+        that rupee replaces the grams that left the tray; it is not kept as profit.
+        Making, stones, extras and bill charges, after courtesy of <strong><%= format_rupees(book.discount) %></strong>,
+        leave a house result of <strong><%= format_rupees(result) %></strong>
+        (<%= '%.1f' % book.margin_percent %>% of taxable).
+      </p>
+      <p>
+        GST of <strong><%= format_rupees(book.gst) %></strong> was written on those bills
+        (CGST <%= format_rupees(book.cgst) %>, IGST <%= format_rupees(book.igst) %>) and sits for government.
+        Cash and transfers taken at the desk in the same dates came to <strong><%= format_rupees(payments[:total]) %></strong>
+        across <%= word.call(payments[:count], 'receipt', 'receipts') %>.
+        Still open on these invoices: <strong><%= format_rupees(book.outstanding) %></strong>.
+        <% if returns[:count].positive? %>
+          Returns on the book: <%= word.call(returns[:count], 'line', 'lines') %>
+          (<%= returns[:cash] %> cash · <%= format_rupees(returns[:cash_amount]) %>, <%= returns[:exchange] %> exchange).
+        <% else %>
+          No return was posted in this window.
+        <% end %>
+        <% if report.new_clients.positive? %>
+          <%= word.call(report.new_clients, 'new client', 'new clients') %> were registered.
+        <% end %>
+      </p>
+    <% end %>
+    <p>
+      As the book stands now, the tray holds <strong><%= tray[:live_pcs] %> pcs</strong>
+      across <%= word.call(tray[:pieces], 'live design', 'live designs') %>
+      (<%= '%.2f' % tray[:grams] %> g, valued at <strong><%= format_rupees(tray[:value]) %></strong> on today’s board).
+      The vault holds <strong><%= vault[:grams] %> g</strong> on <%= word.call(vault[:cards], 'metal card', 'metal cards') %>
+      at <%= word.call(vault[:stores], 'store', 'stores') %>, marked
+      <strong><%= format_rupees(vault[:value]) %></strong> at the fallback ₹/g.
+      Hallmark bulk still on the purity book: <strong><%= '%.2f' % hallmarks[:grams] %> g</strong>.
+      On khata, <strong><%= format_rupees(khata[:receivable]) %></strong> is receivable
+      from <%= word.call(khata[:due], 'client', 'clients') %>;
+      advances sit at <strong><%= format_rupees(khata[:advances]) %></strong>.
+    </p>
+  </article>
+
+  <div class="report-kpis">
+    <div>
+      <span>House result</span>
+      <strong class="<%= loss ? 'is-loss' : 'gold' %>"><%= format_rupees(result) %></strong>
+      <em>Making after courtesy and cash refunds</em>
+    </div>
+    <div>
+      <span>Bills raised</span>
+      <strong><%= format_rupees(book.bill_total) %></strong>
+      <em><%= book.paid_bills %> settled · <%= book.open_bills %> open</em>
+    </div>
+    <div>
+      <span>Tray value</span>
+      <strong class="gold"><%= format_rupees(tray[:value]) %></strong>
+      <em><%= tray[:live_pcs] %> pcs · <%= '%.2f' % tray[:grams] %> g</em>
+    </div>
+    <div>
+      <span>Receivable</span>
+      <strong><%= format_rupees(khata[:receivable]) %></strong>
+      <em><%= khata[:due] %> khatas due · <%= format_rupees(khata[:advances]) %> advance</em>
+    </div>
+  </div>
+
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>1 · Counter in this window</h2>
+          <p class="hint">Read top to bottom. Metal is recovery. The last gold line is what the house kept.</p>
+          <ol class="pl-lines">
+            <% report.statement_lines.each do |line| %>
+              <li class="pl-line is-<%= line[:kind] %>">
+                <div class="pl-line-copy">
+                  <strong><%= line[:label] %></strong>
+                  <span><%= line[:note] %></span>
+                </div>
+                <b><%= format_rupees(line[:amount]) %></b>
+              </li>
+            <% end %>
+          </ol>
+        </div>
+      </section>
+
+      <% if mix.any? { |part| part[:amount].positive? } %>
+        <section class="atelier-form" style="margin-top:18px">
+          <div class="section">
+            <h2>2 · Composition</h2>
+            <p class="hint">Share of the bill before GST. The navy band is metal; the gold band is making — that is where the house lives.</p>
+            <div class="pl-mix">
+              <% mix.each do |part| %>
+                <% next unless part[:share].positive? %>
+                <span class="is-<%= part[:tone] %>" style="width: <%= part[:share] %>%" title="<%= part[:label] %>: <%= format_rupees(part[:amount]) %>"></span>
+              <% end %>
+            </div>
+            <ul class="pl-legend">
+              <% mix.each do |part| %>
+                <li>
+                  <i class="is-<%= part[:tone] %>"></i>
+                  <%= part[:label] %>
+                  <em><%= format_rupees(part[:amount]) %></em>
+                  <span><%= '%.0f' % part[:share] %>%</span>
+                </li>
+              <% end %>
+              <li>
+                <i class="is-gst"></i>
+                GST
+                <em><%= format_rupees(book.gst) %></em>
+                <span>pass-through</span>
+              </li>
+            </ul>
+            <% if series.any? && series_max.positive? %>
+              <div class="pl-spark" aria-hidden="true">
+                <% series.each do |point| %>
+                  <% height = [(point[:value] / series_max * 100).round, point[:value].positive? ? 6 : 2].max %>
+                  <div class="pl-spark-col" title="<%= point[:hint] %>: <%= format_rupees(point[:value]) %>">
+                    <span style="height: <%= height %>%"></span>
+                  </div>
+                <% end %>
+              </div>
+              <p class="hint" style="margin:8px 0 0">House result by day in this window.</p>
+            <% end %>
+          </div>
+        </section>
+      <% end %>
+    </div>
+
+    <aside class="preview">
+      <div class="card-head">
+        <p class="preview-kicker">This reading</p>
+        <span class="client-ref"><%= book.label %></span>
+      </div>
+      <p class="preview-line" style="margin-top:0"><%= house %></p>
+      <div class="preview-price <%= 'is-loss' if loss %>"><%= format_rupees(result) %></div>
+      <p class="preview-line">House result · <%= '%.1f' % book.margin_percent %>% of taxable</p>
+      <div class="chips">
+        <span class="chip"><%= format_rupees(book.metal) %> metal</span>
+        <span class="chip"><%= format_rupees(book.gst) %> GST</span>
+        <span class="chip"><%= format_rupees(payments[:total]) %> taken</span>
+      </div>
+      <p class="preview-desc">Generated <%= report.generated_at.strftime('%d %b %Y, %H:%M') %>. Bill date sets the window. A receipt taken on another day is cash, not a change to this result.</p>
+      <p class="preview-note">Open House result for the line-by-line statement of every invoice. This page is the full house reading — counter, stock and khata together.</p>
+    </aside>
+  </div>
+
+  <h2 class="pl-block-title">3 · GST &amp; cash</h2>
+  <p class="hint pl-block-hint">Tax collected is not profit. Receipts below are dated when they were taken, which may differ from the bill.</p>
+  <div class="report-split">
+    <div class="atelier-form">
+      <div class="section">
+        <h2>GST on bills</h2>
+        <ul class="report-facts">
+          <li><span>CGST</span><b><%= format_rupees(book.cgst) %></b></li>
+          <li><span>IGST</span><b><%= format_rupees(book.igst) %></b></li>
+          <li><span>Held for government</span><b class="gold"><%= format_rupees(book.gst) %></b></li>
+        </ul>
+      </div>
+    </div>
+    <div class="atelier-form">
+      <div class="section">
+        <h2>Taken at the desk</h2>
+        <% if payments[:methods].any? %>
+          <ul class="report-facts">
+            <% payments[:methods].each do |row| %>
+              <li><span><%= row[:name] %></span><b><%= format_rupees(row[:amount]) %></b></li>
+            <% end %>
+            <li><span>Still on these bills</span><b><%= format_rupees(book.outstanding) %></b></li>
+          </ul>
+        <% else %>
+          <p class="hint" style="margin:0">No receipt was taken in this window.</p>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+  <% metals_mix = report.by_metal %>
+  <% if metals_mix.any? %>
+    <h2 class="pl-block-title">4 · Metal that moved</h2>
+    <p class="hint pl-block-hint">Grams on bills, and making each metal contributed. Open a card to read only that metal.</p>
+    <div class="pl-metals">
+      <% metals_mix.each do |row| %>
+        <%
+          metal_params = request.query_parameters.merge('window' => window)
+          metal_params = metal_params.except('from', 'to') unless window == 'custom'
+          selected = book.metal_id.to_s == row[:id].to_s
+          if selected || !row[:id].to_i.positive?
+            metal_params = metal_params.except('metal_id')
+          else
+            metal_params['metal_id'] = row[:id]
+          end
+        %>
+        <%= link_to reports_path(metal_params), class: "pl-metal #{'is-on' if selected}" do %>
+          <span class="swatch" style="background:<%= row[:colour] %>"></span>
+          <div>
+            <strong><%= row[:name] %></strong>
+            <span><%= '%.2f' % row[:grams] %> g · <%= row[:pcs] %> <%= row[:pcs] == 1 ? 'pc' : 'pcs' %></span>
+          </div>
+          <b><%= format_rupees(row[:house]) %></b>
+        <% end %>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% categories = report.by_category %>
+  <% if categories.any? %>
+    <h2 class="pl-block-title">5 · Form &amp; category</h2>
+    <p class="hint pl-block-hint">What left the tray, grouped as the catalogue names it.</p>
+    <div class="stock-table-wrap">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Metal</th>
+            <th class="num">Pcs</th>
+            <th class="num">Net</th>
+            <th class="num">Making</th>
+            <th class="num">On bills</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% categories.each do |row| %>
+            <tr>
+              <td><strong><%= row[:name] %></strong></td>
+              <td><%= row[:metal].presence || '—' %></td>
+              <td class="num"><%= row[:pcs] %></td>
+              <td class="num"><%= '%.2f' % row[:grams] %> g</td>
+              <td class="num"><%= format_rupees(row[:making]) %></td>
+              <td class="num gold"><%= format_rupees(row[:amount]) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <% pieces = report.top_pieces %>
+  <% if pieces.any? %>
+    <h2 class="pl-block-title">6 · Pieces on the bills</h2>
+    <p class="hint pl-block-hint">Ranked by amount written. Making is the house share on that piece.</p>
+    <div class="stock-table-wrap">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>Piece</th>
+            <th>Hallmark</th>
+            <th class="num">Pcs</th>
+            <th class="num">Net</th>
+            <th class="num">Making</th>
+            <th class="num">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% pieces.each do |row| %>
+            <tr>
+              <td>
+                <% if row[:item] %>
+                  <%= link_to jewelry_item_path(row[:item]), class: 'piece-link' do %>
+                    <strong><%= row[:name] %></strong>
+                    <span class="sku"><%= row[:sku] %></span>
+                  <% end %>
+                <% else %>
+                  <strong><%= row[:name] %></strong>
+                <% end %>
+              </td>
+              <td><%= [row[:metal], row[:purity]].compact.join(' · ').presence || '—' %></td>
+              <td class="num"><%= row[:pcs] %></td>
+              <td class="num"><%= '%.2f' % row[:grams] %> g</td>
+              <td class="num"><%= format_rupees(row[:making]) %></td>
+              <td class="num gold"><%= format_rupees(row[:amount]) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <% clients = report.top_clients %>
+  <% if clients.any? %>
+    <h2 class="pl-block-title">7 · Clients in the window</h2>
+    <p class="hint pl-block-hint">Who the counter wrote for. House is making and extras after that client’s discounts.</p>
+    <div class="stock-table-wrap">
+      <table class="stock-table">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th class="num">Bills</th>
+            <th class="num">Net</th>
+            <th class="num">Billed</th>
+            <th class="num">House</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% clients.each do |row| %>
+            <tr>
+              <td>
+                <% if row[:client] %>
+                  <%= link_to customer_path(row[:client]), class: 'piece-link' do %>
+                    <strong><%= row[:name] %></strong>
+                    <span class="sku"><%= row[:ref].presence || 'Client card' %></span>
+                  <% end %>
+                <% else %>
+                  <strong><%= row[:name] %></strong>
+                <% end %>
+              </td>
+              <td class="num"><%= row[:bills] %></td>
+              <td class="num"><%= '%.2f' % row[:grams] %> g</td>
+              <td class="num"><%= format_rupees(row[:total]) %></td>
+              <td class="num gold"><%= format_rupees(row[:house]) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <h2 class="pl-block-title">8 · Standing books</h2>
+  <p class="hint pl-block-hint">Not tied to the window — tray, vault and today’s board as they are now.</p>
+  <div class="report-split report-split-3">
+    <div class="atelier-form">
+      <div class="section">
+        <h2>Tray</h2>
+        <ul class="report-facts">
+          <li><span>Live pieces</span><b><%= tray[:live_pcs] %> pcs</b></li>
+          <li><span>Designs</span><b><%= tray[:pieces] %></b></li>
+          <li><span>Weight</span><b><%= '%.2f' % tray[:grams] %> g</b></li>
+          <li><span>At the board</span><b class="gold"><%= format_rupees(tray[:value]) %></b></li>
+          <li><span>Stock out</span><b><%= tray[:stock_out] %></b></li>
+        </ul>
+        <p class="hint" style="margin:12px 0 0"><%= link_to 'Open the catalogue', jewelry_items_path %></p>
+      </div>
+    </div>
+    <div class="atelier-form">
+      <div class="section">
+        <h2>Vault</h2>
+        <ul class="report-facts">
+          <li><span>Grams</span><b><%= vault[:grams] %> g</b></li>
+          <li><span>Value</span><b class="gold"><%= format_rupees(vault[:value]) %></b></li>
+          <li><span>Cards</span><b><%= vault[:cards] %></b></li>
+          <li><span>Hallmark bulk</span><b><%= '%.2f' % hallmarks[:grams] %> g</b></li>
+          <li><span>Light / empty</span><b><%= vault[:light].size %> / <%= vault[:empty].size %></b></li>
+        </ul>
+        <p class="hint" style="margin:12px 0 0"><%= link_to 'Open metal stock', metal_stocks_path %></p>
+      </div>
+    </div>
+    <div class="atelier-form">
+      <div class="section">
+        <h2>Khata</h2>
+        <ul class="report-facts">
+          <li><span>Clients</span><b><%= khata[:clients] %></b></li>
+          <li><span>Receivable</span><b class="gold"><%= format_rupees(khata[:receivable]) %></b></li>
+          <li><span>Due khatas</span><b><%= khata[:due] %></b></li>
+          <li><span>Advances</span><b><%= format_rupees(khata[:advances]) %></b></li>
+          <li><span>New in window</span><b><%= report.new_clients %></b></li>
+        </ul>
+        <p class="hint" style="margin:12px 0 0"><%= link_to 'Open ledgers', ledgers_path %></p>
+      </div>
+    </div>
+  </div>
+
+  <% board = report.board.select { |row| row[:purities].any? } %>
+  <% if board.any? %>
+    <h2 class="pl-block-title">Today’s board</h2>
+    <p class="hint pl-block-hint">₹ per gram on each hallmark, and bulk grams still on that purity.</p>
+    <div class="report-board">
+      <% board.each do |metal_row| %>
+        <section class="report-board-card">
+          <header>
+            <span class="swatch" style="background:<%= metal_row[:colour] %>"></span>
+            <strong><%= metal_row[:name] %></strong>
+            <% if metal_row[:locked] %><em>Inactive</em><% end %>
+          </header>
+          <ul>
+            <% metal_row[:purities].each do |purity| %>
+              <li>
+                <span><%= purity[:label] %></span>
+                <b><%= purity[:rate].positive? ? "#{format_rupees(purity[:rate])}/g" : '—' %></b>
+                <i><%= '%.2f' % purity[:grams] %> g</i>
+              </li>
+            <% end %>
+          </ul>
+        </section>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% due = report.due_clients %>
+  <% attention = vault[:light].any? || vault[:empty].any? || tray[:stock_out].positive? || due.any? || tray[:locked].positive? %>
+  <% if attention %>
+    <h2 class="pl-block-title">9 · Needs a look</h2>
+    <p class="hint pl-block-hint">Light vaults, empty cards, stock-out designs, and khatas that still owe the house.</p>
+    <div class="report-split">
+      <div class="atelier-form">
+        <div class="section">
+          <h2>Stock</h2>
+          <% if tray[:stock_out].positive? || tray[:locked].positive? %>
+            <p class="hint"><%= tray[:stock_out] %> designs are off the tray. <%= tray[:locked] %> locked by an inactive metal or hallmark.</p>
+          <% end %>
+          <% if tray[:light].any? %>
+            <ul class="report-list">
+              <% tray[:light].each do |item| %>
+                <li><%= link_to item.name, jewelry_item_path(item) %> · <%= item.quantity.to_i %> pcs</li>
+              <% end %>
+            </ul>
+          <% end %>
+          <% if vault[:light].any? || vault[:empty].any? %>
+            <ul class="report-list">
+              <% (vault[:light] + vault[:empty]).uniq.first(6).each do |card| %>
+                <li>
+                  <%= link_to metal_stock_path(card) do %>
+                    <%= card.metal&.name %> at <%= card.store&.name %>
+                  <% end %>
+                  · <%= card.available_grams.to_i %> g
+                  <%= card.empty? ? '· empty' : '· light' %>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+          <% if tray[:stock_out].zero? && vault[:light].empty? && vault[:empty].empty? && tray[:light].empty? %>
+            <p class="hint" style="margin:0">Tray and vault look steady.</p>
+          <% end %>
+        </div>
+      </div>
+      <div class="atelier-form">
+        <div class="section">
+          <h2>Khatas still due</h2>
+          <% if due.any? %>
+            <ul class="report-facts">
+              <% due.each do |client| %>
+                <li>
+                  <%= link_to client.full_name.presence || 'Client', ledger_path(client) %>
+                  <b><%= format_rupees(client.outstanding) %></b>
+                </li>
+              <% end %>
+            </ul>
+          <% else %>
+            <p class="hint" style="margin:0">No client currently owes the house.</p>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .container:has(.house-report) { max-width: 1240px; }
+  .house-report a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .house-report .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .house-report .cat-tabs {
+    display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px;
+    margin: -6px 0 16px; padding: 3px; border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.4); background: #fff;
+  }
+  .house-report .cat-tabs a {
+    display: inline-flex; padding: 7px 14px; border-radius: 999px;
+    color: #6b6258; text-decoration: none; font-size: 13px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .house-report .cat-tabs a.is-active {
+    background: linear-gradient(90deg, #e8d5a3, #c9a227); color: #0b1220;
+  }
+  .house-report .cat-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .house-report .stock-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .house-report .stock-search .form-control { width: auto; min-width: 140px; }
+  .house-report .stock-stats { display: flex; gap: 18px; flex-wrap: wrap; }
+  .house-report .stock-stats span { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700; }
+  .house-report .stock-stats strong { color: #0b1220; font-variant-numeric: tabular-nums; }
+  .house-report .stock-stats em { font-style: normal; font-size: 12px; color: #6b6258; font-weight: 600; }
+  .house-report .report-letter {
+    background: linear-gradient(180deg, #fffaf3, #f7f1e8);
+    border: 1px solid rgba(201,162,39,0.28); border-radius: 18px;
+    padding: 24px 26px 20px; margin-bottom: 18px;
+  }
+  .house-report .pl-kicker {
+    margin: 0; color: #c9a227; font-size: 12px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .house-report .report-letter h2 {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.85rem; font-weight: 600;
+    margin: 6px 0 12px; color: #0b1220;
+  }
+  .house-report .report-letter p {
+    margin: 0 0 12px; color: #14110f; line-height: 1.65; max-width: 78ch;
+  }
+  .house-report .report-letter p:last-child { margin-bottom: 0; }
+  .house-report .report-kpis {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px;
+  }
+  .house-report .report-kpis > div {
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 16px; padding: 14px 16px;
+  }
+  .house-report .report-kpis span {
+    display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700;
+  }
+  .house-report .report-kpis strong {
+    display: block; margin-top: 6px; font-family: "Cormorant Garamond", Georgia, serif;
+    font-size: 1.55rem; font-weight: 600; color: #0b1220; font-variant-numeric: tabular-nums;
+  }
+  .house-report .report-kpis strong.gold { color: #c9a227; }
+  .house-report .report-kpis strong.is-loss { color: #7f1d1d; }
+  .house-report .report-kpis em { display: block; margin-top: 4px; font-style: normal; font-size: 12px; color: #6b6258; }
+  .house-report .pl-lines { list-style: none; margin: 0; padding: 0; }
+  .house-report .pl-line {
+    display: flex; justify-content: space-between; gap: 16px; align-items: flex-start;
+    padding: 12px 0; border-bottom: 1px dashed rgba(201,162,39,0.28);
+  }
+  .house-report .pl-line:last-child { border-bottom: 0; }
+  .house-report .pl-line-copy strong { display: block; color: #0b1220; }
+  .house-report .pl-line-copy span { display: block; margin-top: 3px; font-size: 12px; color: #6b6258; line-height: 1.45; }
+  .house-report .pl-line b { font-variant-numeric: tabular-nums; white-space: nowrap; color: #0b1220; }
+  .house-report .pl-line.is-minus b { color: #7f1d1d; }
+  .house-report .pl-line.is-pass b { color: #6b6258; }
+  .house-report .pl-line.is-subtotal {
+    background: #f7f1e8; margin: 0 -12px; padding: 12px; border-radius: 10px; border-bottom: 0;
+  }
+  .house-report .pl-line.is-result {
+    margin-top: 8px; padding: 14px 12px; margin-left: -12px; margin-right: -12px;
+    border: 1px solid rgba(201,162,39,0.4); border-radius: 12px;
+    background: linear-gradient(90deg, rgba(232,213,163,0.35), rgba(201,162,39,0.12));
+  }
+  .house-report .pl-line.is-result b {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.45rem; color: #c9a227;
+  }
+  .house-report .preview .preview-price.is-loss { color: #f5d0d0; }
+  .house-report .pl-mix {
+    display: flex; height: 16px; border-radius: 999px; overflow: hidden;
+    background: #f7f1e8; border: 1px solid rgba(201,162,39,0.22);
+  }
+  .house-report .pl-mix span { display: block; height: 100%; }
+  .house-report .pl-mix .is-metal, .house-report .pl-legend i.is-metal { background: #0b1220; }
+  .house-report .pl-mix .is-making, .house-report .pl-legend i.is-making { background: #c9a227; }
+  .house-report .pl-mix .is-extra, .house-report .pl-legend i.is-extra { background: #e8d5a3; }
+  .house-report .pl-mix .is-charges, .house-report .pl-legend i.is-charges { background: #8a8072; }
+  .house-report .pl-legend { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+  .house-report .pl-legend li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #14110f; }
+  .house-report .pl-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .house-report .pl-legend i.is-gst { background: #d6cbb8; }
+  .house-report .pl-legend em { margin-left: auto; font-style: normal; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .house-report .pl-legend span { color: #6b6258; font-size: 11px; min-width: 4.5em; text-align: right; }
+  .house-report .pl-spark { display: flex; align-items: flex-end; gap: 3px; height: 72px; margin-top: 16px; }
+  .house-report .pl-spark-col { flex: 1; min-width: 4px; height: 100%; display: flex; align-items: flex-end; }
+  .house-report .pl-spark-col span {
+    display: block; width: 100%; border-radius: 3px 3px 0 0;
+    background: linear-gradient(180deg, #e8d5a3, #c9a227); min-height: 2px;
+  }
+  .house-report .pl-block-title {
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.4rem; font-weight: 600;
+    margin: 28px 0 0; color: #0b1220;
+  }
+  .house-report .pl-block-hint { margin: 4px 0 14px; color: #6b6258; }
+  .house-report .report-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .house-report .report-split-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .house-report .report-facts { list-style: none; margin: 0; padding: 0; }
+  .house-report .report-facts li {
+    display: flex; justify-content: space-between; gap: 12px; padding: 8px 0;
+    border-bottom: 1px dashed rgba(201,162,39,0.22); font-size: 14px;
+  }
+  .house-report .report-facts li:last-child { border-bottom: 0; }
+  .house-report .report-facts span { color: #6b6258; }
+  .house-report .report-facts b { font-variant-numeric: tabular-nums; color: #0b1220; }
+  .house-report .report-facts b.gold { color: #c9a227; }
+  .house-report .report-facts a { color: #0b1220; text-decoration: none; font-weight: 600; }
+  .house-report .pl-metals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .house-report .pl-metal {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 14px;
+    text-decoration: none; color: inherit;
+  }
+  .house-report .pl-metal.is-on, .house-report .pl-metal:hover { border-color: #c9a227; background: #fff; }
+  .house-report .pl-metal .swatch { width: 12px; height: 36px; border-radius: 999px; flex-shrink: 0; }
+  .house-report .pl-metal strong { display: block; color: #0b1220; }
+  .house-report .pl-metal span { display: block; font-size: 12px; color: #6b6258; margin-top: 2px; }
+  .house-report .pl-metal b { margin-left: auto; color: #c9a227; font-variant-numeric: tabular-nums; }
+  .house-report .stock-table-wrap {
+    background: #fff; border: 1px solid rgba(201,162,39,0.22); border-radius: 14px; overflow: auto;
+  }
+  .house-report .stock-table { width: 100%; border-collapse: collapse; }
+  .house-report .stock-table th {
+    text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b6258; padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8;
+  }
+  .house-report .stock-table td { padding: 10px 12px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: top; }
+  .house-report .stock-table tr:last-child td { border-bottom: 0; }
+  .house-report .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .house-report .gold { color: #c9a227; font-weight: 700; }
+  .house-report td > strong, .house-report .piece-link strong { display: block; color: #0b1220; }
+  .house-report .sku { display: block; color: #6b6258; font-size: 12px; margin-top: 2px; }
+  .house-report .piece-link { color: inherit; text-decoration: none; }
+  .house-report .report-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .house-report .report-board-card {
+    background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 14px; padding: 14px 16px;
+  }
+  .house-report .report-board-card header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .house-report .report-board-card .swatch { width: 10px; height: 10px; border-radius: 50%; }
+  .house-report .report-board-card em { margin-left: auto; font-style: normal; font-size: 11px; color: #7f1d1d; font-weight: 700; }
+  .house-report .report-board-card ul { list-style: none; margin: 0; padding: 0; }
+  .house-report .report-board-card li {
+    display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 6px 0;
+    border-bottom: 1px dashed rgba(201,162,39,0.2); font-size: 13px;
+  }
+  .house-report .report-board-card li:last-child { border-bottom: 0; }
+  .house-report .report-board-card b { color: #c9a227; font-variant-numeric: tabular-nums; }
+  .house-report .report-board-card i { font-style: normal; color: #6b6258; font-size: 12px; }
+  .house-report .report-list { list-style: none; margin: 0; padding: 0; }
+  .house-report .report-list li { padding: 6px 0; border-bottom: 1px dashed rgba(201,162,39,0.2); font-size: 13px; }
+  .house-report .report-list a { color: #0b1220; font-weight: 600; text-decoration: none; }
+  @media (max-width: 960px) {
+    .house-report .report-kpis, .house-report .report-split, .house-report .report-split-3 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 720px) {
+    .house-report .report-kpis, .house-report .report-split, .house-report .report-split-3 { grid-template-columns: 1fr; }
+    .house-report .pl-legend { grid-template-columns: 1fr; }
+  }
+  @media print {
+    .navbar, .house-report .stock-hero-actions, .house-report .cat-tabs, .house-report .cat-toolbar { display: none !important; }
+    .house-report .preview { position: static; }
+    .container:has(.house-report) { max-width: none; }
+  }
+</style>

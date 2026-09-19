@@ -178,6 +178,33 @@
   .atelier-page .preview-kicker {
     font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #e8d5a3; margin: 0 0 14px;
   }
+  .atelier-page .preview .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 0 14px;
+  }
+  .atelier-page .preview .card-head .preview-kicker { margin: 0; }
+  .atelier-page .client-ref {
+    flex-shrink: 0;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #0b1220;
+    background: linear-gradient(90deg, #e8d5a3, #c9a227);
+    border-radius: 999px;
+    padding: 6px 11px;
+    line-height: 1.2;
+    box-shadow: 0 8px 18px rgba(201, 162, 39, 0.38);
+    border: 1px solid rgba(255, 248, 230, 0.4);
+    white-space: nowrap;
+  }
+  .atelier-page .client-ref.is-wait {
+    opacity: 0.72;
+    box-shadow: none;
+  }
   .atelier-page .gem {
     height: 120px;
     border-radius: 14px;

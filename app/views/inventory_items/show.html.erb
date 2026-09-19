@@ -1,11 +1,172 @@
-<h1><%= @inventory_item.jewelry_item.name %> - Inventory</h1>
-<p>Available: <%= @inventory_item.available_grams %> g</p>
-<p>Location: <%= @inventory_item.location %></p>
-<h2>Movements</h2>
-<ul>
-  <% @inventory_item.stock_movements.order(created_at: :desc).each do |m| %>
-    <li><%= m.created_at %> - <%= m.movement_type %> - <%= m.change_grams %>g - <%= m.note %></li>
-  <% end %>
-</ul>
+<%= render 'shared/atelier_styles' %>
 
-<%= render 'movement_form' %>
+<%
+  row = @inventory_item
+  piece = @piece || row.jewelry_item
+  movements = @movements || []
+  grams = row.available_grams.to_i
+  qty = piece&.quantity.to_i
+  per = piece&.effective_price_per_gram
+%>
+
+<div class="atelier-page stock-card" id="stock-card" data-grams="<%= grams %>">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Stock card</p>
+      <h1><%= piece&.name || 'Stock card' %></h1>
+      <p class="lead">
+        <%= [piece&.metal&.name, piece&.purity&.try(:hallmark_label), row.location_label].compact.join(' · ') %>
+      </p>
+    </div>
+    <div class="stock-hero-actions">
+      <%= link_to '← Inventory', inventory_items_path, class: 'atelier-back' %>
+      <% if piece %>
+        <%= link_to 'Catalogue piece', jewelry_item_path(piece), class: 'atelier-back' %>
+      <% end %>
+    </div>
+  </header>
+
+  <div class="atelier-grid">
+    <div>
+      <section class="atelier-form">
+        <div class="section">
+          <h2>On the book</h2>
+          <dl class="piece-dl">
+            <div><dt>Grams</dt><dd class="gold"><%= grams %> g</dd></div>
+            <div><dt>Location</dt><dd><%= row.location_label %></dd></div>
+            <div><dt>Tray</dt><dd><%= qty > 0 ? "#{qty} pcs" : 'Out of tray' %></dd></div>
+            <div><dt>Weight each</dt><dd><%= piece ? ('%.2f' % piece.weight_grams.to_f) : '—' %> g</dd></div>
+            <div><dt>SKU</dt><dd><%= piece&.sku || '—' %></dd></div>
+            <div><dt>₹ / g</dt><dd class="gold"><%= per.present? ? format_rupees(per) : 'No rate' %></dd></div>
+          </dl>
+          <% if row.empty? %>
+            <p class="hint warn">This card has 0 g. Receive weight before issuing.</p>
+          <% elsif row.light? %>
+            <p class="hint warn">Light — remaining grams are below one full piece weight.</p>
+          <% end %>
+        </div>
+      </section>
+
+      <section class="atelier-form" style="margin-top:16px">
+        <div class="section">
+          <h2>Record a movement</h2>
+          <p class="hint">Receive adds grams. Issue subtracts. Adjustment takes the sign you type. The book will not go below 0 g.</p>
+          <%= form_tag stock_movements_path, method: :post, id: 'move-form' do %>
+            <%= hidden_field_tag :inventory_item_id, row.id %>
+            <div class="row">
+              <div class="field">
+                <label for="movement_type">Kind</label>
+                <%= select_tag :movement_type, options_for_select([['Receive (in)', 'in'], ['Issue (out)', 'out'], ['Adjustment', 'adjustment']], 'in'), class: 'form-control', id: 'movement_type' %>
+              </div>
+              <div class="field">
+                <label for="change_grams">Grams</label>
+                <%= number_field_tag :change_grams, nil, class: 'form-control', id: 'change_grams', step: 1, placeholder: '0' %>
+              </div>
+            </div>
+            <div class="row" style="margin-top:12px">
+              <div class="field">
+                <label for="note">Note</label>
+                <%= text_field_tag :note, nil, class: 'form-control', id: 'note', placeholder: 'Purchase, issue to making, weighment…' %>
+              </div>
+            </div>
+            <p class="hint" id="move-preview" style="margin:12px 0 0">Enter grams to see the resulting book weight.</p>
+            <div class="actions" style="margin-top:14px">
+              <%= submit_tag 'Post movement', class: 'btn-gold', id: 'move-submit', disabled: true %>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+
+    <aside class="preview">
+      <p class="preview-kicker">Movements</p>
+      <% if movements.any? %>
+        <ol class="move-log">
+          <% movements.each do |m| %>
+            <% delta = m.change_grams.to_i %>
+            <li>
+              <span class="when"><%= m.created_at.in_time_zone.strftime('%d %b %Y · %H:%M') %></span>
+              <strong class="<%= delta.negative? ? 'out' : 'in' %>"><%= delta.positive? ? '+' : '' %><%= delta %> g</strong>
+              <span class="kind"><%= m.movement_type %></span>
+              <% if m.note.present? %>
+                <span class="note"><%= m.note %></span>
+              <% end %>
+            </li>
+          <% end %>
+        </ol>
+      <% else %>
+        <p class="preview-desc">No movements yet. Post a receive, issue or adjustment to start the ledger.</p>
+      <% end %>
+      <p class="preview-note">Returns to the house also post here when this piece is named.</p>
+    </aside>
+  </div>
+</div>
+
+<style>
+  .stock-card a.btn-gold, .stock-card input.btn-gold { text-decoration: none; }
+  .stock-card .stock-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .stock-card .piece-dl {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; margin: 0;
+  }
+  .stock-card .piece-dl dt {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6258; font-weight: 700;
+  }
+  .stock-card .piece-dl dd { margin: 4px 0 0; font-weight: 600; }
+  .stock-card .gold { color: #c9a227; }
+  .stock-card .hint.warn { color: #7f1d1d; }
+  .stock-card .preview { min-height: 280px; }
+  .stock-card .move-log { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow: auto; }
+  .stock-card .move-log li {
+    padding: 10px 0; border-bottom: 1px solid rgba(232,213,163,0.14);
+  }
+  .stock-card .move-log .when { display: block; color: #b7aa98; font-size: 11px; letter-spacing: 0.06em; }
+  .stock-card .move-log strong { display: inline-block; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stock-card .move-log strong.in { color: #e8d5a3; }
+  .stock-card .move-log strong.out { color: #f3c1b6; }
+  .stock-card .move-log .kind { margin-left: 8px; color: #d6cbb8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stock-card .move-log .note { display: block; color: #b7aa98; font-size: 12px; margin-top: 2px; }
+  @media (max-width: 640px) {
+    .stock-card .piece-dl { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+(function(){
+  var root = document.getElementById('stock-card');
+  if(!root) return;
+  var current = parseInt(root.getAttribute('data-grams') || '0', 10) || 0;
+  var typeEl = document.getElementById('movement_type');
+  var gramsEl = document.getElementById('change_grams');
+  var preview = document.getElementById('move-preview');
+  var submit = document.getElementById('move-submit');
+
+  function delta(){
+    var n = parseInt((gramsEl && gramsEl.value) || '0', 10) || 0;
+    var type = (typeEl && typeEl.value) || 'adjustment';
+    if(type === 'out') return -Math.abs(n);
+    if(type === 'in' || type === 'return') return Math.abs(n);
+    return n;
+  }
+
+  function paint(){
+    var d = delta();
+    var next = current + d;
+    if(!d){
+      if(preview) preview.textContent = 'Enter grams to see the resulting book weight.';
+      if(submit) submit.disabled = true;
+      return;
+    }
+    if(next < 0){
+      if(preview) preview.textContent = 'This issue would take the book below 0 g. Reduce the grams.';
+      if(submit) submit.disabled = true;
+      return;
+    }
+    if(preview) preview.textContent = 'Book will read ' + next + ' g (' + (d > 0 ? '+' : '') + d + ' g).';
+    if(submit) submit.disabled = false;
+  }
+
+  if(typeEl) typeEl.addEventListener('change', paint);
+  if(gramsEl) gramsEl.addEventListener('input', paint);
+  paint();
+})();
+</script>

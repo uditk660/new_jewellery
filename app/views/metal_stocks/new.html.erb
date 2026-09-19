@@ -1,23 +1,220 @@
-<h1>New Metal Stock</h1>
+<%= render 'shared/atelier_styles' %>
 
-<%= form_for @metal_stock do |f| %>
-  <div>
-    <%= f.label :store_id, 'Store' %><br>
-    <%= f.collection_select :store_id, @stores, :id, :name %>
+<%
+  metals = @metals || []
+  stores = @stores || []
+  openable = @openable || []
+  selected_metal_id = @metal_stock.metal_id.presence || params[:metal_id]
+  selected_store_id = @metal_stock.store_id.presence || params[:store_id]
+  payload = openable
+%>
+
+<script type="application/json" id="vault-pairs-json"><%= raw json_escape(payload.to_json) %></script>
+
+<div class="atelier-page vault-open" id="vault-open">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Metal vault</p>
+      <h1>Open a vault card</h1>
+      <p class="lead">One card per metal at each store. Opening grams post as a receive; ₹/g is the fallback when hallmark has no board rate.</p>
+    </div>
+    <%= link_to '← Metal stock', metal_stocks_path, class: 'atelier-back' %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Store</span>
+    <span class="step"><b>2</b> Metal</span>
+    <span class="step"><b>3</b> Opening grams &amp; ₹/g</span>
   </div>
-  <div>
-    <%= f.label :metal_id, 'Metal' %><br>
-    <%= f.collection_select :metal_id, @metals, :id, :name %>
-  </div>
-  <div>
-    <%= f.label :available_grams %><br>
-    <%= f.number_field :available_grams %>
-  </div>
-  <div>
-    <%= f.label :price_cents_per_gram, 'Price per gram (₹ - in paise/cents)' %><br>
-    <%= f.number_field :price_cents_per_gram %>
-  </div>
-  <div>
-    <%= f.submit 'Create' %>
-  </div>
-<% end %>
+
+  <% if stores.empty? %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">Add a store before opening a vault card.</p>
+      <div class="actions" style="margin-top:16px">
+        <%= link_to 'Open a house', new_store_path, class: 'btn-gold' %>
+        <%= link_to 'Metal stock', metal_stocks_path, class: 'atelier-back' %>
+      </div>
+    </div>
+  <% elsif metals.empty? %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">Add a metal before opening a vault card.</p>
+      <div class="actions" style="margin-top:16px">
+        <%= link_to 'Metals', metals_path, class: 'btn-gold' %>
+        <%= link_to 'Metal stock', metal_stocks_path, class: 'atelier-back' %>
+      </div>
+    </div>
+  <% elsif openable.empty? %>
+    <div class="atelier-form">
+      <p class="hint" style="margin:0">Every metal already has a card at every store. Open an existing card to receive or issue grams.</p>
+      <div class="actions" style="margin-top:16px">
+        <%= link_to 'Metal stock', metal_stocks_path, class: 'btn-gold' %>
+      </div>
+    </div>
+  <% else %>
+    <div class="atelier-grid">
+      <div class="atelier-form">
+        <%= form_for @metal_stock, url: metal_stocks_path do |f| %>
+          <% if @metal_stock.errors.any? %>
+            <div class="errors"><%= @metal_stock.errors.full_messages.to_sentence %></div>
+          <% end %>
+
+          <section class="section">
+            <h2>1 · Store</h2>
+            <p class="hint">The showroom or workshop that holds this bulk metal.</p>
+            <div class="row">
+              <div class="field">
+                <%= f.label :store_id do %>Store <span class="req">*</span><% end %>
+                <%= f.collection_select :store_id, stores, :id, :name, { include_blank: 'Select a store', selected: selected_store_id }, { class: 'form-control', id: 'metal_stock_store_id' } %>
+              </div>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>2 · Metal</h2>
+            <p class="hint">A metal may appear once per store. Hallmarks stay on the rate board.</p>
+            <div class="row">
+              <div class="field">
+                <%= f.label :metal_id do %>Metal <span class="req">*</span><% end %>
+                <%= f.collection_select :metal_id, metals, :id, :name, { include_blank: 'Select a metal', selected: selected_metal_id }, { class: 'form-control', id: 'metal_stock_metal_id' } %>
+              </div>
+            </div>
+            <p class="hint" id="pair-hint" style="margin-top:12px">Choose store and metal together.</p>
+          </section>
+
+          <section class="section">
+            <h2>3 · Opening grams &amp; ₹ / g</h2>
+            <p class="hint">Whole grams into the vault. Rate is rupees per gram, not paise.</p>
+            <div class="row">
+              <div class="field narrow">
+                <%= f.label :available_grams do %>Grams <span class="req">*</span><% end %>
+                <%= f.number_field :available_grams, class: 'form-control', id: 'metal_stock_available_grams', min: 0, step: 1 %>
+              </div>
+              <div class="field narrow">
+                <%= f.label :price_per_gram, 'Rate ₹ / g' %>
+                <%= f.number_field :price_per_gram, value: (@metal_stock.price_cents_per_gram.to_i.positive? ? ('%.2f' % @metal_stock.price_per_gram) : nil), class: 'form-control', id: 'metal_stock_price_per_gram', min: 0, step: 0.01, placeholder: '0.00' %>
+              </div>
+            </div>
+          </section>
+
+          <div class="actions">
+            <%= f.submit 'Open vault card', class: 'btn-gold', id: 'vault-submit' %>
+            <%= link_to 'Cancel', metal_stocks_path, class: 'atelier-back' %>
+          </div>
+        <% end %>
+      </div>
+
+      <aside class="preview" id="vault-preview" aria-live="polite">
+        <p class="preview-kicker">Vault card</p>
+        <div class="gem" id="preview-gem" aria-hidden="true">⚖️</div>
+        <h2 id="preview-name">Choose metal &amp; store</h2>
+        <span class="sku-chip" id="preview-store">Store</span>
+        <div class="chips" id="preview-chips"></div>
+        <div class="preview-price" id="preview-grams">0 g</div>
+        <p class="preview-line" id="preview-rate">₹/g appears here</p>
+        <p class="preview-desc" id="preview-note">Select a metal and store. Opening posts a receive for the grams you save.</p>
+        <p class="preview-note">If hallmark has no board rate, catalogue and POS fall back to this ₹/g.</p>
+      </aside>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .vault-open a.btn-gold, .vault-open input.btn-gold { text-decoration: none; }
+  .vault-open #preview-gem { position: relative; overflow: hidden; }
+  .vault-open #preview-gem::after {
+    content: ''; position: absolute; inset: 18px 22%; border-radius: 8px;
+    background: var(--vault-swatch, rgba(201,162,39,0.45)); opacity: 0.55;
+  }
+</style>
+
+<script>
+(function(){
+  var jsonEl = document.getElementById('vault-pairs-json');
+  var pairs = [];
+  try { pairs = JSON.parse((jsonEl && jsonEl.textContent) || '[]'); } catch(e) { pairs = []; }
+  var metalEl = document.getElementById('metal_stock_metal_id');
+  var storeEl = document.getElementById('metal_stock_store_id');
+  var gramsEl = document.getElementById('metal_stock_available_grams');
+  var rateEl = document.getElementById('metal_stock_price_per_gram');
+  var nameEl = document.getElementById('preview-name');
+  var storeChip = document.getElementById('preview-store');
+  var chipsEl = document.getElementById('preview-chips');
+  var gramsPreview = document.getElementById('preview-grams');
+  var ratePreview = document.getElementById('preview-rate');
+  var noteEl = document.getElementById('preview-note');
+  var hintEl = document.getElementById('pair-hint');
+  var submitEl = document.getElementById('vault-submit');
+  var gemEl = document.getElementById('preview-gem');
+  var userEditedRate = !!(rateEl && rateEl.value);
+
+  function findPair(){
+    var metalId = metalEl && metalEl.value;
+    var storeId = storeEl && storeEl.value;
+    if(!metalId || !storeId) return null;
+    for(var i=0;i<pairs.length;i++){
+      if(String(pairs[i].metal_id) === String(metalId) && String(pairs[i].store_id) === String(storeId)) return pairs[i];
+    }
+    return false;
+  }
+
+  function metalLabel(){
+    if(!metalEl || !metalEl.value) return '';
+    var opt = metalEl.options[metalEl.selectedIndex];
+    return opt ? opt.text : '';
+  }
+
+  function storeLabel(){
+    if(!storeEl || !storeEl.value) return '';
+    var opt = storeEl.options[storeEl.selectedIndex];
+    return opt ? opt.text : '';
+  }
+
+  function paint(){
+    var pair = findPair();
+    var grams = parseInt((gramsEl && gramsEl.value) || '0', 10) || 0;
+    var rate = parseFloat((rateEl && rateEl.value) || '0') || 0;
+    var metal = metalLabel();
+    var store = storeLabel();
+    if(nameEl) nameEl.textContent = metal || 'Choose metal & store';
+    if(storeChip) storeChip.textContent = store || 'Store';
+    if(chipsEl){
+      var chips = [metal, store, grams + ' g'].filter(Boolean);
+      chipsEl.innerHTML = chips.map(function(c){ return '<span class="chip">' + c + '</span>'; }).join('');
+    }
+    if(gramsPreview) gramsPreview.textContent = grams + ' g';
+    if(ratePreview) ratePreview.textContent = rate ? ('₹' + rate.toFixed(2) + ' / g') : 'No fallback rate yet';
+    if(gemEl && pair && pair.colour) gemEl.style.setProperty('--vault-swatch', pair.colour);
+    if(pair === false){
+      if(hintEl) hintEl.textContent = 'This metal already has a card at that store. Open the existing card instead.';
+      if(noteEl) noteEl.textContent = 'Each metal may appear once per store.';
+      if(submitEl) submitEl.disabled = true;
+      return;
+    }
+    if(submitEl) submitEl.disabled = !(metal && store);
+    if(!pair){
+      if(hintEl) hintEl.textContent = 'Choose store and metal together.';
+      if(noteEl) noteEl.textContent = 'Select a metal and store. Opening posts a receive for the grams you save.';
+      return;
+    }
+    if(hintEl) hintEl.textContent = metal + ' is free at ' + store + '.';
+    if(noteEl){
+      if(pair.rate > 0) noteEl.textContent = 'Last house rate for this metal was ₹' + Number(pair.rate).toFixed(2) + ' / g.';
+      else noteEl.textContent = 'Opening posts a receive. Catalogue falls back to this ₹/g when hallmark has no board rate.';
+    }
+  }
+
+  function maybeFillRate(){
+    var pair = findPair();
+    if(pair && pair.rate > 0 && rateEl && !userEditedRate){
+      rateEl.value = Number(pair.rate).toFixed(2);
+    }
+    paint();
+  }
+
+  if(metalEl) metalEl.addEventListener('change', maybeFillRate);
+  if(storeEl) storeEl.addEventListener('change', maybeFillRate);
+  if(gramsEl) gramsEl.addEventListener('input', paint);
+  if(rateEl) rateEl.addEventListener('input', function(){ userEditedRate = true; paint(); });
+  maybeFillRate();
+})();
+</script>
