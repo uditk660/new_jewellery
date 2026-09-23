@@ -53,9 +53,6 @@
   <% else %>
     <div class="atelier-grid">
       <div class="atelier-form">
-        <% if flash[:alert].present? %>
-          <div class="errors"><%= flash[:alert] %></div>
-        <% end %>
         <% if @rate && @rate.errors.any? %>
           <div class="errors"><%= @rate.errors.full_messages.to_sentence %></div>
         <% end %>

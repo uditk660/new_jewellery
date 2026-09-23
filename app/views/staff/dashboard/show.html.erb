@@ -104,6 +104,35 @@
   </div>
 </div>
 
+<div class="ep-card">
+  <h2>New accounts</h2>
+  <p class="ep-hint">Houses that signed the book — time and the address they came from.</p>
+  <% if @recent_signups.blank? %>
+    <p class="ep-hint" style="margin:12px 0 0">No store has opened an account yet.</p>
+  <% else %>
+    <div class="ep-table-wrap">
+      <table class="ep-table">
+        <thead>
+          <tr><th>House</th><th>Signed</th><th>IP</th></tr>
+        </thead>
+        <tbody>
+          <% @recent_signups.each do |user| %>
+            <tr>
+              <td>
+                <strong><%= user.display_name %></strong>
+                <span class="ep-sub"><%= user.email %></span>
+              </td>
+              <td><%= ist_stamp(user.created_at, with_year: false) %> IST</td>
+              <td><%= user.sign_up_ip.presence || '—' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    <p class="ep-hint" style="margin:12px 0 0"><%= link_to 'Open every account', staff_signups_path, class: 'ep-link' %></p>
+  <% end %>
+</div>
+
 <% if @expiring_soon.any? %>
   <div class="ep-card">
     <h2>Years ending soon</h2>

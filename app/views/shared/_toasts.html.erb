@@ -1,0 +1,189 @@
+<%
+  kinds = { notice: 'ok', success: 'ok', alert: 'bad', error: 'bad', warning: 'warn' }
+  labels = { 'ok' => 'The house', 'bad' => 'Attention', 'warn' => 'A moment' }
+  marks = { 'ok' => '✦', 'bad' => '!', 'warn' => '!' }
+  toasts = kinds.filter_map { |key, kind| msg = flash[key].presence; [kind, msg] if msg }
+%>
+<% if toasts.any? %>
+  <style>
+    .house-toasts {
+      position: fixed;
+      top: max(18px, env(safe-area-inset-top));
+      right: max(18px, env(safe-area-inset-right));
+      z-index: 5000;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: min(400px, calc(100vw - 28px));
+      pointer-events: none;
+      font-family: Inter, system-ui, sans-serif;
+    }
+    .house-toast {
+      pointer-events: auto;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 14px 18px;
+      border-radius: 16px;
+      color: #fffaf3;
+      background:
+        radial-gradient(420px 120px at 100% -20%, rgba(201,162,39,0.22), transparent 55%),
+        linear-gradient(135deg, #16120e 0%, #0b1220 62%, #14110f 100%);
+      border: 1px solid rgba(232,213,163,0.38);
+      box-shadow:
+        0 18px 48px rgba(11,18,32,0.42),
+        inset 0 1px 0 rgba(255,250,243,0.12);
+      animation: house-toast-in 420ms cubic-bezier(0.22, 1, 0.36, 1), house-toast-wane 5s linear forwards;
+    }
+    .house-toast.is-out {
+      opacity: 0 !important;
+      transform: translateX(18px) scale(0.96);
+      filter: blur(2px);
+      transition: opacity 320ms ease, transform 320ms ease, filter 320ms ease;
+    }
+    .house-toast.is-held,
+    .house-toast.is-held .house-toast-bar i,
+    .house-toast.is-held .house-toast-sheen {
+      animation-play-state: paused;
+    }
+    .house-toast-sheen {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(110deg, transparent 35%, rgba(255,250,243,0.2), transparent 65%);
+      transform: translateX(-120%);
+      animation: house-toast-sheen 1.1s ease 0.12s forwards;
+    }
+    .house-toast-mark {
+      flex-shrink: 0;
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 15px; font-weight: 700;
+      background: linear-gradient(145deg, #f4e4bc, #c9a227 55%, #8d6b12);
+      color: #0b1220;
+      box-shadow: 0 0 0 1px rgba(232,213,163,0.45), 0 8px 18px rgba(201,162,39,0.28);
+    }
+    .house-toast.is-bad .house-toast-mark {
+      background: linear-gradient(145deg, #fecaca, #9f1239);
+      color: #fffaf3;
+      box-shadow: 0 0 0 1px rgba(254,202,202,0.35);
+    }
+    .house-toast.is-warn .house-toast-mark {
+      background: linear-gradient(145deg, #fde68a, #b45309);
+      color: #14110f;
+    }
+    .house-toast-copy { flex: 1; min-width: 0; padding-top: 1px; }
+    .house-toast-copy em {
+      display: block;
+      font-style: normal;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #e8d5a3;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .house-toast.is-bad .house-toast-copy em { color: #fecaca; }
+    .house-toast.is-warn .house-toast-copy em { color: #fde68a; }
+    .house-toast-copy p {
+      margin: 0;
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.25;
+      color: #fffaf3;
+    }
+    .house-toast button {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      border: 0; background: transparent;
+      color: #b7aa98; font-size: 18px; line-height: 1;
+      cursor: pointer; border-radius: 8px;
+    }
+    .house-toast button:hover { background: rgba(255,250,243,0.08); color: #fffaf3; }
+    .house-toast-bar {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 3px;
+      background: rgba(255,250,243,0.08);
+    }
+    .house-toast-bar i {
+      display: block;
+      height: 100%;
+      width: 100%;
+      transform-origin: left center;
+      background: linear-gradient(90deg, #f4e4bc, #c9a227 55%, #8d6b12);
+      box-shadow: 0 0 12px rgba(201,162,39,0.55);
+      animation: house-toast-drain 5s linear forwards;
+    }
+    .house-toast.is-bad .house-toast-bar i {
+      background: linear-gradient(90deg, #fecaca, #9f1239);
+      box-shadow: 0 0 12px rgba(159,18,57,0.4);
+    }
+    .house-toast.is-warn .house-toast-bar i {
+      background: linear-gradient(90deg, #fde68a, #b45309);
+    }
+    @keyframes house-toast-in {
+      from { opacity: 0; transform: translateX(28px) scale(0.96); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes house-toast-wane {
+      0%, 62% { opacity: 1; }
+      100% { opacity: 0.38; }
+    }
+    @keyframes house-toast-drain {
+      from { transform: scaleX(1); }
+      to { transform: scaleX(0); }
+    }
+    @keyframes house-toast-sheen {
+      to { transform: translateX(120%); }
+    }
+  </style>
+  <div class="house-toasts" aria-live="polite">
+    <% toasts.each do |kind, msg| %>
+      <div class="house-toast is-<%= kind %> js-toast" role="status">
+        <span class="house-toast-sheen" aria-hidden="true"></span>
+        <span class="house-toast-mark" aria-hidden="true"><%= marks[kind] %></span>
+        <div class="house-toast-copy">
+          <em><%= labels[kind] %></em>
+          <p><%= msg %></p>
+        </div>
+        <button type="button" class="js-toast-close" aria-label="Dismiss">×</button>
+        <span class="house-toast-bar" aria-hidden="true"><i></i></span>
+      </div>
+    <% end %>
+  </div>
+  <script>
+    (function(){
+      var life = 5000;
+      document.querySelectorAll('.js-toast').forEach(function(el){
+        if (el.dataset.bound) return;
+        el.dataset.bound = '1';
+        var left = life;
+        var started = Date.now();
+        var timer;
+        var hide = function(){
+          el.classList.add('is-out');
+          setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 320);
+        };
+        var arm = function(){ timer = setTimeout(hide, left); };
+        arm();
+        el.addEventListener('mouseenter', function(){
+          clearTimeout(timer);
+          left -= Date.now() - started;
+          if (left < 0) left = 0;
+          el.classList.add('is-held');
+        });
+        el.addEventListener('mouseleave', function(){
+          el.classList.remove('is-held');
+          started = Date.now();
+          arm();
+        });
+        var btn = el.querySelector('.js-toast-close');
+        if (btn) btn.addEventListener('click', function(){ clearTimeout(timer); hide(); });
+      });
+    })();
+  </script>
+<% end %>

@@ -19,6 +19,8 @@
       <li><span>Owner</span><b><%= [sub.user.full_name.presence || '—', sub.user.phone.presence || 'No phone'].join(' · ') %></b></li>
       <li><span>Plan</span><b><%= sub.plan.name %> · <%= format_rupees(sub.plan.price_cents, cents: true) %> / year</b></li>
       <li><span>Asked</span><b><%= ist_stamp(sub.requested_at || sub.created_at) %> IST</b></li>
+      <li><span>Signed</span><b><%= ist_stamp(sub.user.created_at) %> IST</b></li>
+      <li><span>From IP</span><b><%= sub.user.sign_up_ip.presence || '—' %></b></li>
     </ul>
     <p class="ep-hint">The house stays locked on a pending screen until you approve. A rejection needs a reason the owner will see.</p>
   </div>

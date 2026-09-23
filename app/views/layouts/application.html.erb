@@ -2,6 +2,7 @@
 <html>
   <head>
     <title>Jewellery OS</title>
+    <%= render 'layouts/favicon' %>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,13 +20,8 @@
       <%= render 'shared/navbar' %>
     <% end %>
     <div class="container">
-      <% if flash[:notice] %>
-        <div class="flash notice"><%= flash[:notice] %></div>
-      <% end %>
-      <% if flash[:alert] %>
-        <div class="flash alert"><%= flash[:alert] %></div>
-      <% end %>
       <%= yield %>
     </div>
+    <%= render 'shared/toasts' %>
   </body>
 </html>

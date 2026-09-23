@@ -2,7 +2,7 @@
 
 <section class="auth-card" aria-labelledby="signin-heading">
   <header class="auth-header">
-    <div class="brand-mark" aria-hidden="true">S</div>
+    <%= image_tag '/favicon.png', alt: 'Strucxil', class: 'brand-logo' %>
     <p>Strucxil</p>
     <h1 id="signin-heading">Jewellery login</h1>
     <p class="brand-sub">Sign in to your store dashboard</p>
@@ -14,9 +14,6 @@
       <%= link_to 'Open a house', new_user_registration_path, data: { turbolinks: false } %>
     </nav>
 
-    <% if flash[:alert].present? %><div class="error-box"><%= flash[:alert] %></div><% end %>
-    <% if flash[:notice].present? %><div class="ok-box"><%= flash[:notice] %></div><% end %>
-
     <%= form_for(resource, as: resource_name, url: session_path(resource_name)) do |f| %>
       <div class="form-group">
         <%= f.label :email, 'Email' %>
@@ -24,7 +21,11 @@
       </div>
       <div class="form-group">
         <%= f.label :password, 'Password' %>
-        <%= f.password_field :password, autocomplete: 'current-password', placeholder: 'Enter your password' %>
+        <%= f.password_field :password, autocomplete: 'current-password', placeholder: 'Enter your password', class: 'js-secret' %>
+      </div>
+      <div class="remember-row">
+        <input type="checkbox" id="show-password" class="js-show-password">
+        <label for="show-password">Show password</label>
       </div>
       <% if devise_mapping.rememberable? %>
         <div class="remember-row">

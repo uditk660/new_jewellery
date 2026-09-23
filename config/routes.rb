@@ -24,6 +24,7 @@ Rails.application.routes.draw do
     end
     resources :plans, only: [:index, :new, :create]
     resources :logs, only: [:index]
+    resources :signups, only: [:index]
     resource :earnings, only: [:show], controller: 'earnings'
   end
 

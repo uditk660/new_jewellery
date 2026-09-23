@@ -18,6 +18,8 @@
     <ul class="ep-facts">
       <li><span>Showroom</span><b><%= sub.user.shop_name.presence || '—' %></b></li>
       <li><span>Owner</span><b><%= [sub.user.full_name.presence || '—', sub.user.phone.presence || '—'].join(' · ') %></b></li>
+      <li><span>Signed</span><b><%= ist_stamp(sub.user.created_at) %> IST</b></li>
+      <li><span>From IP</span><b><%= sub.user.sign_up_ip.presence || '—' %></b></li>
       <li><span>Source</span><b><%= sub.source.to_s.humanize %></b></li>
       <li><span>Opens</span><b><%= sub.starts_at ? "#{ist_stamp(sub.starts_at)} IST" : '—' %></b></li>
       <li><span>Closes</span><b><%= sub.ends_at ? "#{ist_stamp(sub.ends_at)} IST" : '—' %></b></li>

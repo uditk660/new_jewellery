@@ -7,6 +7,15 @@ class User < ActiveRecord::Base
   has_many :subscriptions, dependent: :destroy
   has_one :shop_profile, dependent: :destroy
 
+  before_validation :normalize_mobile_number
+
+  validates :shop_name, :full_name, :phone, presence: true, on: :create
+  validates :password_confirmation, presence: true, on: :create
+  validates :phone, format: {
+    with: /\A\+91\d{10}\z/,
+    message: 'must be +91 and exactly 10 digits'
+  }, allow_blank: true
+
   def current_subscription
     subscriptions.newest.first
   end
@@ -25,5 +34,21 @@ class User < ActiveRecord::Base
 
   def shop_setup_complete?
     shop_profile&.completed?
+  end
+
+  def mobile_digits
+    digits = phone.to_s.gsub(/\D/, '')
+    digits = digits.sub(/\A91/, '') if digits.length > 10 && digits.start_with?('91')
+    digits.last(10)
+  end
+
+  private
+
+  def normalize_mobile_number
+    return if phone.blank?
+
+    digits = phone.to_s.gsub(/\D/, '')
+    digits = digits.sub(/\A91/, '') if digits.length > 10 && digits.start_with?('91')
+    self.phone = "+91#{digits}" if digits.length == 10
   end
 end

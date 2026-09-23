@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><%= content_for?(:title) ? yield(:title) : 'Strucxil — Gold, hallmark and light' %></title>
+    <%= render 'layouts/favicon' %>
     <meta name="description" content="Strucxil, from Strucxil PVT LTD, is software for jewellery houses — gold, hallmark and the quiet work of the counter. Visit the collections, write to us, or open your own house.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,14 +15,9 @@
   <body class="maison">
     <%= render 'pages/nav' %>
     <main>
-      <% if flash[:notice].present? %>
-        <div class="maison-flash is-ok"><%= flash[:notice] %></div>
-      <% end %>
-      <% if flash[:alert].present? %>
-        <div class="maison-flash is-bad"><%= flash[:alert] %></div>
-      <% end %>
       <%= yield %>
     </main>
+    <%= render 'shared/toasts' %>
     <%= render 'pages/footer' %>
     <script>
       (function(){

@@ -38,7 +38,10 @@
                 <%= sub.plan.name %>
                 <span class="ep-sub"><%= format_rupees(sub.plan.price_cents, cents: true) %> / year</span>
               </td>
-              <td><%= ist_stamp(sub.requested_at || sub.created_at) %> IST</td>
+              <td>
+                <%= ist_stamp(sub.requested_at || sub.created_at) %> IST
+                <span class="ep-sub">Signed <%= ist_stamp(sub.user.created_at, with_year: false) %> · <%= sub.user.sign_up_ip.presence || 'no IP' %></span>
+              </td>
               <td><%= link_to 'Review', staff_subscription_request_path(sub), class: 'btn btn-gold' %></td>
             </tr>
           <% end %>

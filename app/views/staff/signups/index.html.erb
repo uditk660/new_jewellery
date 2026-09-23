@@ -1,0 +1,48 @@
+<header class="ep-hero">
+  <div>
+    <p class="ep-eyebrow">Houses</p>
+    <h1>New accounts</h1>
+    <p class="ep-lead">Every store that wrote its name at the door — the hour they signed and the address they came from.</p>
+  </div>
+</header>
+
+<div class="ep-card">
+  <% if @signups.empty? %>
+    <div class="ep-empty">
+      <h2>No house has signed yet</h2>
+      <p class="ep-hint">The next Open a house will appear here with time and IP.</p>
+    </div>
+  <% else %>
+    <p class="ep-hint" style="margin-top:0"><%= @signups.size %> <%= @signups.size == 1 ? 'account' : 'accounts' %>.</p>
+    <div class="ep-table-wrap">
+      <table class="ep-table">
+        <thead>
+          <tr>
+            <th>House</th>
+            <th>Owner</th>
+            <th>Signed</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @signups.each do |user| %>
+            <tr>
+              <td>
+                <strong><%= user.display_name %></strong>
+                <span class="ep-sub"><%= user.email %></span>
+              </td>
+              <td>
+                <%= user.full_name.presence || '—' %>
+                <span class="ep-sub"><%= user.phone.presence || 'No phone' %></span>
+              </td>
+              <td>
+                <%= ist_stamp(user.created_at) %> IST
+              </td>
+              <td><%= user.sign_up_ip.presence || '—' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+</div>

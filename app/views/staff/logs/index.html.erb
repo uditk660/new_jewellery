@@ -8,7 +8,7 @@
 
 <nav class="ep-tabs" aria-label="Actions">
   <%= link_to 'All', staff_logs_path, class: (params[:action_filter].blank? ? 'is-on' : nil) %>
-  <% %w[approved rejected granted cancelled suspended reactivated created_plan].each do |act| %>
+  <% %w[signed_up approved rejected granted cancelled suspended reactivated created_plan].each do |act| %>
     <%= link_to act.humanize, staff_logs_path(action_filter: act), class: (params[:action_filter] == act ? 'is-on' : nil) %>
   <% end %>
 </nav>

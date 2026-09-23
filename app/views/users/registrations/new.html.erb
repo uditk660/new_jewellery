@@ -2,7 +2,7 @@
 
 <section class="auth-card is-wide" aria-labelledby="signup-heading">
   <header class="auth-header">
-    <div class="brand-mark" aria-hidden="true">S</div>
+    <%= image_tag '/favicon.png', alt: 'Strucxil', class: 'brand-logo' %>
     <p>Strucxil</p>
     <h1 id="signup-heading">Open your store</h1>
     <p class="brand-sub">Create an account, then choose a yearly subscription</p>
@@ -21,33 +21,40 @@
     <%= form_for(resource, as: resource_name, url: registration_path(resource_name)) do |f| %>
       <div class="auth-row">
         <div class="form-group">
-          <%= f.label :shop_name, 'Store name' %>
-          <%= f.text_field :shop_name, autofocus: true, placeholder: 'e.g. Meena Jewellers' %>
+          <%= f.label :shop_name do %>Store name <span class="req">*</span><% end %>
+          <%= f.text_field :shop_name, autofocus: true, required: true, placeholder: 'e.g. Meena Jewellers' %>
         </div>
         <div class="form-group">
-          <%= f.label :full_name, 'Your name' %>
-          <%= f.text_field :full_name, placeholder: 'Owner / manager name' %>
+          <%= f.label :full_name do %>Your name <span class="req">*</span><% end %>
+          <%= f.text_field :full_name, required: true, placeholder: 'Owner / manager name' %>
         </div>
       </div>
       <div class="auth-row">
         <div class="form-group">
-          <%= f.label :phone, 'Phone' %>
-          <%= f.text_field :phone, placeholder: '10-digit mobile', inputmode: 'tel' %>
+          <%= f.label :phone do %>Phone <span class="req">*</span><% end %>
+          <div class="phone-field">
+            <span class="phone-cc" aria-hidden="true">+91</span>
+            <%= f.telephone_field :phone, required: true, value: resource.mobile_digits, inputmode: 'numeric', autocomplete: 'tel-national', maxlength: 10, pattern: '[0-9]{10}', placeholder: '10-digit mobile', class: 'js-in-mobile' %>
+          </div>
         </div>
         <div class="form-group">
-          <%= f.label :email %>
-          <%= f.email_field :email, autocomplete: 'email', placeholder: 'store@example.com' %>
+          <%= f.label :email do %>Email <span class="req">*</span><% end %>
+          <%= f.email_field :email, required: true, autocomplete: 'email', placeholder: 'store@example.com' %>
         </div>
       </div>
       <div class="auth-row">
         <div class="form-group">
-          <%= f.label :password %>
-          <%= f.password_field :password, autocomplete: 'new-password', placeholder: 'At least 6 characters' %>
+          <%= f.label :password do %>Password <span class="req">*</span><% end %>
+          <%= f.password_field :password, required: true, minlength: 6, autocomplete: 'new-password', placeholder: 'At least 6 characters', class: 'js-secret' %>
         </div>
         <div class="form-group">
-          <%= f.label :password_confirmation, 'Confirm password' %>
-          <%= f.password_field :password_confirmation, autocomplete: 'new-password' %>
+          <%= f.label :password_confirmation do %>Confirm password <span class="req">*</span><% end %>
+          <%= f.password_field :password_confirmation, required: true, minlength: 6, autocomplete: 'new-password', class: 'js-secret' %>
         </div>
+      </div>
+      <div class="remember-row">
+        <input type="checkbox" id="show-password" class="js-show-password">
+        <label for="show-password">Show password</label>
       </div>
       <%= f.submit 'Continue to plans', class: 'btn-primary' %>
     <% end %>

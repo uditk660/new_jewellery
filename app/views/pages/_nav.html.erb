@@ -1,9 +1,9 @@
 <nav class="maison-nav" aria-label="House">
   <%= link_to root_path, class: 'maison-brand' do %>
-    <span class="maison-mark" aria-hidden="true"></span>
-    <span>
+    <%= image_tag '/favicon.png', alt: 'Strucxil', class: 'maison-logo', width: 36, height: 36 %>
+    <span class="maison-brand-text">
       <strong>Strucxil</strong>
-      <span>For jewellery houses</span>
+      <span class="maison-tagline">For jewellery houses</span>
     </span>
   <% end %>
 
@@ -13,6 +13,15 @@
     <li><%= maison_nav_link 'Collections', collections_path %></li>
     <li><%= maison_nav_link 'The house', about_path %></li>
     <li><%= maison_nav_link 'Contact', contact_path %></li>
+    <li class="maison-mobile-auth">
+      <% if user_signed_in? %>
+        <%= link_to 'Atelier', root_path, class: 'btn-gold' %>
+        <%= button_to 'Sign out', destroy_user_session_path, method: :delete, class: 'btn-ghost', form: { style: 'margin:0' } %>
+      <% else %>
+        <%= link_to 'Sign in', new_user_session_path, class: 'btn-ghost', data: { turbolinks: false } %>
+        <%= link_to 'Open a house', new_user_registration_path, class: 'btn-gold', data: { turbolinks: false } %>
+      <% end %>
+    </li>
   </ul>
 
   <div class="maison-actions">

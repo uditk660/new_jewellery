@@ -2,10 +2,10 @@
   <div class="wrap footer-row">
     <div>
       <%= link_to root_path, class: 'maison-brand' do %>
-        <span class="maison-mark" aria-hidden="true"></span>
-        <span>
+        <%= image_tag '/favicon.png', alt: 'Strucxil', class: 'maison-logo', width: 36, height: 36 %>
+        <span class="maison-brand-text">
           <strong>Strucxil</strong>
-          <span>Gold · hallmark · light</span>
+          <span class="maison-tagline">Gold · hallmark · light</span>
         </span>
       <% end %>
     </div>

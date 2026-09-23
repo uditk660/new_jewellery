@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><%= content_for?(:title) ? yield(:title) : 'Choose your plan' %></title>
+    <%= render 'layouts/favicon' %>
     <%= csrf_meta_tags %>
     <style>
       * { box-sizing: border-box; }
@@ -92,9 +93,8 @@
       </div>
     </div>
     <div class="wrap">
-      <% if flash[:alert] %><div class="error-box"><%= flash[:alert] %></div><% end %>
-      <% if flash[:notice] %><div class="notice-box"><%= flash[:notice] %></div><% end %>
       <%= yield %>
     </div>
+    <%= render 'shared/toasts' %>
   </body>
 </html>

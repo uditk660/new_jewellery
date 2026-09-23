@@ -21,7 +21,11 @@
   img { max-width: 100%; display: block; }
   a { color: inherit; }
   .maison-nav {
-    position: sticky; top: 0; z-index: 40;
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    width: 100%;
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
     padding: 16px 28px;
     transition: background 0.35s ease, border-color 0.35s ease, backdrop-filter 0.35s ease;
@@ -34,19 +38,23 @@
   }
   .maison-brand {
     display: flex; align-items: center; gap: 10px; text-decoration: none;
+    min-width: 0;
   }
-  .maison-mark {
+  .maison-brand-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+  .maison-logo, .maison-mark {
     width: 36px; height: 36px; border-radius: 50%;
-    background: linear-gradient(145deg, #f4e4bc, #c9a227 55%, #8d6b12);
-    box-shadow: 0 0 0 1px rgba(232,213,163,0.45), inset 0 1px 0 rgba(255,255,255,0.55);
+    object-fit: cover; flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(232,213,163,0.4);
+    background: #0b1220;
   }
   .maison-brand strong {
     font-family: "Cormorant Garamond", Georgia, serif;
     font-size: 1.35rem; font-weight: 600; letter-spacing: 0.02em;
   }
-  .maison-brand span {
+  .maison-tagline {
     display: block; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold-2);
   }
+  .maison-mobile-auth { display: none; }
   .maison-links { display: flex; align-items: center; gap: 22px; list-style: none; margin: 0; padding: 0; }
   .maison-links a {
     text-decoration: none; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
@@ -208,6 +216,12 @@
       #090b10;
   }
   .page-hero h1 { font-size: clamp(2.6rem, 6vw, 4.6rem); margin: 0 0 10px; color: #fffaf3; }
+  .page-hero-logo {
+    width: 72px; height: 72px; border-radius: 50%;
+    object-fit: cover; display: block; margin: 0 auto 18px;
+    box-shadow: 0 0 0 1px rgba(232,213,163,0.4), 0 12px 28px rgba(0,0,0,0.35);
+    background: #0b1220;
+  }
   .contact-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 28px; align-items: start; }
   .glass {
     background: linear-gradient(180deg, rgba(255,250,243,0.06), rgba(255,250,243,0.03));
@@ -250,13 +264,42 @@
   .delay-2 { transition-delay: 0.2s; }
   .delay-3 { transition-delay: 0.3s; }
   @media (max-width: 900px) {
-    .maison-toggle { display: inline-flex; }
+    .maison-nav {
+      padding: 10px 14px;
+      gap: 10px;
+      flex-wrap: nowrap;
+    }
+    .maison-brand { flex: 1 1 auto; }
+    .maison-brand-text strong { font-size: 1.15rem; white-space: nowrap; }
+    .maison-tagline { display: none; }
+    .maison-toggle {
+      display: inline-flex;
+      margin-left: auto;
+      flex-shrink: 0;
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+    .maison-nav .maison-actions { display: none; }
     .maison-links {
-      display: none; position: absolute; top: 64px; left: 12px; right: 12px;
+      display: none; position: absolute; top: 56px; left: 12px; right: 12px;
       background: rgba(11,18,32,0.96); border: 1px solid var(--line); border-radius: 16px;
-      padding: 16px; flex-direction: column; align-items: flex-start;
+      padding: 16px; flex-direction: column; align-items: stretch;
     }
     .maison-links.is-open { display: flex; }
+    .maison-mobile-auth {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      margin-top: 4px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .maison-mobile-auth form { width: 100%; margin: 0; }
+    .maison-mobile-auth .btn-gold,
+    .maison-mobile-auth .btn-ghost { width: 100%; }
+    .maison-mobile-auth .btn-gold { color: #0b1220; }
+    .maison-mobile-auth .btn-ghost { color: var(--gold-2); }
     .split, .split.reverse, .collection-grid, .feat-grid, .contact-grid, .piece-grid { grid-template-columns: 1fr; }
     .split.reverse .copy { order: 0; }
     .hero { min-height: 82vh; }

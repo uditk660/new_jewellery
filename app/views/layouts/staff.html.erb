@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Licence desk · Strucxil</title>
+    <%= render 'layouts/favicon' %>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -219,6 +220,7 @@
             <% if defined?(@pending_count) && @pending_count.to_i.positive? %><em><%= @pending_count %></em><% end %>
           <% end %>
           <p class="ep-nav-label">Houses</p>
+          <%= link_to 'New accounts', staff_signups_path, class: (controller_name == 'signups' ? 'is-on' : nil) %>
           <%= link_to 'Years on the book', staff_subscriptions_path, class: (controller_name == 'subscriptions' && action_name != 'new' ? 'is-on' : nil) %>
           <%= link_to 'Grant a year', new_staff_subscription_path, class: (controller_name == 'subscriptions' && action_name == 'new' ? 'is-on' : nil) %>
           <p class="ep-nav-label">Catalogue</p>
@@ -235,10 +237,9 @@
         </div>
       </aside>
       <section class="ep-main">
-        <% if flash[:notice] %><div class="ep-flash notice"><%= flash[:notice] %></div><% end %>
-        <% if flash[:alert] %><div class="ep-flash alert"><%= flash[:alert] %></div><% end %>
         <%= yield %>
       </section>
     </div>
+    <%= render 'shared/toasts' %>
   </body>
 </html>
