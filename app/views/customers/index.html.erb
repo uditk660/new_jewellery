@@ -16,17 +16,35 @@
     </div>
   </header>
 
+  <%
+    book_params = { q: @q.presence, status: (@status unless @status == 'all'), sort: (@sort unless @sort == 'name'), direction: @direction }
+    book_params.compact!
+    next_amount_dir = (@sort == 'amount' && @direction == 'desc') ? 'asc' : 'desc'
+  %>
+
+  <nav class="people-tabs" aria-label="Bill status">
+    <% { 'all' => 'All', 'pending' => 'Pending', 'paid' => 'Paid' }.each do |key, label| %>
+      <%= link_to customers_path(book_params.merge(status: (key == 'all' ? nil : key), page: nil).compact), class: (@status == key ? 'is-on' : nil) do %>
+        <%= label %>
+        <em><%= @status_counts[key].to_i %></em>
+      <% end %>
+    <% end %>
+  </nav>
+
   <div class="cat-toolbar atelier-form">
     <%= form_tag customers_path, method: :get, class: 'people-search' do %>
-      <%= text_field_tag :q, @q, class: 'form-control', placeholder: 'Search name, phone, number, email, Aadhaar, PAN or GST' %>
+      <%= hidden_field_tag :status, @status unless @status == 'all' %>
+      <%= hidden_field_tag :sort, @sort unless @sort == 'name' %>
+      <%= hidden_field_tag :direction, @direction %>
+      <%= text_field_tag :q, @q, class: 'form-control', placeholder: 'Search name, phone, client no., email, Aadhaar, PAN or GST' %>
       <button type="submit" class="atelier-back">Search</button>
       <% if @q.present? %>
-        <%= link_to 'Clear', customers_path, class: 'atelier-back' %>
+        <%= link_to 'Clear', customers_path(book_params.except(:q)), class: 'atelier-back' %>
       <% end %>
     <% end %>
     <div class="people-count">
-      <span>In the book</span>
-      <strong><%= @customers.size %></strong>
+      <span><%= @status == 'all' ? 'In the book' : @status.titleize %></span>
+      <strong><%= @total_count %></strong>
     </div>
   </div>
 
@@ -47,6 +65,7 @@
           <p class="meta"><%= c.email.presence || 'No email' %></p>
           <p class="meta"><%= c.gst_number.present? ? "GST #{c.gst_number}" : 'No GST on file' %></p>
           <p class="bal <%= c.outstanding.positive? ? 'due' : '' %>"><%= format_rupees(c.outstanding) %> outstanding</p>
+          <span class="bill-status is-<%= c.invoice_book_status %>"><%= c.invoice_book_status_label %></span>
         <% end %>
       <% end %>
     </div>
@@ -59,7 +78,12 @@
             <th>Client No.</th>
             <th>Phone</th>
             <th class="gst">GST</th>
-            <th class="num">Outstanding</th>
+            <th>Status</th>
+            <th class="num">
+              <%= link_to customers_path(book_params.merge(sort: 'amount', direction: next_amount_dir, page: nil).compact), class: "sort-link #{'is-on' if @sort == 'amount'}" do %>
+                Outstanding<%= @sort == 'amount' ? (@direction == 'asc' ? ' ↑' : ' ↓') : '' %>
+              <% end %>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -77,24 +101,43 @@
               <td class="code"><span class="code-chip"><%= c.client_ref.presence || '—' %></span></td>
               <td><%= c.phone.presence || '—' %></td>
               <td class="gst"><%= c.gst_number.presence || '—' %></td>
+              <td>
+                <span class="bill-status is-<%= c.invoice_book_status %>"><%= c.invoice_book_status_label %></span>
+              </td>
               <td class="num <%= 'due' if c.outstanding.positive? %>"><%= format_rupees(c.outstanding) %></td>
             </tr>
           <% end %>
         </tbody>
       </table>
     </div>
+
+    <% if @total_count.to_i > @per_page %>
+      <div class="people-pager">
+        <% if @page > 1 %>
+          <%= link_to '← Previous', customers_path(book_params.merge(page: @page - 1)), class: 'atelier-back' %>
+        <% end %>
+        <span>Page <%= @page %> of <%= (@total_count.to_f / @per_page).ceil %></span>
+        <% if (@page * @per_page) < @total_count.to_i %>
+          <%= link_to 'Next →', customers_path(book_params.merge(page: @page + 1)), class: 'atelier-back' %>
+        <% end %>
+      </div>
+    <% end %>
   <% else %>
     <div class="atelier-form">
       <p class="hint" style="margin:0">
         <% if @q.present? %>
-          Nothing matches “<%= @q %>”. Try another name or phone.
+          Nothing matches “<%= @q %>”. Try a name, phone or client number.
+        <% elsif @status == 'pending' %>
+          No client has a pending invoice.
+        <% elsif @status == 'paid' %>
+          No client has every invoice paid.
         <% else %>
           No clients yet. Register the first buyer to open the book.
         <% end %>
       </p>
       <div class="actions" style="margin-top:16px">
-        <% if @q.present? %>
-          <%= link_to 'Clear search', customers_path, class: 'atelier-back' %>
+        <% if @q.present? || @status != 'all' %>
+          <%= link_to 'Clear filters', customers_path, class: 'atelier-back' %>
         <% else %>
           <%= link_to 'Register a client', new_customer_path, class: 'btn-gold' %>
         <% end %>
@@ -118,6 +161,28 @@
   .people-book .view-btn.is-active {
     background: linear-gradient(90deg, #e8d5a3, #c9a227); color: #0b1220;
   }
+  .people-book .people-tabs {
+    display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 0 0 16px;
+    padding: 3px; border-radius: 999px; border: 1px solid rgba(201,162,39,0.4); background: #fff;
+  }
+  .people-book .people-tabs a {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 14px; border-radius: 999px; color: #6b6258;
+    text-decoration: none; font-size: 13px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .people-book .people-tabs a em {
+    font-style: normal; min-width: 1.4em; padding: 1px 7px; border-radius: 999px;
+    background: #f7f1e8; color: #0b1220; font-size: 11px; font-variant-numeric: tabular-nums;
+  }
+  .people-book .people-tabs a.is-on { background: linear-gradient(90deg, #e8d5a3, #c9a227); color: #0b1220; }
+  .people-book .people-tabs a.is-on em { background: rgba(11,18,32,0.12); }
+  .people-book .sort-link { color: inherit; text-decoration: none; }
+  .people-book .sort-link.is-on { color: #0b1220; }
+  .people-book .people-pager {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    margin-top: 16px; color: #6b6258; font-size: 13px; font-weight: 600;
+  }
+  .people-book .people-pager a.atelier-back { text-decoration: none; }
   .people-book .cat-toolbar {
     display: flex; justify-content: space-between; align-items: center; gap: 16px;
     margin-bottom: 18px; flex-wrap: wrap;
@@ -159,6 +224,14 @@
   .people-book .people-card-top p,
   .people-book .meta { margin: 2px 0 0; color: #6b6258; font-size: 13px; }
   .people-book .bal { margin: 12px 0 0; font-weight: 700; color: #c9a227; }
+  .people-book .bill-status {
+    display: inline-block; margin-top: 10px; padding: 3px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .people-book td .bill-status { margin-top: 0; }
+  .people-book .bill-status.is-paid { background: #ecf8f0; color: #14532d; border: 1px solid #bbf7d0; }
+  .people-book .bill-status.is-pending { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+  .people-book .bill-status.is-none { background: #f3eee6; color: #6b6258; border: 1px solid rgba(201,162,39,0.28); }
   .people-book .bal.due, .people-book td.due { color: #7f1d1d; }
   .people-book .people-list-wrap {
     background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 18px;

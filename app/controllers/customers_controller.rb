@@ -3,15 +3,50 @@ class CustomersController < ApplicationController
 
   def index
     @q = params[:q].to_s.strip
-    customers = Customer.order(:first_name, :last_name)
+    @status = %w[paid pending].include?(params[:status].to_s) ? params[:status].to_s : 'all'
+    @sort = params[:sort].to_s == 'amount' ? 'amount' : 'name'
+    @direction = params[:direction].to_s == 'asc' ? 'asc' : 'desc'
+    @direction = 'asc' if @sort == 'name' && params[:direction].blank?
+    @direction = 'desc' if @sort == 'amount' && params[:direction].blank?
+
+    page = params[:page].to_i <= 0 ? 1 : params[:page].to_i
+    per_page = 20
+
+    customers = Customer.all
     if @q.present?
-      like = "%#{@q}%"
+      token = @q.sub(/\A#+/, '').strip
       customers = customers.where(
-        'first_name LIKE :q OR last_name LIKE :q OR email LIKE :q OR phone LIKE :q OR aadhaar_or_pan LIKE :q OR gst_number LIKE :q OR address LIKE :q OR COALESCE(client_code, \'\') LIKE :q',
-        q: like
+        'first_name LIKE :q OR last_name LIKE :q OR email LIKE :q OR phone LIKE :q OR aadhaar_or_pan LIKE :q OR gst_number LIKE :q OR address LIKE :q OR COALESCE(client_code, \'\') LIKE :q OR COALESCE(client_code, \'\') LIKE :code OR CONCAT(\'#\', COALESCE(client_code, \'\')) LIKE :q',
+        q: "%#{@q}%",
+        code: "%#{token}%"
       )
     end
-    @customers = customers.limit(200)
+
+    pending_ids = Order.where(status: 'pending').select(:customer_id)
+    paid_ids = Order.where(status: 'paid').select(:customer_id)
+    @status_counts = {
+      'all' => customers.count,
+      'pending' => customers.where(id: pending_ids).count,
+      'paid' => customers.where(id: paid_ids).where.not(id: pending_ids).count
+    }
+
+    case @status
+    when 'pending'
+      customers = customers.where(id: pending_ids)
+    when 'paid'
+      customers = customers.where(id: paid_ids).where.not(id: pending_ids)
+    end
+
+    customers = if @sort == 'amount'
+                  customers.order(Arel.sql("COALESCE(balance_cents, 0) #{@direction == 'asc' ? 'ASC' : 'DESC'}"), :first_name, :last_name)
+                else
+                  customers.order(:first_name, :last_name)
+                end
+
+    @total_count = customers.count
+    @page = page
+    @per_page = per_page
+    @customers = customers.includes(:orders).limit(per_page).offset((page - 1) * per_page)
   end
 
   def new

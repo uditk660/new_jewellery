@@ -230,6 +230,7 @@ class OrdersController < ApplicationController
   def parsed_line_items
     raw_line_item_params.filter_map do |raw|
       next if raw.values.all? { |v| v.blank? }
+      next if (raw['jewelry_item_id'] || raw[:jewelry_item_id]).blank?
 
       item = JewelryItem.find_by(id: raw['jewelry_item_id'] || raw[:jewelry_item_id])
       qty = (raw['quantity'] || raw[:quantity]).to_i

@@ -82,6 +82,21 @@ class Customer < ActiveRecord::Base
     balance_cents.to_i / 100.0
   end
 
+  # Paid when every live bill is paid. Pending if any invoice is still open.
+  def invoice_book_status
+    live = orders.reject { |order| %w[cancelled failed].include?(order.status.to_s) }
+    return 'none' if live.empty?
+    live.any? { |order| order.status.to_s == 'pending' } ? 'pending' : 'paid'
+  end
+
+  def invoice_book_status_label
+    case invoice_book_status
+    when 'paid' then 'Paid'
+    when 'pending' then 'Pending'
+    else 'No bills'
+    end
+  end
+
   def journal_cents
     return 0 unless self.class.connection.data_source_exists?('ledger_entries')
     ledger_entries.to_a.sum(&:signed_cents)
