@@ -8,26 +8,26 @@
   charges = bill[:charges]
   taxable = bill[:taxable]
   cgst_rate = bill[:cgst_rate]
-  igst_rate = bill[:igst_rate]
+  sgst_rate = bill[:sgst_rate]
   cgst = bill[:cgst]
-  igst = bill[:igst]
+  sgst = bill[:sgst]
   total = bill[:total]
   paid = bill[:paid]
   remaining = bill[:remaining]
   pending = @order.status == 'pending'
   client = @order.customer
   bill_no = @order.invoice_number.presence || "##{@order.id}"
-  gross_total = lines.sum { |li| li.gross_weight.to_f }
-  net_total = lines.sum { |li| li.net_weight.to_f }
+  gross_total = @order.total_gross_grams
+  net_total = @order.total_net_grams
 %>
 
 <div class="atelier-page bill-show" id="bill-show"
-     data-subtotal="<%= '%.2f' % subtotal %>"
-     data-paid="<%= '%.2f' % paid %>"
+     data-subtotal-cents="<%= bill[:subtotal_cents] %>"
+     data-paid-cents="<%= bill[:paid_cents] %>"
      data-discount="<%= '%.2f' % discount %>"
      data-charges="<%= '%.2f' % charges %>"
      data-cgst-rate="<%= '%.2f' % cgst_rate %>"
-     data-igst-rate="<%= '%.2f' % igst_rate %>">
+     data-sgst-rate="<%= '%.2f' % sgst_rate %>">
   <header class="atelier-hero">
     <div>
       <p class="eyebrow">Sales</p>
@@ -188,26 +188,26 @@
         <section class="atelier-form" id="charge-form" style="margin-top:16px">
           <div class="section">
             <h2>Record payment</h2>
-            <p class="hint">Discount is taken before tax. Extra charges are added to the taxable amount. Payment cannot exceed remaining due. A full settlement opens the invoice.</p>
+            <p class="hint">CGST and SGST are worked on the subtotal. Discount and extra charges then apply to the total after tax. Payment cannot exceed remaining due. A full settlement opens the invoice.</p>
             <%= form_tag record_payment_order_path(@order), method: :post, id: 'payment-form' do %>
               <div class="row">
                 <div class="field">
-                  <label for="discount_input">Discount (₹)</label>
-                  <%= number_field_tag :discount, ('%.2f' % discount), step: 0.01, min: 0, class: 'form-control', id: 'discount_input' %>
+                  <label for="cgst_rate">CGST (%)</label>
+                  <%= number_field_tag :cgst_rate, ('%.2f' % cgst_rate), step: 0.01, min: 0, max: 20, class: 'form-control', id: 'cgst_rate' %>
                 </div>
                 <div class="field">
-                  <label for="charges_input">Extra charges (₹)</label>
-                  <%= number_field_tag :charges, ('%.2f' % charges), step: 0.01, min: 0, class: 'form-control', id: 'charges_input' %>
+                  <label for="sgst_rate">SGST (%)</label>
+                  <%= number_field_tag :sgst_rate, ('%.2f' % sgst_rate), step: 0.01, min: 0, max: 20, class: 'form-control', id: 'sgst_rate' %>
                 </div>
               </div>
               <div class="row" style="margin-top:12px">
                 <div class="field">
-                  <label for="cgst_rate">CGST (%)</label>
-                  <%= number_field_tag :cgst_rate, ('%.2f' % cgst_rate), step: 0.01, min: 0, class: 'form-control', id: 'cgst_rate' %>
+                  <label for="discount_input">Discount on total (₹)</label>
+                  <%= number_field_tag :discount, ('%.2f' % discount), step: 0.01, min: 0, max: ('%.2f' % bill[:after_tax]), class: 'form-control', id: 'discount_input' %>
                 </div>
                 <div class="field">
-                  <label for="igst_rate">CGST (%)</label>
-                  <%= number_field_tag :igst_rate, ('%.2f' % igst_rate), step: 0.01, min: 0, class: 'form-control', id: 'igst_rate' %>
+                  <label for="charges_input">Extra charges (₹)</label>
+                  <%= number_field_tag :charges, ('%.2f' % charges), step: 0.01, min: 0, class: 'form-control', id: 'charges_input' %>
                 </div>
               </div>
               <div class="row" style="margin-top:12px">
@@ -220,10 +220,17 @@
                     <% end %>
                   </select>
                 </div>
+              </div>
+              <div class="row" style="margin-top:12px">
                 <div class="field">
-                  <label for="payment_amount_input">Amount (₹) <span class="req">*</span></label>
-                  <%= number_field_tag :payment_amount, ('%.2f' % remaining), step: 0.01, min: 0.01, class: 'form-control', id: 'payment_amount_input' %>
-                  <p class="hint" id="pay-hint" style="margin:8px 0 0">Remaining due updates as discount and tax change.</p>
+                  <label for="remaining_due_display">Remaining due (₹)</label>
+                  <input type="text" id="remaining_due_display" class="form-control due-locked" value="<%= remaining.to_i %>" readonly tabindex="-1" aria-readonly="true">
+                  <p class="hint" id="due-hint" style="margin:8px 0 0">Locked. Rounded off to the rupee.</p>
+                </div>
+                <div class="field">
+                  <label for="payment_amount_input">Pay now (₹) <span class="req">*</span></label>
+                  <%= number_field_tag :payment_amount, params[:payment_amount].presence, step: 1, min: 1, max: remaining.to_i, inputmode: 'numeric', placeholder: "Up to #{remaining.to_i}", class: 'form-control', id: 'payment_amount_input', required: true %>
+                  <p class="hint" id="pay-hint" style="margin:8px 0 0">Whole rupees, up to the remaining due.</p>
                 </div>
               </div>
               <div class="actions" style="margin-top:16px">
@@ -250,19 +257,29 @@
       </div>
       <div class="preview-sum">
         <div><span>Subtotal</span><strong id="sum-subtotal"><%= format_rupees(subtotal) %></strong></div>
-        <div><span>Discount</span><strong id="sum-discount"><%= format_rupees(discount) %></strong></div>
-        <div><span>Charges</span><strong id="sum-charges"><%= format_rupees(charges) %></strong></div>
-        <div><span>Taxable</span><strong id="sum-taxable"><%= format_rupees(taxable) %></strong></div>
-        <div><span>CGST <em id="sum-cgst-rate"><%= '%.2f' % cgst_rate %>%</em></span><strong id="sum-cgst"><%= format_rupees(cgst) %></strong></div>
-        <div><span>CGST <em id="sum-igst-rate"><%= '%.2f' % igst_rate %>%</em></span><strong id="sum-igst"><%= format_rupees(igst) %></strong></div>
+        <% if bill[:discount_after_tax] %>
+          <div><span>CGST <em id="sum-cgst-rate"><%= '%.2f' % cgst_rate %>%</em></span><strong id="sum-cgst"><%= format_rupees(cgst) %></strong></div>
+          <div><span>SGST <em id="sum-sgst-rate"><%= '%.2f' % sgst_rate %>%</em></span><strong id="sum-sgst"><%= format_rupees(sgst) %></strong></div>
+          <div><span>Total after tax</span><strong id="sum-after-tax"><%= format_rupees(bill[:after_tax]) %></strong></div>
+          <div><span>Discount</span><strong id="sum-discount">−<%= format_rupees(discount) %></strong></div>
+          <div><span>Extra charges</span><strong id="sum-charges">+<%= format_rupees(charges) %></strong></div>
+        <% else %>
+          <div><span>Discount</span><strong id="sum-discount"><%= format_rupees(discount) %></strong></div>
+          <div><span>Charges</span><strong id="sum-charges"><%= format_rupees(charges) %></strong></div>
+          <div><span>Taxable</span><strong id="sum-taxable"><%= format_rupees(taxable) %></strong></div>
+          <div><span>CGST <em id="sum-cgst-rate"><%= '%.2f' % cgst_rate %>%</em></span><strong id="sum-cgst"><%= format_rupees(cgst) %></strong></div>
+          <div><span>SGST <em id="sum-sgst-rate"><%= '%.2f' % sgst_rate %>%</em></span><strong id="sum-sgst"><%= format_rupees(sgst) %></strong></div>
+        <% end %>
+        <div><span>Bill total</span><strong id="sum-exact"><%= format_rupees(total) %></strong></div>
+        <div><span>Round off</span><strong id="sum-roundoff"><%= bill[:round_off_cents].negative? ? '−' : '+' %><%= format_rupees(bill[:round_off_cents].abs / 100.0) %></strong></div>
         <div><span>Paid</span><strong id="sum-paid"><%= format_rupees(paid) %></strong></div>
         <div><span>Remaining</span><strong id="sum-remaining"><%= format_rupees(remaining) %></strong></div>
       </div>
-      <div class="preview-price" id="sum-total"><%= format_rupees(total) %></div>
+      <div class="preview-price" id="sum-total"><%= format_rupees(bill[:payable]) %></div>
       <div class="preview-desc">Amount payable</div>
       <p class="preview-note" id="preview-note">
         <% if pending %>
-          Taxable = subtotal − discount + extra charges. Total adds CGST on that taxable amount.
+          CGST and SGST on the subtotal, then discount off and extra charges on the total after tax.
         <% else %>
           This bill is <%= @order.status %>. <%= paid.positive? ? 'Payments are on file.' : '' %>
         <% end %>
@@ -394,6 +411,21 @@
   }
   .bill-show .bill-popup-card p#bill-popup-msg { margin: 0 0 16px; color: #14110f; }
   .bill-show .bill-popup-card .btn-gold { width: 100%; }
+  .bill-show .atelier-form input.form-control.due-locked,
+  .bill-show .atelier-form input.form-control.due-locked:focus {
+    background: #f1e7d6;
+    color: #0b1220;
+    font-family: Inter, system-ui, sans-serif;
+    font-variant-numeric: lining-nums tabular-nums;
+    font-size: 18px;
+    font-weight: 700;
+    border-style: dashed;
+    border-color: rgba(201, 162, 39, 0.55);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .bill-show .is-invalid { border-color: #9b3b2f !important; }
+  .bill-show .hint.is-error { color: #9b3b2f; }
   @media (max-width: 880px) {
     .bill-show .bill-hero-actions { width: 100%; }
     .bill-show .piece-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -406,19 +438,21 @@
   (function(){
     var root = document.getElementById('bill-show');
     if(!root) return;
-    var subtotal = parseFloat(root.getAttribute('data-subtotal') || '0') || 0;
-    var paid = parseFloat(root.getAttribute('data-paid') || '0') || 0;
+    var subtotalP = parseInt(root.getAttribute('data-subtotal-cents') || '0', 10) || 0;
+    var paidP = parseInt(root.getAttribute('data-paid-cents') || '0', 10) || 0;
+    var subtotal = subtotalP / 100;
+    var paid = paidP / 100;
     var fallback = {
       discount: parseFloat(root.getAttribute('data-discount') || '0') || 0,
       charges: parseFloat(root.getAttribute('data-charges') || '0') || 0,
       cgstRate: parseFloat(root.getAttribute('data-cgst-rate') || '0') || 0,
-      igstRate: parseFloat(root.getAttribute('data-igst-rate') || '0') || 0
+      sgstRate: parseFloat(root.getAttribute('data-sgst-rate') || '0') || 0
     };
     var form = document.getElementById('payment-form');
     var discEl = document.getElementById('discount_input');
     var chgEl = document.getElementById('charges_input');
     var cgstEl = document.getElementById('cgst_rate');
-    var igstEl = document.getElementById('igst_rate');
+    var sgstEl = document.getElementById('sgst_rate');
     var amtEl = document.getElementById('payment_amount_input');
     var pmEl = document.getElementById('payment_method_input');
     var btn = document.getElementById('record-payment-btn');
@@ -430,54 +464,98 @@
 
     function money(v){ return '\u20B9' + (isFinite(v) ? Number(v) : 0).toFixed(2); }
     function num(el){ return parseFloat((el && el.value) || 0) || 0; }
+    function paise(v){ v = Number(v); return isFinite(v) ? Math.round(Number((v * 100).toPrecision(15))) : 0; }
+    function share(p, rateP){ return Math.round(p * rateP / 10000); }
+    function roundRupee(p){ return Math.round(p / 100) * 100; }
+    function rupees(p){ return '\u20B9' + Math.round(p / 100); }
+    function payRaw(){ return amtEl ? String(amtEl.value || '').trim() : ''; }
     function set(id, v){ var el = document.getElementById(id); if(el) el.textContent = money(v); }
     function setText(id, v){ var el = document.getElementById(id); if(el) el.textContent = v; }
 
     function totals(){
-      var discount = Math.max(0, discEl ? num(discEl) : fallback.discount);
-      var charges = Math.max(0, chgEl ? num(chgEl) : fallback.charges);
-      var overDiscount = discount > subtotal;
-      if(overDiscount) discount = subtotal;
-      var taxable = subtotal - discount + charges;
+      var discountP = paise(Math.max(0, discEl ? num(discEl) : fallback.discount));
+      var chargesP = paise(Math.max(0, chgEl ? num(chgEl) : fallback.charges));
+      var taxableP = subtotalP;
       var cgstRate = Math.max(0, cgstEl ? num(cgstEl) : fallback.cgstRate);
-      var igstRate = Math.max(0, igstEl ? num(igstEl) : fallback.igstRate);
-      var cgst = taxable * (cgstRate / 100);
-      var igst = taxable * (igstRate / 100);
-      var total = taxable + cgst + igst;
-      var remaining = Math.max(0, total - paid);
+      var sgstRate = Math.max(0, sgstEl ? num(sgstEl) : fallback.sgstRate);
+      var cgstP = share(taxableP, paise(cgstRate));
+      var sgstP = share(taxableP, paise(sgstRate));
+      var afterTaxP = taxableP + cgstP + sgstP;
+      var overDiscount = discountP > afterTaxP;
+      if(overDiscount) discountP = afterTaxP;
+      var totalP = afterTaxP - discountP + chargesP;
+      var payableP = roundRupee(totalP);
+      var remainingP = Math.max(0, roundRupee(totalP - paidP));
       return {
-        discount: discount, charges: charges, taxable: taxable,
-        cgstRate: cgstRate, igstRate: igstRate, cgst: cgst, igst: igst,
-        total: total, remaining: remaining, overDiscount: discEl && num(discEl) > subtotal
+        discount: discountP / 100, charges: chargesP / 100, taxable: taxableP / 100,
+        cgstRate: cgstRate, sgstRate: sgstRate, cgst: cgstP / 100, sgst: sgstP / 100,
+        afterTaxP: afterTaxP,
+        total: totalP / 100, payableP: payableP, roundOffP: payableP - totalP,
+        remaining: remainingP / 100, remainingP: remainingP,
+        belowPaid: payableP < paidP,
+        rateTooHigh: cgstRate > 20 || sgstRate > 20,
+        overDiscount: overDiscount
       };
     }
 
     function paint(){
       var t = totals();
       set('sum-subtotal', subtotal);
-      set('sum-discount', discEl ? num(discEl) : t.discount);
-      set('sum-charges', t.charges);
-      set('sum-taxable', t.taxable);
+      setText('sum-discount', '\u2212' + money(t.discount));
+      setText('sum-charges', '+' + money(t.charges));
+      set('sum-after-tax', t.afterTaxP / 100);
       set('sum-cgst', t.cgst);
-      set('sum-igst', t.igst);
+      set('sum-sgst', t.sgst);
       setText('sum-cgst-rate', t.cgstRate.toFixed(2) + '%');
-      setText('sum-igst-rate', t.igstRate.toFixed(2) + '%');
+      setText('sum-sgst-rate', t.sgstRate.toFixed(2) + '%');
       set('sum-paid', paid);
       set('sum-remaining', t.remaining);
-      set('sum-total', t.total);
-      if(amtEl && document.activeElement !== amtEl){
-        var current = num(amtEl);
-        if(current <= 0 || current > t.remaining) amtEl.value = t.remaining.toFixed(2);
+      set('sum-exact', t.total);
+      setText('sum-roundoff', (t.roundOffP < 0 ? '\u2212' : '+') + money(Math.abs(t.roundOffP) / 100));
+      set('sum-total', t.payableP / 100);
+      var dueEl = document.getElementById('remaining_due_display');
+      if(dueEl) dueEl.value = String(t.remainingP / 100);
+      if(amtEl){
+        amtEl.max = String(t.remainingP / 100);
+        amtEl.placeholder = 'Up to ' + (t.remainingP / 100);
       }
-      if(hint) hint.textContent = 'Remaining due ' + money(t.remaining) + '.';
+      var dueHint = document.getElementById('due-hint');
+      if(dueHint){
+        dueHint.textContent = t.overDiscount
+          ? 'Discount cannot exceed the total after tax of ' + money(t.afterTaxP / 100) + '.'
+          : t.belowPaid
+          ? 'These terms bring the bill below the ' + money(paid) + ' already received.'
+          : 'Locked. Bill ' + money(t.total) + ' rounded off to ' + rupees(t.payableP) + (paidP ? ', less ' + money(paid) + ' paid.' : '.');
+      }
+      if(discEl) discEl.classList.toggle('is-invalid', !!t.overDiscount || t.belowPaid);
       syncBtn();
+    }
+
+    // Returns an error message for the Pay now box, or '' when it is acceptable.
+    function payProblem(t){
+      var raw = payRaw();
+      if(!raw) return 'Enter the amount the client is paying now.';
+      if(!/^\d+$/.test(raw)) return 'Pay in whole rupees, e.g. 500.';
+      var p = parseInt(raw, 10) * 100;
+      if(p <= 0) return 'Payment amount must be greater than 0.';
+      if(p > t.remainingP) return 'Cannot exceed the remaining due of ' + rupees(t.remainingP) + '.';
+      return '';
     }
 
     function syncBtn(){
       var t = totals();
-      var amt = amtEl ? num(amtEl) : 0;
       var methodOk = pmEl ? !!pmEl.value : true;
-      var off = !methodOk || amt <= 0 || amt > t.remaining + 0.001 || !!t.overDiscount;
+      var problem = payProblem(t);
+      var typed = payRaw() !== '';
+      if(hint){
+        var left = typed && !problem ? t.remainingP - parseInt(payRaw(), 10) * 100 : null;
+        hint.textContent = typed && problem ? problem
+          : left !== null ? (left === 0 ? 'This settles the bill.' : 'Leaves ' + rupees(left) + ' due.')
+          : 'Whole rupees, up to the remaining due.';
+        hint.classList.toggle('is-error', typed && !!problem);
+      }
+      if(amtEl) amtEl.classList.toggle('is-invalid', typed && !!problem);
+      var off = !methodOk || !!problem || t.overDiscount || t.belowPaid || t.rateTooHigh;
       if(btn) btn.disabled = off;
       if(heroBtn) heroBtn.disabled = off;
     }
@@ -489,7 +567,7 @@
     }
     function hidePopup(){ if(popup) popup.hidden = true; }
 
-    [discEl, chgEl, cgstEl, igstEl].forEach(function(el){
+    [discEl, chgEl, cgstEl, sgstEl].forEach(function(el){
       if(!el) return;
       el.addEventListener('input', paint);
     });
@@ -501,9 +579,19 @@
     if(form){
       form.addEventListener('submit', function(e){
         var t = totals();
-        if(discEl && num(discEl) > subtotal){
+        if(t.overDiscount){
           e.preventDefault();
-          showPopup('Discount cannot exceed the bill subtotal (' + money(subtotal) + ').');
+          showPopup('Discount cannot exceed the total after tax (' + money(t.afterTaxP / 100) + ').');
+          return;
+        }
+        if(t.rateTooHigh){
+          e.preventDefault();
+          showPopup('CGST and SGST cannot exceed 20% each.');
+          return;
+        }
+        if(t.belowPaid){
+          e.preventDefault();
+          showPopup('These terms bring the bill below the ' + money(paid) + ' already received.');
           return;
         }
         if(!pmEl || !pmEl.value){
@@ -511,19 +599,14 @@
           showPopup('Choose how this payment was taken.');
           return;
         }
-        var amt = amtEl ? num(amtEl) : 0;
-        if(amt <= 0){
+        var problem = payProblem(t);
+        if(problem){
           e.preventDefault();
-          showPopup('Payment amount must be greater than 0.');
-          return;
-        }
-        if(amt > t.remaining + 0.001){
-          e.preventDefault();
-          showPopup('Payment cannot exceed remaining due (' + money(t.remaining) + ').');
+          showPopup(problem);
         }
       });
     }
 
-    paint();
+    if(form) paint();
   })();
 </script>

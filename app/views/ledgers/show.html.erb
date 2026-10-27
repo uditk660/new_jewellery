@@ -60,6 +60,7 @@
                     <th class="num">Debit</th>
                     <th class="num">Credit</th>
                     <th class="num">Balance</th>
+                    <th class="print-col"><span class="sr-only">Print</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -87,6 +88,14 @@
                       <td class="num"><%= line[:debit].to_f.positive? ? format_rupees(line[:debit]) : '—' %></td>
                       <td class="num"><%= line[:credit].to_f.positive? ? format_rupees(line[:credit]) : '—' %></td>
                       <td class="num gold"><%= format_rupees(line[:balance]) %></td>
+                      <td class="print-col">
+                        <% if line[:print].present? %>
+                          <%= link_to line[:print], class: 'print-link', target: '_blank', rel: 'noopener', data: { turbolinks: false }, title: "Print #{line[:print_label].to_s.downcase}" do %>
+                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M7 3h10v4H7zM5 8h14a2 2 0 0 1 2 2v6h-4v4H7v-4H3v-6a2 2 0 0 1 2-2zm4 7v3h6v-3zm9-4a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
+                            <span><%= line[:print_label] %></span>
+                          <% end %>
+                        <% end %>
+                      </td>
                     </tr>
                   <% end %>
                 </tbody>
@@ -111,8 +120,21 @@
       <span class="sku-chip"><%= customer.phone.presence || 'No phone' %></span>
       <div class="preview-price"><%= format_rupees(cents.negative? ? -amount : amount) %></div>
       <p class="preview-line"><%= cents.negative? ? 'Advance with the house' : (cents.positive? ? 'Outstanding on the book' : 'Settled') %></p>
-      <p class="preview-desc">Bill payments still happen on the invoice. Use journal entries for opening balances and cash taken on account.</p>
-      <p class="preview-note">POS reads this outstanding as due when the figure is above zero.</p>
+      <p class="preview-desc">Take a deposit with “Post an entry → Receipt”. It pays pending bills first and never takes the khata below zero.</p>
+      <% if cents.positive? %>
+        <%= link_to 'Receive a deposit', new_ledger_path(customer_id: customer.id, kind: 'credit'), class: 'btn-gold receive-btn' %>
+      <% end %>
+      <% if @receipts.present? %>
+        <div class="receipt-list">
+          <p class="preview-kicker">Khata slips</p>
+          <% @receipts.each do |r| %>
+            <%= link_to ledger_receipt_path(customer, r), class: 'receipt-row', data: { turbolinks: false } do %>
+              <span><strong><%= r.receipt_number %></strong><em><%= r.received_on.strftime('%d %b %Y') %> · <%= r.credit? ? r.payment_method : r.title %></em></span>
+              <b><%= format_rupees(r.amount) %></b>
+            <% end %>
+          <% end %>
+        </div>
+      <% end %>
     </aside>
   </div>
 </div>
@@ -148,4 +170,22 @@
   .khata-card .sku { display: block; color: #6b6258; font-size: 12px; margin-top: 2px; }
   .khata-card .client-gem { position: relative; overflow: hidden; }
   .khata-card .cameo { width: 92px; height: 92px; display: block; }
+  .khata-card .receive-btn { margin-top: 12px; }
+  .khata-card .print-col { width: 1%; white-space: nowrap; text-align: right; }
+  .khata-card .print-link {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.45); color: #0b1220; background: #fffaf3;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-decoration: none;
+  }
+  .khata-card .print-link:hover { background: linear-gradient(90deg, #e8d5a3, #c9a227); border-color: #c9a227; }
+  .khata-card .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .khata-card .receipt-list { margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(232,213,163,0.25); }
+  .khata-card .receipt-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid rgba(232,213,163,0.14); text-decoration: none; color: #e8d5a3;
+  }
+  .khata-card .receipt-row strong { display: block; font-size: 13px; color: #fffaf3; }
+  .khata-card .receipt-row em { display: block; font-style: normal; font-size: 11px; color: #b7aa98; }
+  .khata-card .receipt-row b { font-variant-numeric: tabular-nums; color: #e8d5a3; }
+  .khata-card .receipt-row:hover strong { color: #e8d5a3; }
 </style>

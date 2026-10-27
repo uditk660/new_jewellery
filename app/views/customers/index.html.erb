@@ -50,8 +50,9 @@
 
   <% if @customers.any? %>
     <div class="people-cards" data-layout="cards">
-      <% @customers.each do |c| %>
+      <% @customers.each_with_index do |c, idx| %>
         <%= link_to customer_path(c), class: 'people-card' do %>
+          <span class="index-serial-badge"><%= index_serial(idx) %></span>
           <div class="people-card-top">
             <div class="people-card-id">
               <span class="avatar"><%= c.initials %></span>
@@ -74,6 +75,7 @@
       <table class="people-list">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Client</th>
             <th>Client No.</th>
             <th>Phone</th>
@@ -87,8 +89,9 @@
           </tr>
         </thead>
         <tbody>
-          <% @customers.each do |c| %>
+          <% @customers.each_with_index do |c, idx| %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td>
                 <%= link_to customer_path(c), class: 'people-name' do %>
                   <span class="avatar small"><%= c.initials %></span>
@@ -111,17 +114,11 @@
       </table>
     </div>
 
-    <% if @total_count.to_i > @per_page %>
-      <div class="people-pager">
-        <% if @page > 1 %>
-          <%= link_to '← Previous', customers_path(book_params.merge(page: @page - 1)), class: 'atelier-back' %>
-        <% end %>
-        <span>Page <%= @page %> of <%= (@total_count.to_f / @per_page).ceil %></span>
-        <% if (@page * @per_page) < @total_count.to_i %>
-          <%= link_to 'Next →', customers_path(book_params.merge(page: @page + 1)), class: 'atelier-back' %>
-        <% end %>
-      </div>
-    <% end %>
+    <%= render 'shared/index_pagination',
+               page: @page,
+               per_page: @per_page,
+               total_count: @total_count,
+               url: ->(n) { customers_path(book_params.merge(page: n)) } %>
   <% else %>
     <div class="atelier-form">
       <p class="hint" style="margin:0">
@@ -178,11 +175,6 @@
   .people-book .people-tabs a.is-on em { background: rgba(11,18,32,0.12); }
   .people-book .sort-link { color: inherit; text-decoration: none; }
   .people-book .sort-link.is-on { color: #0b1220; }
-  .people-book .people-pager {
-    display: flex; align-items: center; justify-content: center; gap: 12px;
-    margin-top: 16px; color: #6b6258; font-size: 13px; font-weight: 600;
-  }
-  .people-book .people-pager a.atelier-back { text-decoration: none; }
   .people-book .cat-toolbar {
     display: flex; justify-content: space-between; align-items: center; gap: 16px;
     margin-bottom: 18px; flex-wrap: wrap;
@@ -195,6 +187,7 @@
     display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;
   }
   .people-book .people-card {
+    position: relative;
     display: block; text-decoration: none; color: inherit;
     background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 18px;
     padding: 18px; box-shadow: 0 12px 28px rgba(20,17,15,0.05);

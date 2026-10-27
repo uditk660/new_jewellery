@@ -13,7 +13,7 @@ class HouseReport
   end
 
   delegate :from, :to, :window, :label, :metal_id, :metal_filter, :bill_count, :pieces, :grams,
-           :metal, :making, :extra, :charges, :discount, :taxable, :gst, :cgst, :igst, :bill_total,
+           :metal, :making, :extra, :charges, :discount, :taxable, :gst, :cgst, :sgst, :bill_total,
            :house_result, :cash_refunds, :receipts, :outstanding, :paid_bills, :open_bills,
            :margin_percent, :mix, :by_metal, :statement_lines, :series, :series_max, :bills,
            to: :book

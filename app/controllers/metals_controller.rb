@@ -3,8 +3,13 @@ class MetalsController < ApplicationController
   before_action :set_metal, only: [:show, :update, :destroy]
 
   def index
-    @metals = Metal.includes(:purities, :jewellery_categories).ordered
-    @metals = @metals.where('name LIKE ?', "%#{params[:q].to_s.strip}%") if params[:q].present?
+    scope = Metal.includes(:purities, :jewellery_categories, jewelry_items: [:jewellery_category, :purity]).ordered
+    scope = scope.where('name LIKE ?', "%#{params[:q].to_s.strip}%") if params[:q].present?
+
+    @per_page = (params[:per_page].presence || 20).to_i.clamp(5, 100)
+    @page = [params[:page].to_i, 1].max
+    @total_count = scope.count
+    @metals = scope.limit(@per_page).offset((@page - 1) * @per_page)
   end
 
   def new

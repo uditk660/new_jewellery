@@ -11,12 +11,13 @@
   .btn-ghost{background:transparent;border:1px solid #e6eef6;padding:8px 12px;border-radius:8px;color:#0f172a;text-decoration:none}
   .purities-table{width:100%;border-collapse:collapse;margin-top:8px}
   .purities-table th,.purities-table td{padding:10px 12px;border-bottom:1px solid #f1f5f9;text-align:left}
+  .purities-table .col-serial{width:2.75rem;text-align:center;color:#64748b;font-variant-numeric:tabular-nums;font-size:12px;font-weight:600}
   .purities-table th{color:#475569;font-size:13px;font-weight:600}
   .badge{display:inline-block;padding:6px 8px;border-radius:999px;background:#f1f5f9;color:#0f172a;font-size:12px}
   .empty-state{padding:36px;text-align:center;color:#475569}
   @media (max-width:780px){
     .purities-title h2{font-size:16px}
-    .purities-table td:nth-child(5),.purities-table th:nth-child(5){display:none}
+    .purities-table td:nth-child(6),.purities-table th:nth-child(6){display:none}
   }
   .svg-hero{width:56px;height:56px}
  </style>
@@ -47,6 +48,7 @@
       <table class="purities-table">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Metal</th>
             <th>Name</th>
             <th>Purity (%)</th>
@@ -56,8 +58,9 @@
           </tr>
         </thead>
         <tbody>
-          <% @purities.each do |p| %>
+          <% @purities.each_with_index do |p, idx| %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td><%= p.metal&.name || '-' %></td>
               <td><%= p.name %></td>
               <td><span class="badge"><%= number_with_precision(p.purity_percent || 0, precision: 2) %></span></td>

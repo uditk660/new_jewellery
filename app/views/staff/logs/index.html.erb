@@ -24,6 +24,7 @@
       <table class="ep-table">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>When</th>
             <th>Employee</th>
             <th>Action</th>
@@ -33,8 +34,9 @@
           </tr>
         </thead>
         <tbody>
-          <% @logs.each do |log| %>
+          <% @logs.each_with_index do |log, idx| %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td>
                 <%= ist_stamp(log.created_at) %>
                 <span class="ep-sub"><%= log.ip_address.presence || '—' %></span>

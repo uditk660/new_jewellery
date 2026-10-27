@@ -20,51 +20,70 @@ class LineItem < ActiveRecord::Base
     errors.add(:quantity, "cannot exceed remaining stock (#{available} pcs)")
   end
 
+  # Metal value written on the bill when it was raised (₹/g × net g × qty).
+  # A bill never re-reads today's board: `rate` holds the metal total, and
+  # `price_cents` holds the per-piece metal value as a fallback for old rows.
+  def metal_cents
+    stored = Paise.dec!(rate)
+    return Paise.from_rupees(stored) if stored.positive?
+
+    price_cents.to_i * quantity.to_i
+  end
+
+  def making_cents
+    Paise.from_rupees(making_charge)
+  end
+
+  def additional_cents
+    Paise.from_rupees(additional_charge) * quantity.to_i
+  end
+
+  def line_amount_cents
+    metal_cents + making_cents + additional_cents
+  end
+
   def total_cents
-    # include making charge per-line (converted to cents) and additional charge per-item
-    base = (price_cents * quantity)
-    making_c = (making_charge.to_f * 100).to_i
-    additional_c = ((additional_charge.to_f * 100).to_i * quantity)
-    base + making_c + additional_c
+    line_amount_cents
   end
 
   def total
-    total_cents.to_f / 100.0
+    Paise.rupees(total_cents)
   end
 
-  # Metal value stored on the bill (₹/g × net g × qty at the time it was raised).
   def metal_amount
-    return rate.to_f if rate.to_f.positive?
+    Paise.rupees(metal_cents)
+  end
 
-    (per_gram_price.to_f * net_weight.to_f * quantity.to_i)
+  def line_amount
+    Paise.rupees(line_amount_cents)
+  end
+
+  def net_grams_total
+    Paise.dec!(net_weight) * quantity.to_i
+  end
+
+  def gross_grams_total
+    Paise.dec!(gross_weight) * quantity.to_i
   end
 
   def rate_per_gram_used
-    den = net_weight.to_f * quantity.to_i
-    den.positive? ? (metal_amount / den) : per_gram_price.to_f
+    grams = net_grams_total
+    return 0.0 unless grams.positive?
+
+    (BigDecimal(metal_cents) / 100 / grams).round(2, BigDecimal::ROUND_HALF_UP).to_f
   end
 
-  # Price per gram to be used for calculations. Prefer jewelry_item.effective_price_per_gram
-  # (set by JewelryItem model) and fall back to stored price_cents.
+  def making_percent
+    metal = metal_cents
+    metal.positive? ? (making_cents * 100.0 / metal) : 0.0
+  end
+
+  # Today's board rate for this piece (used only to prefill new bills).
   def per_gram_price
     if jewelry_item && jewelry_item.respond_to?(:effective_price_per_gram) && jewelry_item.effective_price_per_gram.present?
       jewelry_item.effective_price_per_gram.to_f
     else
       (price_cents || 0).to_f / 100.0
     end
-  end
-
-  def making_percent
-    metal = metal_amount
-    metal.positive? ? (making_charge.to_f / metal * 100.0) : 0.0
-  end
-
-  # Compute the line amount as: metal + making + additional per piece × qty
-  def line_amount
-    metal_amount + making_charge.to_f + additional_charge.to_f * quantity.to_i
-  end
-
-  def line_amount_cents
-    (line_amount * 100).to_i
   end
 end

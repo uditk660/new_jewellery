@@ -1,0 +1,458 @@
+<%
+  estimate = @estimate
+  customers_payload = (@customers || []).map do |c|
+    { id: c.id, name: c.full_name, phone: c.phone.to_s,
+      place: c.address.to_s.split(/[\n,]/).map(&:strip).reject(&:blank?).last.to_s, ref: c.client_ref.to_s }
+  end
+  blank_item = { 'description' => '', 'pcs' => '1', 'net_weight' => '', 'tunch' => '', 'labour' => '', 'labour_on' => 'pc' }
+  items = estimate.item_rows.presence || [blank_item]
+  form_state = {
+    items: items.map { |r| r.slice('description', 'jewelry_item_id', 'pcs', 'net_weight', 'tunch', 'labour', 'labour_on') },
+    settlements: estimate.settlement_rows.map { |r| r.slice('kind', 'description', 'weight', 'touch', 'fine', 'rate', 'amount') },
+    catalogue: @catalogue || [],
+    customers: customers_payload,
+    carry: @carry || {},
+    bhav: @gold_bhav,
+    kinds: Estimate::SETTLEMENT_KINDS
+  }
+  prev_fine = estimate.prev_fine_mg.to_i.zero? ? '' : format('%.3f', Estimate.mg_to_g(estimate.prev_fine_mg))
+  prev_amount = estimate.prev_amount_cents.to_i.zero? ? '' : format('%.2f', Paise.rupees(estimate.prev_amount_cents))
+  url = estimate.persisted? ? estimate_path(estimate) : estimates_path
+%>
+
+<script type="application/json" id="estimate-form-json"><%= raw json_escape(form_state.to_json) %></script>
+
+<div class="atelier-grid est-grid">
+  <div class="atelier-form">
+    <%= form_for estimate, url: url, html: { id: 'estimate-form', autocomplete: 'off' } do |f| %>
+      <% if estimate.errors.any? %>
+        <div class="errors"><%= estimate.errors.full_messages.uniq.to_sentence %></div>
+      <% end %>
+
+      <section class="section">
+        <h2>1 · Client</h2>
+        <p class="hint">Pick a client from the book to carry forward their last balance, or write a walk-in name.</p>
+        <div class="row">
+          <div class="field">
+            <%= f.label :customer_id, 'From the client book' %>
+            <%= f.select :customer_id, options_for_select(customers_payload.map { |c| [[c[:name], c[:phone].presence, c[:ref].presence].compact.join(' · '), c[:id]] }, estimate.customer_id),
+                         { include_blank: 'Walk-in / not in book' }, { class: 'form-control', id: 'est-customer' } %>
+          </div>
+          <div class="field narrow">
+            <%= f.label :estimate_date do %>Date <span class="req">*</span><% end %>
+            <%= f.date_field :estimate_date, class: 'form-control', required: true %>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div class="field">
+            <%= f.label :party_name do %>Name on slip <span class="req">*</span><% end %>
+            <%= f.text_field :party_name, class: 'form-control', id: 'est-name', placeholder: 'e.g. Sudhir Ji', maxlength: 120, required: true %>
+          </div>
+          <div class="field">
+            <%= f.label :party_place, 'Place' %>
+            <%= f.text_field :party_place, class: 'form-control', id: 'est-place', placeholder: 'e.g. Jagdishpur, Ara', maxlength: 80 %>
+          </div>
+          <div class="field narrow">
+            <%= f.label :party_phone, 'Mobile' %>
+            <%= f.text_field :party_phone, class: 'form-control', id: 'est-phone', placeholder: '98xxxxxxxx', maxlength: 20, inputmode: 'tel' %>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>2 · Pieces</h2>
+        <p class="hint">Fine = net weight × tunch %. Labour is charged per piece or per gram of net weight.</p>
+        <datalist id="est-catalogue">
+          <% (@catalogue || []).each do |c| %>
+            <option value="<%= c[:name] %><%= c[:sku].present? ? " — #{c[:sku]}" : '' %>"></option>
+          <% end %>
+        </datalist>
+        <div id="est-items" class="est-rows"></div>
+        <button type="button" class="atelier-back" id="est-add-item">+ Add piece</button>
+      </section>
+
+      <section class="section">
+        <h2>3 · Previous balance</h2>
+        <p class="hint">Brought forward from an earlier estimate (shown as “Bal.” on the slip). Filled in for clients in the book; leave blank if none.</p>
+        <div class="row">
+          <div class="field">
+            <%= f.label :prev_ref, 'Reference' %>
+            <%= f.text_field :prev_ref, class: 'form-control', id: 'est-prev-ref', placeholder: 'e.g. 4179-15/09/26', maxlength: 80 %>
+          </div>
+          <div class="field narrow">
+            <label for="est-prev-fine">Fine (g)</label>
+            <input type="text" inputmode="decimal" name="estimate[prev_fine]" id="est-prev-fine" class="form-control" value="<%= prev_fine %>" placeholder="0.000">
+          </div>
+          <div class="field narrow">
+            <label for="est-prev-amount">Amount ₹</label>
+            <input type="text" inputmode="decimal" name="estimate[prev_amount]" id="est-prev-amount" class="form-control" value="<%= prev_amount %>" placeholder="0.00">
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>4 · Settlement</h2>
+        <p class="hint">Old metal taken in (weight × touch), fine converted to money at the gold bhav per 10 g, and cash received.</p>
+        <div id="est-settlements" class="est-rows"></div>
+        <div class="actions est-add-set">
+          <button type="button" class="atelier-back" data-add="metal">+ Metal received</button>
+          <button type="button" class="atelier-back" data-add="bhav">+ Gold bhav</button>
+          <button type="button" class="atelier-back" data-add="cash">+ Receipt cash</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>5 · Note</h2>
+        <div class="field">
+          <%= f.text_field :note, class: 'form-control', placeholder: 'Optional line printed under the table', maxlength: 200 %>
+        </div>
+      </section>
+
+      <div class="actions">
+        <%= f.submit estimate.persisted? ? 'Save & print estimate' : 'Make & print estimate', class: 'btn-gold' %>
+        <%= link_to 'Cancel', estimate.persisted? ? estimate_path(estimate) : estimates_path, class: 'atelier-back' %>
+      </div>
+    <% end %>
+  </div>
+
+  <aside class="preview est-preview" aria-live="polite">
+    <div class="card-head">
+      <p class="preview-kicker">Rough estimate · live</p>
+      <span class="client-ref">No. <%= estimate.estimate_no || Estimate.next_number %></span>
+    </div>
+    <h3 id="pv-name">Client name</h3>
+    <p class="pv-sub" id="pv-sub"></p>
+    <table class="pv-table">
+      <thead><tr><th>Description</th><th class="n">Fine g</th><th class="n">Amount</th></tr></thead>
+      <tbody id="pv-body"></tbody>
+    </table>
+    <div class="pv-close">
+      <span>Closing balance</span>
+      <div><b id="pv-close-fine">Nil</b><small>fine</small></div>
+      <div><b id="pv-close-amount">Nil</b><small>amount</small></div>
+    </div>
+    <p class="pv-foot" id="pv-foot">Positive: client owes the house. Negative: house owes the client.</p>
+  </aside>
+</div>
+
+<style>
+  .container:has(.est-page) { max-width: 1360px; }
+  .est-page .est-grid { grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr); }
+  .est-page .est-rows { display: grid; gap: 10px; margin-bottom: 12px; }
+  .est-page .est-row {
+    position: relative; border: 1px solid rgba(201,162,39,0.3); border-radius: 14px; background: #fff;
+    padding: 12px 12px 10px 44px;
+  }
+  .est-page .est-row .no {
+    position: absolute; left: 12px; top: 14px; width: 22px; height: 22px; border-radius: 50%;
+    background: #0b1220; color: #e8d5a3; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .est-page .est-row .grid { display: grid; gap: 8px 10px; align-items: end; }
+  .est-page .est-row.item .grid { grid-template-columns: minmax(0, 2.4fr) 0.6fr 1fr 0.9fr 0.9fr 0.8fr; }
+  .est-page .est-row.set .grid { grid-template-columns: 1.1fr minmax(0, 1.6fr) 1fr 1fr 1fr; }
+  .est-page .est-row label { font-size: 10.5px; margin-bottom: 4px; }
+  .est-page .est-row input.form-control, .est-page .est-row select.form-control { padding: 8px 10px; font-size: 13.5px; }
+  .est-page .est-row .out {
+    display: flex; gap: 14px; justify-content: flex-end; align-items: center; margin-top: 8px;
+    font-size: 12px; color: #6b6258; font-variant-numeric: tabular-nums;
+  }
+  .est-page .est-row .out b { color: #0b1220; font-weight: 700; }
+  .est-page .est-row .out b.gold { color: #a8841a; }
+  .est-page .est-row .remove {
+    border: 0; background: none; color: #9f1239; font-size: 12px; font-weight: 700; cursor: pointer; padding: 0 0 0 6px;
+  }
+  .est-page .est-row .use { border: 0; background: none; color: #a8841a; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; text-decoration: underline; }
+  .est-page .est-row .ghost { visibility: hidden; }
+  .est-page .est-add-set { flex-wrap: wrap; }
+  .est-page .est-preview h3 { font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.5rem; margin: 0; color: #fffaf3; font-weight: 600; }
+  .est-page .pv-sub { margin: 2px 0 14px; font-size: 12px; color: rgba(247,241,232,0.7); }
+  .est-page .pv-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .est-page .pv-table th { text-align: left; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #e8d5a3; padding: 6px 0; border-bottom: 1px solid rgba(232,213,163,0.3); }
+  .est-page .pv-table td { padding: 6px 0; border-bottom: 1px solid rgba(232,213,163,0.12); color: #f7f1e8; }
+  .est-page .pv-table .n { text-align: right; }
+  .est-page .pv-table tr.sum td { color: #e8d5a3; font-weight: 700; border-bottom-color: rgba(232,213,163,0.35); }
+  .est-page .pv-table td small { display: block; color: rgba(247,241,232,0.55); font-size: 11px; }
+  .est-page .pv-close {
+    margin-top: 16px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(232,213,163,0.4);
+    background: rgba(201,162,39,0.1); display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center;
+  }
+  .est-page .pv-close span { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #e8d5a3; font-weight: 700; }
+  .est-page .pv-close b { display: block; font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.45rem; color: #c9a227; text-align: right; font-variant-numeric: lining-nums tabular-nums; font-feature-settings: "lnum" 1, "tnum" 1; }
+  .est-page .pv-close small { display: block; text-align: right; font-size: 10px; color: rgba(247,241,232,0.6); text-transform: uppercase; letter-spacing: 0.1em; }
+  .est-page .pv-foot { margin: 12px 0 0; font-size: 11.5px; color: rgba(247,241,232,0.6); }
+  @media (max-width: 1100px) {
+    .est-page .est-grid { grid-template-columns: 1fr; }
+    .est-page .est-preview { position: static; }
+  }
+  @media (max-width: 760px) {
+    .est-page .est-row.item .grid, .est-page .est-row.set .grid { grid-template-columns: 1fr 1fr; }
+    .est-page .est-row .grid .wide { grid-column: 1 / -1; }
+    .est-page .row { flex-wrap: wrap; }
+    .est-page .field.narrow { flex: 1 1 140px; }
+  }
+</style>
+
+<script>
+(function () {
+  var dataEl = document.getElementById('estimate-form-json');
+  if (!dataEl) return;
+  var data = JSON.parse(dataEl.textContent || '{}');
+  var items = data.items || [];
+  var sets = data.settlements || [];
+  var catalogue = data.catalogue || [];
+  var kinds = data.kinds || {};
+  var itemsEl = document.getElementById('est-items');
+  var setsEl = document.getElementById('est-settlements');
+  var prevFine = document.getElementById('est-prev-fine');
+  var prevAmount = document.getElementById('est-prev-amount');
+  var prevRef = document.getElementById('est-prev-ref');
+
+  function num(v) {
+    var s = String(v == null ? '' : v).replace(/,/g, '').trim();
+    if (!/^-?\d+(\.\d+)?$/.test(s)) return 0;
+    return parseFloat(s);
+  }
+  function half(x) { return x < 0 ? -Math.round(-x - 1e-9) : Math.round(x + 1e-9); }
+  function mg(v) { return half(num(v) * 1000); }
+  function paise(v) { return half(num(v) * 100); }
+  function fineOf(weightMg, pct) { return half(weightMg * num(pct) / 100); }
+  function fmtFine(m) { return m === 0 ? 'Nil' : (m / 1000).toFixed(3); }
+  function fmtAmt(p) {
+    if (p === 0) return 'Nil';
+    var sign = p < 0 ? '−' : '';
+    return sign + '₹' + (Math.abs(p) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  function itemCalc(r) {
+    var net = mg(r.net_weight);
+    var fine = fineOf(net, r.tunch);
+    var lab = paise(r.labour);
+    var amount = r.labour_on === 'g' ? half(net * lab / 1000) : lab * (parseInt(r.pcs, 10) || 0);
+    return { net: net, fine: fine, amount: amount };
+  }
+
+  function totals(uptoSet) {
+    var t = { net: 0, fine: 0, amount: 0, pcs: 0 };
+    items.forEach(function (r) { var c = itemCalc(r); t.net += c.net; t.fine += c.fine; t.amount += c.amount; t.pcs += parseInt(r.pcs, 10) || 0; });
+    t.runFine = t.fine + mg(prevFine.value);
+    t.runAmount = t.amount + paise(prevAmount.value);
+    t.effects = [];
+    var limit = uptoSet == null ? sets.length : uptoSet;
+    sets.forEach(function (s, i) {
+      var e = setEffect(s);
+      if (i < limit) { t.runFine += e.fine; t.runAmount += e.amount; }
+      t.effects.push(e);
+    });
+    return t;
+  }
+
+  function setEffect(s) {
+    if (s.kind === 'metal') return { fine: -fineOf(mg(s.weight), s.touch), amount: 0 };
+    if (s.kind === 'bhav') { var f = mg(s.fine); return { fine: -f, amount: half(f * num(s.rate) * 100 / 10000) }; }
+    if (s.kind === 'cash') return { fine: 0, amount: -paise(s.amount) };
+    return { fine: 0, amount: 0 };
+  }
+
+  function input(name, value, attrs) {
+    return '<input class="form-control" name="' + name + '" value="' + esc(value) + '" ' + (attrs || '') + '>';
+  }
+
+  function renderItems() {
+    itemsEl.innerHTML = items.map(function (r, i) {
+      var n = 'items[' + i + ']';
+      return '<div class="est-row item" data-i="' + i + '">' +
+        '<span class="no">' + (i + 1) + '</span>' +
+        '<div class="grid">' +
+          '<div class="wide"><label>Description</label>' + input(n + '[description]', r.description, 'data-f="description" list="est-catalogue" maxlength="80" placeholder="Type or pick a catalogue piece"') +
+            '<input type="hidden" name="' + n + '[jewelry_item_id]" value="' + esc(r.jewelry_item_id || '') + '" data-f="jewelry_item_id"></div>' +
+          '<div><label>Pc</label>' + input(n + '[pcs]', r.pcs, 'data-f="pcs" inputmode="numeric"') + '</div>' +
+          '<div><label>Net wt (g)</label>' + input(n + '[net_weight]', r.net_weight, 'data-f="net_weight" inputmode="decimal" placeholder="0.000"') + '</div>' +
+          '<div><label>Tunch %</label>' + input(n + '[tunch]', r.tunch, 'data-f="tunch" inputmode="decimal" placeholder="e.g. 79.50"') + '</div>' +
+          '<div><label>Labour ₹</label>' + input(n + '[labour]', r.labour, 'data-f="labour" inputmode="decimal" placeholder="0"') + '</div>' +
+          '<div><label>Per</label><select class="form-control" name="' + n + '[labour_on]" data-f="labour_on">' +
+            '<option value="pc"' + (r.labour_on !== 'g' ? ' selected' : '') + '>piece</option>' +
+            '<option value="g"' + (r.labour_on === 'g' ? ' selected' : '') + '>gram</option></select></div>' +
+        '</div>' +
+        '<div class="out"><span>Fine <b class="gold" data-o="fine">—</b> g</span><span>Labour <b data-o="amount">—</b></span>' +
+          (items.length > 1 ? '<button type="button" class="remove" data-remove="item">Remove</button>' : '') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderSets() {
+    setsEl.innerHTML = sets.map(function (s, i) {
+      var n = 'settlements[' + i + ']';
+      var kindSel = '<select class="form-control" name="' + n + '[kind]" data-f="kind">' + Object.keys(kinds).map(function (k) {
+        return '<option value="' + k + '"' + (s.kind === k ? ' selected' : '') + '>' + esc(kinds[k]) + '</option>';
+      }).join('') + '</select>';
+      var desc = '<div><label>Description</label>' + input(n + '[description]', s.description, 'data-f="description" maxlength="60" placeholder="' + (s.kind === 'metal' ? 'e.g. Old gold' : (s.kind === 'bhav' ? 'S. Gold bhav' : 'Receipt cash')) + '"') + '</div>';
+      var fields;
+      if (s.kind === 'metal') {
+        fields = '<div><label>Weight (g)</label>' + input(n + '[weight]', s.weight, 'data-f="weight" inputmode="decimal" placeholder="0.000"') + '</div>' +
+                 '<div><label>Touch %</label>' + input(n + '[touch]', s.touch, 'data-f="touch" inputmode="decimal" placeholder="e.g. 99.50"') + '</div>';
+      } else if (s.kind === 'bhav') {
+        fields = '<div><label>Fine to convert (g) <button type="button" class="use" data-use="fine">use balance</button></label>' + input(n + '[fine]', s.fine, 'data-f="fine" inputmode="decimal" placeholder="0.000"') + '</div>' +
+                 '<div><label>Bhav ₹ / 10 g</label>' + input(n + '[rate]', s.rate, 'data-f="rate" inputmode="decimal" placeholder="e.g. 150000"') + '</div>';
+      } else {
+        fields = '<div><label>Cash ₹ <button type="button" class="use" data-use="amount">use balance</button></label>' + input(n + '[amount]', s.amount, 'data-f="amount" inputmode="decimal" placeholder="0"') + '</div>' +
+                 '<div class="ghost"><label>&nbsp;</label><input class="form-control" disabled></div>';
+      }
+      return '<div class="est-row set" data-i="' + i + '">' +
+        '<span class="no">' + (i + 1) + '</span>' +
+        '<div class="grid"><div><label>Kind</label>' + kindSel + '</div>' + desc + fields + '</div>' +
+        '<div class="out"><span>Fine <b class="gold" data-o="fine">—</b></span><span>Amount <b data-o="amount">—</b></span>' +
+          '<button type="button" class="remove" data-remove="set">Remove</button></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function refresh() {
+    var t = totals();
+    itemsEl.querySelectorAll('.est-row').forEach(function (row) {
+      var c = itemCalc(items[+row.dataset.i]);
+      row.querySelector('[data-o="fine"]').textContent = (c.fine / 1000).toFixed(3);
+      row.querySelector('[data-o="amount"]').textContent = fmtAmt(c.amount).replace('Nil', '₹0.00');
+    });
+    setsEl.querySelectorAll('.est-row').forEach(function (row) {
+      var e = t.effects[+row.dataset.i];
+      row.querySelector('[data-o="fine"]').textContent = e.fine === 0 ? '—' : (e.fine / 1000).toFixed(3) + ' g';
+      row.querySelector('[data-o="amount"]').textContent = e.amount === 0 ? '—' : fmtAmt(e.amount);
+    });
+    renderPreview(t);
+  }
+
+  function renderPreview(t) {
+    var name = document.getElementById('est-name').value.trim();
+    var place = document.getElementById('est-place').value.trim();
+    var phone = document.getElementById('est-phone').value.trim();
+    document.getElementById('pv-name').textContent = name || 'Client name';
+    document.getElementById('pv-sub').textContent = [place, phone].filter(Boolean).join(' · ');
+    var rows = items.map(function (r) {
+      var c = itemCalc(r);
+      var bits = [r.pcs ? r.pcs + ' pc' : '', r.net_weight ? (c.net / 1000).toFixed(3) + ' g' : '', r.tunch ? r.tunch + '%' : '', r.labour ? '₹' + r.labour + '/' + (r.labour_on === 'g' ? 'g' : 'pc') : ''].filter(Boolean).join(' · ');
+      return '<tr><td>' + esc(r.description || 'Piece') + '<small>' + esc(bits) + '</small></td><td class="n">' + (c.fine / 1000).toFixed(3) + '</td><td class="n">' + fmtAmt(c.amount).replace('Nil', '—') + '</td></tr>';
+    });
+    rows.push('<tr class="sum"><td>Total · ' + (t.net / 1000).toFixed(3) + ' g net</td><td class="n">' + (t.fine / 1000).toFixed(3) + '</td><td class="n">' + fmtAmt(t.amount).replace('Nil', '—') + '</td></tr>');
+    var pf = mg(prevFine.value), pa = paise(prevAmount.value);
+    if (pf !== 0 || pa !== 0 || prevRef.value.trim()) {
+      rows.push('<tr><td>Bal. ' + esc(prevRef.value.trim()) + '</td><td class="n">' + (pf ? (pf / 1000).toFixed(3) : '—') + '</td><td class="n">' + (pa ? fmtAmt(pa) : '—') + '</td></tr>');
+      rows.push('<tr class="sum"><td>Net total</td><td class="n">' + fmtFine(t.fine + pf) + '</td><td class="n">' + fmtAmt(t.amount + pa) + '</td></tr>');
+    }
+    sets.forEach(function (s, i) {
+      var e = t.effects[i];
+      var label = s.description || kinds[s.kind];
+      var sub = s.kind === 'metal' ? (num(s.weight).toFixed(3) + ' g @ ' + num(s.touch).toFixed(2) + '%') :
+                s.kind === 'bhav' ? ('@ ₹' + num(s.rate).toLocaleString('en-IN') + ' / 10 g') : '';
+      rows.push('<tr><td>' + esc(label) + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</td><td class="n">' + (e.fine ? (e.fine / 1000).toFixed(3) : '—') + '</td><td class="n">' + (e.amount ? fmtAmt(e.amount) : '—') + '</td></tr>');
+    });
+    document.getElementById('pv-body').innerHTML = rows.join('');
+    document.getElementById('pv-close-fine').textContent = t.runFine === 0 ? 'Nil' : (t.runFine / 1000).toFixed(3) + ' g';
+    document.getElementById('pv-close-amount').textContent = fmtAmt(t.runAmount);
+  }
+
+  function matchCatalogue(text) {
+    var v = String(text || '').trim().toLowerCase();
+    if (!v) return null;
+    return catalogue.find(function (c) {
+      var label = (c.name + (c.sku ? ' — ' + c.sku : '')).toLowerCase();
+      return label === v;
+    }) || null;
+  }
+
+  itemsEl.addEventListener('input', function (e) {
+    var row = e.target.closest('.est-row'); var f = e.target.dataset.f;
+    if (!row || !f) return;
+    items[+row.dataset.i][f] = e.target.value;
+    refresh();
+  });
+  itemsEl.addEventListener('change', function (e) {
+    var row = e.target.closest('.est-row');
+    if (!row) return;
+    var r = items[+row.dataset.i];
+    if (e.target.dataset.f === 'labour_on') { r.labour_on = e.target.value; refresh(); return; }
+    if (e.target.dataset.f !== 'description') return;
+    var hit = matchCatalogue(e.target.value);
+    r.jewelry_item_id = hit ? hit.id : '';
+    if (hit) {
+      r.description = hit.name;
+      if (!num(r.net_weight) && hit.weight) r.net_weight = hit.weight.toFixed(3);
+      if (!num(r.tunch) && hit.tunch) r.tunch = hit.tunch.toFixed(2);
+      renderItems();
+    } else {
+      row.querySelector('[data-f="jewelry_item_id"]').value = '';
+    }
+    refresh();
+  });
+  itemsEl.addEventListener('click', function (e) {
+    if (e.target.dataset.remove !== 'item') return;
+    items.splice(+e.target.closest('.est-row').dataset.i, 1);
+    renderItems(); refresh();
+  });
+  document.getElementById('est-add-item').addEventListener('click', function () {
+    var last = items[items.length - 1] || {};
+    items.push({ description: '', pcs: '1', net_weight: '', tunch: last.tunch || '', labour: last.labour || '', labour_on: last.labour_on || 'pc' });
+    renderItems(); refresh();
+    var rows = itemsEl.querySelectorAll('[data-f="description"]');
+    if (rows.length) rows[rows.length - 1].focus();
+  });
+
+  setsEl.addEventListener('input', function (e) {
+    var row = e.target.closest('.est-row'); var f = e.target.dataset.f;
+    if (!row || !f || f === 'kind') return;
+    sets[+row.dataset.i][f] = e.target.value;
+    refresh();
+  });
+  setsEl.addEventListener('change', function (e) {
+    if (e.target.dataset.f !== 'kind') return;
+    var i = +e.target.closest('.est-row').dataset.i;
+    sets[i] = fresh(e.target.value, i);
+    renderSets(); refresh();
+  });
+  setsEl.addEventListener('click', function (e) {
+    var row = e.target.closest('.est-row');
+    if (!row) return;
+    var i = +row.dataset.i;
+    if (e.target.dataset.remove === 'set') { sets.splice(i, 1); renderSets(); refresh(); return; }
+    var use = e.target.dataset.use;
+    if (!use) return;
+    var t = totals(i);
+    if (use === 'fine') sets[i].fine = (t.runFine / 1000).toFixed(3);
+    if (use === 'amount') sets[i].amount = (Math.max(t.runAmount, 0) / 100).toFixed(2);
+    renderSets(); refresh();
+  });
+
+  function fresh(kind, at) {
+    var t = totals(at);
+    if (kind === 'metal') return { kind: 'metal', description: 'Old gold', weight: '', touch: '' };
+    if (kind === 'bhav') return { kind: 'bhav', description: 'S. Gold bhav', fine: t.runFine > 0 ? (t.runFine / 1000).toFixed(3) : '', rate: data.bhav ? String(data.bhav) : '' };
+    return { kind: 'cash', description: 'Receipt cash', amount: t.runAmount > 0 ? (t.runAmount / 100).toFixed(2) : '' };
+  }
+  document.querySelectorAll('[data-add]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      sets.push(fresh(btn.dataset.add, sets.length));
+      renderSets(); refresh();
+    });
+  });
+
+  var customerSel = document.getElementById('est-customer');
+  customerSel.addEventListener('change', function () {
+    var c = (data.customers || []).find(function (x) { return String(x.id) === customerSel.value; });
+    if (!c) return;
+    document.getElementById('est-name').value = c.name;
+    document.getElementById('est-phone').value = c.phone || '';
+    if (c.place) document.getElementById('est-place').value = c.place;
+    var carry = data.carry[String(c.id)];
+    prevRef.value = carry ? carry.ref : '';
+    prevFine.value = carry && carry.fine ? Number(carry.fine).toFixed(3) : '';
+    prevAmount.value = carry && carry.amount ? Number(carry.amount).toFixed(2) : '';
+    refresh();
+  });
+  ['est-name', 'est-place', 'est-phone', 'est-prev-ref', 'est-prev-fine', 'est-prev-amount'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', refresh);
+  });
+
+  renderItems(); renderSets(); refresh();
+})();
+</script>

@@ -66,6 +66,17 @@ class ReturnsController < ApplicationController
       record['walk_in_phone'] = record['walk_in_phone'].to_s.gsub(/\s+/, '').presence
     end
 
+    problem = return_problem(payload)
+    if problem
+      @return_form = OpenStruct.new(payload.to_h)
+      load_form_collections
+      flash.now[:alert] = problem
+      render :new, status: :unprocessable_entity
+      return
+    end
+    record['action'] = record['action'].to_s == 'exchange' ? 'exchange' : 'cash'
+    record['amount'] = '%.2f' % Paise.round2(payload[:amount]) if payload[:amount].present?
+
     if payload[:jewelry_item_id].present? && payload[:quantity].present?
       ji = JewelryItem.find_by(id: payload[:jewelry_item_id])
       qty = payload[:quantity].to_i
@@ -109,6 +120,53 @@ class ReturnsController < ApplicationController
   end
 
   private
+
+  # A return can only bring back what a settled bill actually sold, and a cash
+  # refund cannot exceed what that piece was billed at.
+  def return_problem(payload)
+    qty_raw = payload[:quantity].to_s.strip
+    amount_raw = payload[:amount].to_s.strip
+    if payload[:jewelry_item_id].present? && !qty_raw.match?(/\A\d+\z/)
+      return 'Quantity must be a whole number of pieces.'
+    end
+    qty = qty_raw.to_i
+    return 'Quantity must be at least 1.' if payload[:jewelry_item_id].present? && qty < 1
+    if amount_raw.present?
+      amount = Paise.dec(amount_raw)
+      return 'Refund amount must be a plain number.' if amount.nil?
+      return 'Refund amount cannot be negative.' if amount.negative?
+    end
+    return nil if payload[:order_id].blank?
+
+    order = Order.includes(:line_items).find_by(id: payload[:order_id])
+    return 'That bill could not be found.' unless order
+    return 'Only a settled bill can take a return.' unless order.status == 'paid'
+    if payload[:customer_id].present? && order.customer_id.to_s != payload[:customer_id].to_s
+      return 'That bill belongs to a different client.'
+    end
+    return nil if payload[:jewelry_item_id].blank?
+
+    lines = order.line_items.select { |li| li.jewelry_item_id.to_s == payload[:jewelry_item_id].to_s }
+    return 'That piece is not on the chosen bill.' if lines.empty?
+
+    sold = lines.sum { |li| li.quantity.to_i }
+    already = Array(session[:return_records]).sum do |r|
+      r = stringify_record(r)
+      same = r['order_id'].to_s == order.id.to_s && r['jewelry_item_id'].to_s == payload[:jewelry_item_id].to_s
+      same && r['stock_updated'] ? r['quantity'].to_i : 0
+    end
+    return "Only #{sold - already} pcs of this piece remain returnable on the bill." if qty > sold - already
+
+    if amount_raw.present?
+      piece_cents = lines.sum(&:line_amount_cents) * qty / sold
+      subtotal = order.subtotal_cents
+      billed_cents = subtotal.positive? ? (piece_cents * order.total_cents / subtotal) : 0
+      if Paise.from_rupees(amount_raw) > billed_cents
+        return "Refund cannot exceed ₹#{'%.2f' % Paise.rupees(billed_cents)} billed for #{qty} pcs."
+      end
+    end
+    nil
+  end
 
   def load_form_collections
     @customers = Customer.order(:first_name, :last_name)

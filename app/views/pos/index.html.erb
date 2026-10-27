@@ -1,7 +1,7 @@
 <%= render 'shared/atelier_styles' %>
 
 <%
-  @order ||= Order.new(status: 'pending', cgst_rate: Order::DEFAULT_CGST_RATE, igst_rate: Order::DEFAULT_IGST_RATE)
+  @order ||= Order.new(status: 'pending', cgst_rate: Order::DEFAULT_CGST_RATE, sgst_rate: Order::DEFAULT_SGST_RATE)
   @draft_customer ||= Customer.new
   @customer_mode ||= 'existing'
   @items ||= []
@@ -140,10 +140,20 @@
         </div>
 
         <div class="ticket-block">
-          <h2>Charges &amp; tax</h2>
+          <h2>Tax &amp; charges</h2>
           <div class="row">
             <div class="field">
-              <label for="discount">Discount (₹)</label>
+              <label for="cgst_rate">CGST (%)</label>
+              <%= number_field_tag :cgst_rate, ('%.2f' % (@order.cgst_rate.presence || Order::DEFAULT_CGST_RATE)), step: 0.01, min: 0, max: 20, class: 'form-control', id: 'cgst_rate' %>
+            </div>
+            <div class="field">
+              <label for="sgst_rate">SGST (%)</label>
+              <%= number_field_tag :sgst_rate, ('%.2f' % (@order.sgst_rate.presence || Order::DEFAULT_SGST_RATE)), step: 0.01, min: 0, max: 20, class: 'form-control', id: 'sgst_rate' %>
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <div class="field">
+              <label for="discount">Discount on total (₹)</label>
               <%= number_field_tag :discount, ('%.2f' % @order.discount.to_f), step: 0.01, min: 0, class: 'form-control', id: 'discount' %>
             </div>
             <div class="field">
@@ -151,25 +161,16 @@
               <%= number_field_tag :charges, ('%.2f' % @order.charges.to_f), step: 0.01, min: 0, class: 'form-control', id: 'charges' %>
             </div>
           </div>
-          <div class="row" style="margin-top:10px">
-            <div class="field">
-              <label for="cgst_rate">CGST (%)</label>
-              <%= number_field_tag :cgst_rate, ('%.2f' % (@order.cgst_rate.presence || Order::DEFAULT_CGST_RATE)), step: 0.01, min: 0, class: 'form-control', id: 'cgst_rate' %>
-            </div>
-            <div class="field">
-              <label for="igst_rate">CGST (%)</label>
-              <%= number_field_tag :igst_rate, ('%.2f' % (@order.igst_rate.presence || Order::DEFAULT_IGST_RATE)), step: 0.01, min: 0, class: 'form-control', id: 'igst_rate' %>
-            </div>
-          </div>
         </div>
 
         <div class="ticket-sum">
           <div><span>Subtotal</span><strong id="sum-subtotal">₹0.00</strong></div>
-          <div><span>Discount</span><strong id="sum-discount">₹0.00</strong></div>
-          <div><span>Charges</span><strong id="sum-charges">₹0.00</strong></div>
-          <div><span>Taxable</span><strong id="sum-taxable">₹0.00</strong></div>
           <div><span>CGST</span><strong id="sum-cgst">₹0.00</strong></div>
-          <div><span>CGST</span><strong id="sum-igst">₹0.00</strong></div>
+          <div><span>SGST</span><strong id="sum-sgst">₹0.00</strong></div>
+          <div><span>Total after tax</span><strong id="sum-taxable">₹0.00</strong></div>
+          <div><span>Discount</span><strong id="sum-discount">₹0.00</strong></div>
+          <div><span>Extra charges</span><strong id="sum-charges">₹0.00</strong></div>
+          <div><span>Round off</span><strong id="sum-roundoff">₹0.00</strong></div>
         </div>
         <div class="preview-price" id="sum-total">₹0.00</div>
         <p class="preview-note" id="preview-note">Name the client and add a piece to raise the bill.</p>
@@ -373,6 +374,18 @@
 
   function money(v){ return '\u20B9' + (isFinite(v) ? Number(v) : 0).toFixed(2); }
   function num(el){ return parseFloat((el && el.value) || 0) || 0; }
+  function paise(v){ v = Number(v); return isFinite(v) ? Math.round(Number((v * 100).toPrecision(15))) : 0; }
+  function share(p, rateP){ return Math.round(p * rateP / 10000); }
+  // Tax on the subtotal, then discount off and charges on the total after tax.
+  function billTerms(subtotalP){
+    var cgstP = share(subtotalP, paise(num(document.getElementById('cgst_rate'))));
+    var sgstP = share(subtotalP, paise(num(document.getElementById('sgst_rate'))));
+    var afterTaxP = subtotalP + cgstP + sgstP;
+    var discountP = Math.min(paise(Math.max(0, num(document.getElementById('discount')))), afterTaxP);
+    var chargesP = paise(Math.max(0, num(document.getElementById('charges'))));
+    var totalP = afterTaxP - discountP + chargesP;
+    return { cgstP: cgstP, sgstP: sgstP, afterTaxP: afterTaxP, discountP: discountP, chargesP: chargesP, totalP: totalP, payableP: Math.round(totalP / 100) * 100 };
+  }
   function int(el){ return parseInt((el && el.value) || 0, 10) || 0; }
   function val(sel){ var el = document.querySelector(sel); return el ? el.value.trim() : ''; }
   function itemById(id){ return items.find(function(it){ return String(it.id) === String(id); }); }
@@ -474,9 +487,10 @@
     var add = num(row.querySelector('.piece-add'));
     var grossEl = row.querySelector('.piece-gross');
     var gross = grossEl ? parseFloat(grossEl.value || net) : net;
-    var metal = rate * net * qty;
-    var making = metal * (makingPct / 100);
-    return { it: it, qty: qty, net: net, gross: gross, rate: rate, makingPct: makingPct, add: add, metal: metal, making: making, total: metal + making + (add * qty) };
+    var metalP = Math.round(paise(rate) * paise(net) * qty / 100);
+    var makingP = share(metalP, paise(makingPct));
+    var totalP = metalP + makingP + paise(add) * qty;
+    return { it: it, qty: qty, net: net, gross: gross, rate: rate, makingPct: makingPct, add: add, metal: metalP / 100, making: makingP / 100, totalP: totalP, total: totalP / 100 };
   }
 
   function bindRow(row){
@@ -525,7 +539,7 @@
     }
     var rows = linesEl.querySelectorAll('.ticket-line');
     if(!rows.length){ if(show) setError('Add at least one catalogue piece to the ticket.'); return false; }
-    var ok = true, message = '', subtotal = 0;
+    var ok = true, message = '', subtotalP = 0;
     rows.forEach(function(row, i){
       var l = lineAmount(row);
       var n = i + 1;
@@ -534,39 +548,40 @@
       else if(l.it && l.qty > l.it.quantity){ ok = false; message = message || 'Only ' + l.it.quantity + ' pcs of ' + l.it.name + ' remain.'; }
       if(l.net <= 0){ ok = false; message = message || 'Piece ' + n + ': net weight must be greater than 0 g.'; }
       if(l.rate <= 0){ ok = false; message = message || 'Piece ' + n + ': set a rupee-per-gram rate.'; }
-      subtotal += l.total;
+      subtotalP += l.totalP;
     });
     var discount = num(document.getElementById('discount'));
+    var cgstRate = num(document.getElementById('cgst_rate'));
+    var sgstRate = num(document.getElementById('sgst_rate'));
     if(discount < 0){ ok = false; message = message || 'Discount cannot be negative.'; }
-    if(discount > subtotal){ ok = false; message = message || 'Discount cannot exceed the bill subtotal.'; }
+    var terms = billTerms(subtotalP);
+    if(paise(discount) > terms.afterTaxP){ ok = false; message = message || 'Discount cannot exceed the total after tax (' + money(terms.afterTaxP / 100) + ').'; }
+    if(num(document.getElementById('charges')) < 0){ ok = false; message = message || 'Extra charges cannot be negative.'; }
+    if(cgstRate < 0 || sgstRate < 0 || cgstRate > 20 || sgstRate > 20){ ok = false; message = message || 'CGST and SGST must each be between 0% and 20%.'; }
     if(show && !ok) setError(message);
     return ok;
   }
 
   function recalc(){
     var rows = linesEl.querySelectorAll('.ticket-line');
-    var subtotal = 0;
+    var subtotalP = 0;
     rows.forEach(function(row){
       var l = lineAmount(row);
       row.querySelector('.line-total').textContent = money(l.total);
-      subtotal += l.total;
+      subtotalP += l.totalP;
     });
     if(emptyEl) emptyEl.hidden = rows.length > 0;
     var count = document.getElementById('ticket-count');
     if(count) count.textContent = String(rows.length);
-    var discount = Math.max(0, num(document.getElementById('discount')));
-    var charges = Math.max(0, num(document.getElementById('charges')));
-    var taxable = subtotal - discount + charges;
-    var cgst = taxable * (num(document.getElementById('cgst_rate')) / 100);
-    var igst = taxable * (num(document.getElementById('igst_rate')) / 100);
-    var total = taxable + cgst + igst;
-    document.getElementById('sum-subtotal').textContent = money(subtotal);
-    document.getElementById('sum-discount').textContent = money(discount);
-    document.getElementById('sum-charges').textContent = money(charges);
-    document.getElementById('sum-taxable').textContent = money(taxable);
-    document.getElementById('sum-cgst').textContent = money(cgst);
-    document.getElementById('sum-igst').textContent = money(igst);
-    document.getElementById('sum-total').textContent = money(total);
+    var t = billTerms(subtotalP);
+    document.getElementById('sum-subtotal').textContent = money(subtotalP / 100);
+    document.getElementById('sum-cgst').textContent = money(t.cgstP / 100);
+    document.getElementById('sum-sgst').textContent = money(t.sgstP / 100);
+    document.getElementById('sum-taxable').textContent = money(t.afterTaxP / 100);
+    document.getElementById('sum-discount').textContent = '\u2212' + money(t.discountP / 100);
+    document.getElementById('sum-charges').textContent = '+' + money(t.chargesP / 100);
+    document.getElementById('sum-roundoff').textContent = (t.payableP < t.totalP ? '\u2212' : '+') + money(Math.abs(t.payableP - t.totalP) / 100);
+    document.getElementById('sum-total').textContent = money(t.payableP / 100);
     if(raiseBtn) raiseBtn.disabled = !formValid(false);
     document.getElementById('preview-note').textContent = formValid(false) ? 'Ready to raise. Payment is recorded on the bill.' : 'Name the client and add a piece to raise the bill.';
     renderTray();
@@ -678,7 +693,7 @@
   var clearBtn = document.getElementById('client-clear');
   if(clearBtn) clearBtn.addEventListener('click', function(){ pickCustomer(null); if(clientSearch) clientSearch.focus(); });
 
-  ['customer_first_name','customer_last_name','customer_phone','customer_gst','discount','charges','cgst_rate','igst_rate'].forEach(function(id){
+  ['customer_first_name','customer_last_name','customer_phone','customer_gst','discount','charges','cgst_rate','sgst_rate'].forEach(function(id){
     var el = document.getElementById(id);
     if(!el) return;
     el.addEventListener('input', function(){

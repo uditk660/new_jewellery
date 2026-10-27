@@ -1,0 +1,227 @@
+<%
+  shop = @shop
+  receipt = @receipt
+  client = @customer
+  house = shop&.shop_name.presence || current_user&.display_name || 'Jewellery House'
+  tagline = shop&.tagline.presence || 'Hallmarked gold · Trust in every gram'
+  owner = shop&.owner_name.presence
+  street = [shop&.address_line1, shop&.address_line2].reject(&:blank?).join(', ')
+  town = [shop&.city, shop&.pincode].reject(&:blank?).join(' ')
+  place = [street, town, shop&.state].reject(&:blank?).join(', ')
+  contact = [shop&.phone.presence, shop&.email.presence].compact.join(' · ')
+  papers = [shop&.gstin.present? ? "GSTIN #{shop.gstin}" : nil, shop&.bis_hallmark_licence.present? ? "BIS #{shop.bis_hallmark_licence}" : nil].compact.join(' · ')
+  city = shop&.city.presence || 'India'
+  initials = house.to_s.split(/\s+/).map { |w| w[0] }.compact.first(2).join.upcase
+  initials = 'JH' if initials.blank?
+  before = Paise.rupees(receipt.balance_before_cents)
+  after = Paise.rupees(receipt.balance_after_cents)
+  deposited = Paise.rupees(receipt.deposited_to_date_cents)
+  allocations = receipt.allocations
+  is_credit = receipt.credit?
+  amount_label = case receipt.kind
+                 when 'opening' then 'Opening amount'
+                 when 'debit' then 'This charge'
+                 else 'This deposit'
+                 end
+  party_label = is_credit ? 'Received with thanks from' : (receipt.kind == 'opening' ? 'Opening balance for' : 'Charged to')
+  stamp_word = is_credit ? 'RECEIVED' : 'POSTED'
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= receipt.title %> <%= receipt.receipt_number %> · <%= house %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="turbolinks-visit-control" content="reload">
+  <style>
+    :root {
+      --navy: #0b1220; --ink: #14110f; --gold: #c9a227; --gold-hi: #e8d5a3;
+      --ivory: #f7f1e8; --cream: #fffaf3; --muted: #6b6258;
+    }
+    * { box-sizing: border-box; }
+    .deposit b, .acct .total b { font-variant-numeric: lining-nums tabular-nums; font-feature-settings: "lnum" 1, "tnum" 1; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: radial-gradient(900px 420px at 50% -10%, rgba(201,162,39,0.22), transparent 55%),
+                  linear-gradient(180deg, #16120e, #0b1220 42%, #14110f);
+    }
+    .toolbar {
+      width: min(210mm, calc(100% - 32px)); margin: 18px auto 0;
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    }
+    .toolbar a, .toolbar button {
+      font: inherit; font-size: 13px; font-weight: 700; border-radius: 999px; padding: 10px 16px;
+      cursor: pointer; text-decoration: none; display: inline-flex; align-items: center;
+    }
+    .toolbar a { border: 1px solid rgba(232,213,163,0.4); color: var(--gold-hi); }
+    .toolbar .right { display: flex; gap: 8px; }
+    .toolbar button { border: 0; background: linear-gradient(90deg, #e8d5a3, #c9a227); color: var(--navy); }
+    .notice { width: min(210mm, calc(100% - 32px)); margin: 10px auto 0; color: var(--gold-hi); font-size: 13px; }
+
+    .slip {
+      position: relative; width: 210mm; height: 148mm; margin: 16px auto 40px; overflow: hidden;
+      background: var(--cream); padding: 8mm 10mm 7mm;
+      box-shadow: 0 40px 80px rgba(0,0,0,0.45), 0 0 0 1px rgba(201,162,39,0.35);
+      display: flex; flex-direction: column;
+    }
+    .slip::before, .slip::after { content: ""; position: absolute; pointer-events: none; inset: 5px; border: 1px solid rgba(201,162,39,0.55); }
+    .slip::after { inset: 8px; border-color: rgba(11,18,32,0.14); }
+
+    .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding-bottom: 5px; border-bottom: 1px solid rgba(201,162,39,0.4); }
+    .brand { display: flex; gap: 9px; align-items: center; min-width: 0; }
+    .mark {
+      width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 35% 30%, #2a2218, var(--navy)); border: 1px solid var(--gold); color: var(--gold-hi);
+      font-family: "Cormorant Garamond", Georgia, serif; font-size: 15px; font-weight: 700; letter-spacing: 0.08em;
+    }
+    .house { margin: 0; font-family: "Cormorant Garamond", Georgia, serif; font-size: 23px; font-weight: 600; line-height: 1; color: var(--navy); letter-spacing: -0.01em; }
+    .tag { margin: 2px 0 0; font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+    .addr { margin: 3px 0 0; font-size: 9px; color: var(--muted); line-height: 1.35; }
+    .addr span { display: block; }
+    .doc { text-align: right; flex-shrink: 0; }
+    .doc h2 { margin: 0; font-family: "Cormorant Garamond", Georgia, serif; font-size: 17px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--navy); font-weight: 600; }
+    .doc dl { margin: 4px 0 0; display: grid; grid-template-columns: auto auto; gap: 1px 10px; font-size: 10px; }
+    .doc dt { color: var(--gold); text-transform: uppercase; letter-spacing: 0.12em; font-size: 8px; font-weight: 700; align-self: center; }
+    .doc dd { margin: 0; color: var(--navy); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    .body { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; margin-top: 7px; }
+    .k { display: block; font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-bottom: 2px; }
+    .from strong { font-family: "Cormorant Garamond", Georgia, serif; font-size: 17px; color: var(--navy); font-weight: 600; }
+    .from p { margin: 1px 0 0; font-size: 10px; color: var(--muted); }
+    .deposit {
+      margin-top: 7px; padding: 8px 10px; border: 1px solid rgba(201,162,39,0.45); border-radius: 10px; background: var(--ivory);
+      display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    }
+    .deposit span { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+    .deposit b { font-family: "Cormorant Garamond", Georgia, serif; font-size: 26px; color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .words { margin: 5px 0 0; font-size: 9px; color: var(--muted); line-height: 1.4; }
+    .words b { color: var(--navy); font-weight: 600; }
+    .applied { margin: 6px 0 0; font-size: 9.5px; color: var(--muted); }
+    .applied span { display: inline-block; margin: 2px 4px 0 0; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(201,162,39,0.4); color: var(--navy); background: #fff; }
+
+    .acct { border: 1px solid rgba(201,162,39,0.45); border-radius: 10px; padding: 4px 10px; background: #fff; }
+    .acct div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 11px; color: var(--muted); border-bottom: 1px solid rgba(201,162,39,0.18); }
+    .acct div b { color: var(--navy); font-variant-numeric: tabular-nums; font-weight: 600; }
+    .acct .total { border-bottom: 0; border-top: 1.5px solid var(--gold); padding-top: 6px; }
+    .acct .total span { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); font-weight: 700; align-self: center; }
+    .acct .total b { font-family: "Cormorant Garamond", Georgia, serif; font-size: 18px; color: var(--gold); }
+    .state { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; vertical-align: middle; }
+    .state.settled { color: #3f5d3a; border: 1px solid rgba(63,93,58,0.4); background: rgba(63,93,58,0.08); }
+    .state.due { color: #8a5a12; border: 1px solid rgba(201,162,39,0.5); background: rgba(201,162,39,0.1); }
+
+    .sign { margin-top: auto; display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 14px; padding-top: 6px; }
+    .sign .line { border-top: 1px solid var(--navy); padding-top: 3px; font-size: 9.5px; color: var(--navy); }
+    .sign .line em { display: block; font-style: normal; font-size: 8px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+    .sign .for { text-align: right; }
+    .sign .for p { margin: 0 0 22px; font-size: 9px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .stamp { width: 27mm; height: 27mm; transform: rotate(-8deg); opacity: 0.85; }
+    .foot { margin-top: 5px; padding-top: 4px; border-top: 1px solid rgba(201,162,39,0.3); display: flex; justify-content: space-between; gap: 10px; font-size: 8px; color: var(--muted); }
+
+    @media print {
+      @page { size: A4 portrait; margin: 0; }
+      body { background: #fff !important; min-height: 0; }
+      .toolbar, .notice { display: none !important; }
+      .slip {
+        margin: 0; box-shadow: none; width: 210mm; height: 148.5mm;
+        border-bottom: 1px dashed #b9b0a3;
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+      }
+      .deposit, .acct { background: #fff !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <%= link_to '← Khata', ledger_path(client), data: { turbolinks: false } %>
+    <div class="right">
+      <%= link_to 'New entry', new_ledger_path(customer_id: client.id), data: { turbolinks: false } %>
+      <button type="button" onclick="window.print()">Print receipt</button>
+    </div>
+  </div>
+  <% if flash[:notice].present? %><p class="notice"><%= flash[:notice] %></p><% end %>
+
+  <article class="slip">
+    <header class="head">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"><%= initials %></div>
+        <div>
+          <h1 class="house"><%= house %></h1>
+          <p class="tag"><%= tagline %></p>
+          <p class="addr">
+            <% if place.present? %><span><%= place %></span><% end %>
+            <% line = [contact.presence, papers.presence].compact.join(' · ') %>
+            <% if line.present? %><span><%= line %></span><% end %>
+          </p>
+        </div>
+      </div>
+      <div class="doc">
+        <h2><%= receipt.title %></h2>
+        <dl>
+          <dt>No.</dt><dd><%= receipt.receipt_number %></dd>
+          <dt>Date</dt><dd><%= receipt.received_on.strftime('%d %b %Y') %></dd>
+          <% if is_credit %>
+            <dt>Paid via</dt><dd><%= receipt.payment_method.presence || '—' %></dd>
+          <% end %>
+        </dl>
+      </div>
+    </header>
+
+    <section class="body">
+      <div>
+        <div class="from">
+          <span class="k"><%= party_label %></span>
+          <strong><%= client.full_name %></strong>
+          <p><%= [client.client_ref.presence, client.phone.presence, client.gst_number.present? ? "GSTIN #{client.gst_number}" : nil].compact.join(' · ') %></p>
+        </div>
+        <div class="deposit">
+          <span><%= amount_label %></span>
+          <b><%= format_rupees(receipt.amount) %></b>
+        </div>
+        <p class="words">In words: <b><%= rupees_in_words(receipt.amount) %></b></p>
+        <% if allocations.any? %>
+          <p class="applied">Applied to
+            <% allocations.each do |a| %><span><%= a[:label] %> · <%= format_rupees(a[:cents], cents: true) %></span><% end %>
+          </p>
+        <% end %>
+        <% if receipt.note.present? %>
+          <p class="applied">Note: <%= receipt.note %></p>
+        <% end %>
+      </div>
+
+      <div>
+        <span class="k">Client account (khata)</span>
+        <div class="acct">
+          <div><span>Balance before</span><b><%= format_rupees(before) %></b></div>
+          <div><span><%= amount_label %></span><b><%= is_credit ? '−' : '+' %> <%= format_rupees(receipt.amount) %></b></div>
+          <div>
+            <span>Balance now <em class="state <%= receipt.settled? ? 'settled' : 'due' %>"><%= receipt.settled? ? 'Settled' : 'Due' %></em></span>
+            <b><%= format_rupees(after) %></b>
+          </div>
+          <div class="total"><span>Total deposited to date</span><b><%= format_rupees(deposited) %></b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sign">
+      <div class="line">Client signature<em><%= client.full_name %></em></div>
+      <%= render 'shared/house_stamp', house: house, city: city, word: stamp_word, date: receipt.received_on %>
+      <div class="for">
+        <p>For <%= house %></p>
+        <div class="line"><%= owner || 'Authorised signatory' %><em>Authorised signatory</em></div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span>
+        <%= is_credit ? 'This receipt acknowledges money received on the client’s account.' : 'This slip records an amount added to the client’s account.' %>
+        It is not a tax invoice.
+      </span>
+      <span><%= receipt.receipt_number %></span>
+    </footer>
+  </article>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<%= render 'shared/atelier_styles' %>
+
+<div class="atelier-page est-page" id="estimate-edit">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Rough estimate · No. <%= @estimate.estimate_no %></p>
+      <h1>Revise the estimate</h1>
+      <p class="lead">Change pieces, metal, bhav or cash. The slip keeps its number and is re-balanced on save.</p>
+    </div>
+    <%= link_to '← Back to slip', estimate_path(@estimate), class: 'atelier-back' %>
+  </header>
+
+  <%= render 'form' %>
+</div>

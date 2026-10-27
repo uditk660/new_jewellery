@@ -2,6 +2,7 @@ class LedgerEntry < ActiveRecord::Base
   KINDS = %w[opening debit credit].freeze
 
   belongs_to :customer
+  belongs_to :khata_receipt, optional: true
 
   validates :kind, inclusion: { in: KINDS }
   validates :entry_date, presence: true
@@ -15,7 +16,8 @@ class LedgerEntry < ActiveRecord::Base
   end
 
   def amount=(rupees)
-    self.amount_cents = (rupees.to_s.gsub(',', '').to_f * 100).round
+    value = Paise.dec(rupees.to_s.delete(','))
+    self.amount_cents = value && Paise.from_rupees(value)
   end
 
   def credit?

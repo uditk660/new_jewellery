@@ -1,7 +1,7 @@
 <%= render 'shared/atelier_styles' %>
 
 <%
-  @order ||= Order.new(status: 'pending', cgst_rate: Order::DEFAULT_CGST_RATE, igst_rate: Order::DEFAULT_IGST_RATE)
+  @order ||= Order.new(status: 'pending', cgst_rate: Order::DEFAULT_CGST_RATE, sgst_rate: Order::DEFAULT_SGST_RATE)
   @draft_customer ||= Customer.new
   @customer_mode ||= 'existing'
   @items ||= []
@@ -121,26 +121,26 @@
 
         <section class="atelier-form" style="margin-top:16px">
           <div class="section">
-            <h2>Charges &amp; tax</h2>
-            <p class="hint">Discount is taken before tax. Default CGST follows the house rates of <%= Order::DEFAULT_CGST_RATE %>% each.</p>
+            <h2>Tax &amp; charges</h2>
+            <p class="hint">CGST and SGST (house rate <%= Order::DEFAULT_CGST_RATE %>% each) are worked on the subtotal. Discount and extra charges then apply to the total after tax.</p>
             <div class="row">
               <div class="field">
-                <label for="discount">Discount (₹)</label>
+                <label for="cgst_rate">CGST (%)</label>
+                <%= number_field_tag :cgst_rate, ('%.2f' % (@order.cgst_rate.presence || Order::DEFAULT_CGST_RATE)), step: 0.01, min: 0, max: 20, class: 'form-control', id: 'cgst_rate' %>
+              </div>
+              <div class="field">
+                <label for="sgst_rate">SGST (%)</label>
+                <%= number_field_tag :sgst_rate, ('%.2f' % (@order.sgst_rate.presence || Order::DEFAULT_SGST_RATE)), step: 0.01, min: 0, max: 20, class: 'form-control', id: 'sgst_rate' %>
+              </div>
+            </div>
+            <div class="row" style="margin-top:12px">
+              <div class="field">
+                <label for="discount">Discount on total (₹)</label>
                 <%= number_field_tag :discount, ('%.2f' % @order.discount.to_f), step: 0.01, min: 0, class: 'form-control', id: 'discount' %>
               </div>
               <div class="field">
                 <label for="charges">Extra charges (₹)</label>
                 <%= number_field_tag :charges, ('%.2f' % @order.charges.to_f), step: 0.01, min: 0, class: 'form-control', id: 'charges' %>
-              </div>
-            </div>
-            <div class="row" style="margin-top:12px">
-              <div class="field">
-                <label for="cgst_rate">CGST (%)</label>
-                <%= number_field_tag :cgst_rate, ('%.2f' % (@order.cgst_rate.presence || Order::DEFAULT_CGST_RATE)), step: 0.01, min: 0, class: 'form-control', id: 'cgst_rate' %>
-              </div>
-              <div class="field">
-                <label for="igst_rate">CGST (%)</label>
-                <%= number_field_tag :igst_rate, ('%.2f' % (@order.igst_rate.presence || Order::DEFAULT_IGST_RATE)), step: 0.01, min: 0, class: 'form-control', id: 'igst_rate' %>
               </div>
             </div>
           </div>
@@ -159,11 +159,12 @@
         <div class="preview-lines" id="preview-lines"></div>
         <div class="preview-sum">
           <div><span>Subtotal</span><strong id="sum-subtotal">₹0.00</strong></div>
-          <div><span>Discount</span><strong id="sum-discount">₹0.00</strong></div>
-          <div><span>Charges</span><strong id="sum-charges">₹0.00</strong></div>
-          <div><span>Taxable</span><strong id="sum-taxable">₹0.00</strong></div>
           <div><span>CGST</span><strong id="sum-cgst">₹0.00</strong></div>
-          <div><span>CGST</span><strong id="sum-igst">₹0.00</strong></div>
+          <div><span>SGST</span><strong id="sum-sgst">₹0.00</strong></div>
+          <div><span>Total after tax</span><strong id="sum-taxable">₹0.00</strong></div>
+          <div><span>Discount</span><strong id="sum-discount">₹0.00</strong></div>
+          <div><span>Extra charges</span><strong id="sum-charges">₹0.00</strong></div>
+          <div><span>Round off</span><strong id="sum-roundoff">₹0.00</strong></div>
         </div>
         <div class="preview-price" id="sum-total">₹0.00</div>
         <div class="preview-desc">Amount payable</div>
@@ -308,17 +309,23 @@
 
     function money(v){ return '\u20B9' + (isFinite(v) ? Number(v) : 0).toFixed(2); }
     function num(el){ return parseFloat((el && el.value) || 0) || 0; }
+    function paise(v){ v = Number(v); return isFinite(v) ? Math.round(Number((v * 100).toPrecision(15))) : 0; }
+    function share(p, rateP){ return Math.round(p * rateP / 10000); }
+    // Tax on the subtotal, then discount off and charges on the total after tax.
+    function billTerms(subtotalP){
+      var cgstP = share(subtotalP, paise(num(document.getElementById('cgst_rate'))));
+      var sgstP = share(subtotalP, paise(num(document.getElementById('sgst_rate'))));
+      var afterTaxP = subtotalP + cgstP + sgstP;
+      var discountP = Math.min(paise(Math.max(0, num(document.getElementById('discount')))), afterTaxP);
+      var chargesP = paise(Math.max(0, num(document.getElementById('charges'))));
+      var totalP = afterTaxP - discountP + chargesP;
+      return { cgstP: cgstP, sgstP: sgstP, afterTaxP: afterTaxP, discountP: discountP, chargesP: chargesP, totalP: totalP, payableP: Math.round(totalP / 100) * 100 };
+    }
     function int(el){ return parseInt((el && el.value) || 0, 10) || 0; }
     function val(sel){ var el = document.querySelector(sel); return el ? el.value.trim() : ''; }
     function itemById(id){ return items.find(function(it){ return String(it.id) === String(id); }); }
     function customerById(id){ return customers.find(function(c){ return String(c.id) === String(id); }); }
     function mode(){ var on = document.querySelector('input[name="customer_mode"]:checked'); return on ? on.value : 'existing'; }
-    function selectedIds(){
-      var ids = [];
-      wrap.querySelectorAll('.piece-id').forEach(function(s){ if(s.value) ids.push(String(s.value)); });
-      return ids;
-    }
-
     function setError(msg){
       if(!errorBox) return;
       if(!msg){ errorBox.hidden = true; errorBox.textContent = ''; return; }
@@ -328,25 +335,52 @@
 
     function mark(el, bad, show){ if(el && show) el.classList.toggle('field-error', !!bad); }
 
-    function optionHtml(current){
-      var taken = selectedIds();
+    // Pieces already counted on other lines of this bill, by catalogue id.
+    function qtyOnOtherLines(exceptCard){
+      var used = {};
+      wrap.querySelectorAll('.piece-card').forEach(function(card){
+        if(card === exceptCard) return;
+        var id = card.querySelector('.piece-id').value;
+        if(!id) return;
+        used[id] = (used[id] || 0) + Math.max(int(card.querySelector('.piece-qty')), 0);
+      });
+      return used;
+    }
+
+    function leftFor(it, card){
+      return Math.max(Number(it.quantity || 0) - (qtyOnOtherLines(card)[String(it.id)] || 0), 0);
+    }
+
+    function optionHtml(current, card){
+      var used = qtyOnOtherLines(card);
       var html = '<option value="">Select a piece</option>';
       items.forEach(function(it){
-        var used = taken.indexOf(String(it.id)) !== -1 && String(it.id) !== String(current);
-        if(used) return;
-        var label = [it.name, it.metal, it.purity, Number(it.weight_grams).toFixed(2) + ' g', it.quantity + ' pcs'].filter(Boolean).join(' · ');
+        var left = Math.max(Number(it.quantity || 0) - (used[String(it.id)] || 0), 0);
+        if(left <= 0 && String(it.id) !== String(current)) return;
+        var label = [it.name, it.metal, it.purity, Number(it.weight_grams).toFixed(2) + ' g', left + ' pcs left'].filter(Boolean).join(' · ');
         html += '<option value="'+it.id+'"'+(String(it.id)===String(current)?' selected':'')+'>'+label+'</option>';
       });
       return html;
     }
 
     function refreshSelects(){
-      wrap.querySelectorAll('.piece-id').forEach(function(sel){
+      wrap.querySelectorAll('.piece-card').forEach(function(card){
+        var sel = card.querySelector('.piece-id');
         var current = sel.value;
-        sel.innerHTML = optionHtml(current);
+        sel.innerHTML = optionHtml(current, card);
         if(current) sel.value = current;
+        var it = itemById(current);
+        var meta = card.querySelector('.piece-meta');
+        if(it && meta){
+          meta.textContent = [it.category, 'SKU ' + (it.sku || '—'), it.hsn ? ('HSN ' + it.hsn) : null, 'up to ' + leftFor(it, card) + ' pcs on this line'].filter(Boolean).join(' · ');
+        }
       });
       refreshAddButton();
+    }
+
+    function anyStockLeft(){
+      var used = qtyOnOtherLines(null);
+      return items.some(function(it){ return Number(it.quantity || 0) - (used[String(it.id)] || 0) > 0; });
     }
 
     function lastCard(){
@@ -363,11 +397,11 @@
 
     function refreshAddButton(){
       if(!addBtn) return;
-      var remaining = items.length > 0 && selectedIds().length < items.length;
+      var remaining = items.length > 0 && anyStockLeft();
       var ready = lastRowReady();
       addBtn.disabled = !(remaining && ready);
       addBtn.setAttribute('aria-disabled', addBtn.disabled ? 'true' : 'false');
-      if(!remaining) addBtn.title = 'Every remaining catalogue piece is already on this bill.';
+      if(!remaining) addBtn.title = 'Every piece in stock is already on this bill.';
       else if(!ready) addBtn.title = 'Enter Qty, Net (g) and ₹/g on this piece first.';
       else addBtn.title = 'Add another piece';
     }
@@ -399,7 +433,7 @@
         '<div class="piece-total">Line total \u20B90.00</div>';
       wrap.appendChild(card);
       var sel = card.querySelector('.piece-id');
-      sel.innerHTML = optionHtml('');
+      sel.innerHTML = optionHtml('', card);
       if(id) sel.value = String(id);
       if(sel.value) applyItem(card, itemById(sel.value), data);
       else if(data && (data.net_weight || data.quantity)) applyDraft(card, data);
@@ -447,16 +481,21 @@
       var rate = num(card.querySelector('.piece-rate'));
       var makingPct = num(card.querySelector('.piece-making'));
       var add = num(card.querySelector('.piece-add'));
-      var metal = rate * net * qty;
-      var making = metal * (makingPct / 100);
-      return { it: it, qty: qty, net: net, gross: num(card.querySelector('.piece-gross')), rate: rate, makingPct: makingPct, add: add, metal: metal, making: making, total: metal + making + (add * qty) };
+      var metalP = Math.round(paise(rate) * paise(net) * qty / 100);
+      var makingP = share(metalP, paise(makingPct));
+      var totalP = metalP + makingP + paise(add) * qty;
+      return { it: it, qty: qty, net: net, gross: num(card.querySelector('.piece-gross')), rate: rate, makingPct: makingPct, add: add, metal: metalP / 100, making: makingP / 100, totalP: totalP, total: totalP / 100 };
     }
 
     function qtyOverStock(card){
       var l = lineAmount(card);
       if(!l.it) return '';
-      if(l.qty > l.it.quantity){
-        return 'Only ' + l.it.quantity + ' pcs of ' + l.it.name + ' remain. Qty cannot be more than available stock.';
+      var left = leftFor(l.it, card);
+      if(l.qty > left){
+        var other = Number(l.it.quantity || 0) - left;
+        return other > 0
+          ? 'Only ' + l.it.quantity + ' pcs of ' + l.it.name + ' remain and ' + other + ' are already on other lines. This line can take at most ' + left + '.'
+          : 'Only ' + l.it.quantity + ' pcs of ' + l.it.name + ' remain. Qty cannot be more than available stock.';
       }
       return '';
     }
@@ -493,6 +532,7 @@
           if(el.classList.contains('piece-qty')){
             var cleaned = (el.value || '').replace(/\D/g, '');
             if(el.value !== cleaned) el.value = cleaned;
+            refreshSelects();
           }
           recalc();
         });
@@ -520,7 +560,6 @@
       if(!used.length){ if(show) setError('Add at least one catalogue piece to the bill.'); return false; }
       var ok = true;
       var message = '';
-      var seen = {};
       used.forEach(function(card, i){
         var l = lineAmount(card);
         var n = i + 1;
@@ -529,17 +568,17 @@
         var netEl = card.querySelector('.piece-net');
         var grossEl = card.querySelector('.piece-gross');
         var rateEl = card.querySelector('.piece-rate');
+        var left = l.it ? leftFor(l.it, card) : 0;
         mark(sel, !sel.value, show);
-        mark(qtyEl, l.qty < 1 || (l.it && l.qty > l.it.quantity), show);
+        mark(qtyEl, l.qty < 1 || (l.it && l.qty > left), show);
         mark(netEl, l.net <= 0, show);
         mark(grossEl, l.gross > 0 && l.gross < l.net, show);
         mark(rateEl, l.rate <= 0, show);
         if(!sel.value){ ok = false; message = message || 'Piece ' + n + ': choose a catalogue piece.'; }
-        else if(seen[sel.value]){ ok = false; message = message || l.it.name + ' is already on this bill.'; }
-        else seen[sel.value] = true;
         if(l.qty < 1){ ok = false; message = message || 'Piece ' + n + ': quantity must be at least 1.'; }
-        else if(l.it && l.qty > l.it.quantity){
-          if(show) ok = false;
+        else if(l.it && l.qty > left){
+          ok = false;
+          message = message || 'Piece ' + n + ': only ' + left + ' pcs of ' + l.it.name + ' are left after the other lines.';
         }
         if(l.net <= 0){ ok = false; message = message || 'Piece ' + n + ': net weight must be greater than 0 g.'; }
         if(l.gross > 0 && l.gross < l.net){ ok = false; message = message || 'Piece ' + n + ': gross weight cannot be less than net weight.'; }
@@ -549,17 +588,19 @@
       var discount = num(document.getElementById('discount'));
       var charges = num(document.getElementById('charges'));
       var cgst = num(document.getElementById('cgst_rate'));
-      var igst = num(document.getElementById('igst_rate'));
+      var sgst = num(document.getElementById('sgst_rate'));
       mark(document.getElementById('discount'), discount < 0, show);
       mark(document.getElementById('charges'), charges < 0, show);
-      mark(document.getElementById('cgst_rate'), cgst < 0, show);
-      mark(document.getElementById('igst_rate'), igst < 0, show);
+      mark(document.getElementById('cgst_rate'), cgst < 0 || cgst > 20, show);
+      mark(document.getElementById('sgst_rate'), sgst < 0 || sgst > 20, show);
       if(discount < 0){ ok = false; message = message || 'Discount cannot be negative.'; }
       if(charges < 0){ ok = false; message = message || 'Extra charges cannot be negative.'; }
-      if(cgst < 0 || igst < 0){ ok = false; message = message || 'Tax rates cannot be negative.'; }
-      var subtotal = 0;
-      cards.forEach(function(card){ subtotal += lineAmount(card).total; });
-      if(discount > subtotal){ ok = false; message = message || 'Discount cannot exceed the bill subtotal.'; mark(document.getElementById('discount'), true, show); }
+      if(cgst < 0 || sgst < 0){ ok = false; message = message || 'Tax rates cannot be negative.'; }
+      if(cgst > 20 || sgst > 20){ ok = false; message = message || 'CGST and SGST cannot exceed 20% each.'; }
+      var subtotalP = 0;
+      cards.forEach(function(card){ subtotalP += lineAmount(card).totalP; });
+      var terms = billTerms(subtotalP);
+      if(paise(discount) > terms.afterTaxP){ ok = false; message = message || 'Discount cannot exceed the total after tax (' + money(terms.afterTaxP / 100) + ').'; mark(document.getElementById('discount'), true, show); }
       if(show && !ok) setError(message);
       return ok;
     }
@@ -581,29 +622,25 @@
 
     function recalc(){
       var cards = wrap.querySelectorAll('.piece-card');
-      var subtotal = 0;
+      var subtotalP = 0;
       var html = '';
       cards.forEach(function(card){
         var l = lineAmount(card);
         card.querySelector('.piece-total').textContent = 'Line total ' + money(l.total);
-        subtotal += l.total;
+        subtotalP += l.totalP;
         if(l.it){
           html += '<div class="preview-line-row"><span>'+l.it.name+' · '+l.qty+' × '+l.net.toFixed(2)+' g</span><strong>'+money(l.total)+'</strong></div>';
         }
       });
-      var discount = Math.max(0, num(document.getElementById('discount')));
-      var charges = Math.max(0, num(document.getElementById('charges')));
-      var taxable = subtotal - discount + charges;
-      var cgst = taxable * (num(document.getElementById('cgst_rate')) / 100);
-      var igst = taxable * (num(document.getElementById('igst_rate')) / 100);
-      var total = taxable + cgst + igst;
-      document.getElementById('sum-subtotal').textContent = money(subtotal);
-      document.getElementById('sum-discount').textContent = money(discount);
-      document.getElementById('sum-charges').textContent = money(charges);
-      document.getElementById('sum-taxable').textContent = money(taxable);
-      document.getElementById('sum-cgst').textContent = money(cgst);
-      document.getElementById('sum-igst').textContent = money(igst);
-      document.getElementById('sum-total').textContent = money(total);
+      var t = billTerms(subtotalP);
+      document.getElementById('sum-subtotal').textContent = money(subtotalP / 100);
+      document.getElementById('sum-cgst').textContent = money(t.cgstP / 100);
+      document.getElementById('sum-sgst').textContent = money(t.sgstP / 100);
+      document.getElementById('sum-taxable').textContent = money(t.afterTaxP / 100);
+      document.getElementById('sum-discount').textContent = '\u2212' + money(t.discountP / 100);
+      document.getElementById('sum-charges').textContent = '+' + money(t.chargesP / 100);
+      document.getElementById('sum-roundoff').textContent = (t.payableP < t.totalP ? '\u2212' : '+') + money(Math.abs(t.payableP - t.totalP) / 100);
+      document.getElementById('sum-total').textContent = money(t.payableP / 100);
       document.getElementById('preview-lines').innerHTML = html || '<div class="preview-line-row"><span>No pieces yet</span><strong>\u20B90.00</strong></div>';
       if(raiseBtn) raiseBtn.disabled = !formValid(false);
       refreshAddButton();
@@ -704,7 +741,7 @@
     var clearBtn = document.getElementById('client-clear');
     if(clearBtn) clearBtn.addEventListener('click', function(){ pickCustomer(null); if(search) search.focus(); });
 
-    ['customer_first_name','customer_last_name','customer_phone','customer_email','discount','charges','cgst_rate','igst_rate'].forEach(function(id){
+    ['customer_first_name','customer_last_name','customer_phone','customer_email','discount','charges','cgst_rate','sgst_rate'].forEach(function(id){
       var el = document.getElementById(id);
       if(!el) return;
       el.addEventListener('input', function(){
@@ -721,7 +758,7 @@
     if(addBtn) addBtn.addEventListener('click', function(e){
       e.preventDefault();
       if(addBtn.disabled || !lastRowReady()) return;
-      if(selectedIds().length >= items.length) return;
+      if(!anyStockLeft()) return;
       addRow({});
       var next = lastCard();
       if(next){

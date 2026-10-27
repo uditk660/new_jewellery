@@ -1,6 +1,6 @@
 <%= render 'shared/atelier_styles' %>
 
-<div class="atelier-page metal-master is-cards" id="metals-view">
+<div class="atelier-page metal-master is-list" id="metals-view">
   <header class="atelier-hero">
     <div>
       <p class="eyebrow">House masters</p>
@@ -22,8 +22,9 @@
 
   <% if @metals.any? %>
     <div class="metal-cards" data-layout="cards">
-      <% @metals.each do |metal| %>
+      <% @metals.each_with_index do |metal, idx| %>
         <%= link_to metal_path(metal), class: 'metal-card' do %>
+          <span class="index-serial-badge"><%= index_serial(idx) %></span>
           <div class="metal-card-top">
             <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
             <div>
@@ -32,21 +33,19 @@
             </div>
             <% unless metal.active? %><span class="off">Inactive</span><% end %>
           </div>
-          <div class="chips">
-            <% if metal.purity_names.any? %>
-              <% metal.purities.ordered.each do |p| %>
-                <span class="chip"><%= p.name %> · <%= p.available_weight_label %></span>
+          <div class="chips chips-dense">
+            <% labels = metal_hallmark_chip_labels(metal) %>
+            <% if labels.any? %>
+              <% labels.each do |label| %>
+                <span class="chip"><%= label %></span>
               <% end %>
             <% else %>
               <span class="chip muted-chip">No hallmarks yet</span>
             <% end %>
           </div>
           <p class="cats">
-            <% if metal.category_names.any? %>
-              <%= metal.category_names.join(' · ') %>
-            <% else %>
-              No categories yet
-            <% end %>
+            <% line = metal_categories_line(metal) %>
+            <%= line.present? ? line : 'No categories yet' %>
           </p>
         <% end %>
       <% end %>
@@ -56,6 +55,7 @@
       <table class="metal-list">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Metal</th>
             <th>Hallmarks &amp; weight</th>
             <th>Categories</th>
@@ -63,22 +63,24 @@
           </tr>
         </thead>
         <tbody>
-          <% @metals.each do |metal| %>
+          <% @metals.each_with_index do |metal, idx| %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td>
                 <%= link_to metal_path(metal), class: 'metal-name' do %>
                   <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
                   <span>
                     <strong><%= metal.name %></strong>
-                    <span class="meta"><%= [metal.code.presence, metal.base_unit.presence || 'gram', (metal.bis_mandatory? ? 'BIS' : nil)].compact.join(' · ') %></span>
+                    <span class="meta"><%= (metal.base_unit.presence || 'gram').upcase %></span>
                   </span>
                 <% end %>
               </td>
               <td>
-                <div class="chips">
-                  <% if metal.purity_names.any? %>
-                    <% metal.purities.ordered.each do |p| %>
-                      <span class="chip"><%= p.name %> · <%= p.available_weight_label %></span>
+                <div class="chips chips-dense">
+                  <% labels = metal_hallmark_chip_labels(metal) %>
+                  <% if labels.any? %>
+                    <% labels.each do |label| %>
+                      <span class="chip"><%= label %></span>
                     <% end %>
                   <% else %>
                     <span class="chip muted-chip">No hallmarks yet</span>
@@ -86,8 +88,9 @@
                 </div>
               </td>
               <td class="cats-cell">
-                <% if metal.category_names.any? %>
-                  <%= metal.category_names.join(' · ') %>
+                <% line = metal_categories_line(metal) %>
+                <% if line.present? %>
+                  <%= line %>
                 <% else %>
                   <span class="muted">No categories yet</span>
                 <% end %>
@@ -104,6 +107,13 @@
         </tbody>
       </table>
     </div>
+
+    <%= render 'shared/index_pagination',
+               page: @page,
+               per_page: @per_page,
+               total_count: @total_count,
+               note: "#{@total_count} metals",
+               url: ->(n) { metals_path(request.query_parameters.merge(page: n)) } %>
   <% else %>
     <div class="atelier-form">
       <p class="hint" style="margin:0">No metals yet. Add Gold with 18K, 20K and 22K to start the catalogue.</p>
@@ -144,6 +154,7 @@
     gap: 16px;
   }
   .metal-master .metal-card {
+    position: relative;
     display: block;
     text-decoration: none;
     color: inherit;
@@ -167,9 +178,18 @@
     display: inline-block;
   }
   .metal-master .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .metal-master .chips-dense {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+    max-width: 520px;
+  }
   .metal-master .chip {
     background: #fff; border: 1px solid rgba(201,162,39,0.28); border-radius: 999px;
     padding: 4px 10px; font-size: 12px; font-weight: 600; color: #14110f;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .metal-master .muted-chip { color: #9a9186; font-weight: 500; }
   .metal-master .cats { margin: 12px 0 0; color: #6b6258; font-size: 13px; }
@@ -195,10 +215,11 @@
   .metal-master .metal-list td {
     padding: 14px 16px;
     border-bottom: 1px solid rgba(201,162,39,0.12);
-    vertical-align: middle;
+    vertical-align: top;
     font-size: 14px;
     color: #14110f;
   }
+  .metal-master .metal-list td.col-status { vertical-align: middle; }
   .metal-master .metal-list tbody tr:last-child td { border-bottom: 0; }
   .metal-master .metal-list tbody tr:hover { background: rgba(232,213,163,0.22); }
   .metal-master .metal-name {
@@ -223,7 +244,7 @@
     color: #6b6258;
     text-transform: uppercase;
   }
-  .metal-master .cats-cell { color: #6b6258; font-size: 13px; }
+  .metal-master .cats-cell { color: #6b6258; font-size: 13px; line-height: 1.55; max-width: 280px; }
   .metal-master .muted { color: #9a9186; }
   .metal-master .stock {
     display: inline-block;
@@ -242,8 +263,8 @@
   .metal-master.is-cards [data-layout="cards"] { display: grid; }
   @media (max-width: 800px) {
     .metal-master .metal-hero-actions { width: 100%; }
-    .metal-master .metal-list th:nth-child(3),
-    .metal-master .metal-list td:nth-child(3) { display: none; }
+    .metal-master .metal-list th:nth-child(4),
+    .metal-master .metal-list td:nth-child(4) { display: none; }
   }
 </style>
 
@@ -267,8 +288,8 @@
     buttons.forEach(function(btn){
       btn.addEventListener('click', function(){ apply(btn.getAttribute('data-view')); });
     });
-    var saved = 'cards';
-    try { saved = localStorage.getItem(key) || 'cards'; } catch(e){}
+    var saved = 'list';
+    try { saved = localStorage.getItem(key) || 'list'; } catch(e){}
     apply(saved);
   })();
 </script>

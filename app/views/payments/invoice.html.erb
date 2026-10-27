@@ -348,7 +348,7 @@
 
       <aside class="sum">
         <% if bill %>
-          <div><span>Bill total</span><b><%= format_rupees(bill[:total]) %></b></div>
+          <div><span>Bill total (rounded off)</span><b><%= format_rupees(bill[:payable]) %></b></div>
           <div><span>Paid on the bill</span><b><%= format_rupees(bill[:paid]) %></b></div>
           <div><span>Remaining</span><b><%= format_rupees(bill[:remaining]) %></b></div>
         <% end %>

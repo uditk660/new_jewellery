@@ -10,154 +10,166 @@ class Order < ActiveRecord::Base
   after_update :decrement_inventory_on_payment
 
   STATUSES = %w[pending paid failed cancelled]
+  LIVE_STATUSES = %w[pending paid].freeze
 
-  # Default tax rates (percent)
+  # Intra-state GST on jewellery: CGST + SGST (percent each).
   DEFAULT_CGST_RATE = 1.5
-  DEFAULT_IGST_RATE = 1.5
+  DEFAULT_SGST_RATE = 1.5
 
-  def total_cents
-    line_items.sum('price_cents * quantity')
-  end
+  scope :live, -> { where(status: LIVE_STATUSES) }
 
-  # Return the CGST rate for this order, falling back to the default if not set
   def cgst_rate_or_default
-    cgst_rate.nil? ? DEFAULT_CGST_RATE : cgst_rate.to_f
+    cgst_rate.nil? ? BigDecimal(DEFAULT_CGST_RATE.to_s) : Paise.dec!(cgst_rate)
   end
 
-  # Return the second CGST rate for this order, falling back to the default if not set
-  def igst_rate_or_default
-    igst_rate.nil? ? DEFAULT_IGST_RATE : igst_rate.to_f
+  def sgst_rate_or_default
+    sgst_rate.nil? ? BigDecimal(DEFAULT_SGST_RATE.to_s) : Paise.dec!(sgst_rate)
   end
 
-  def total
-    total_cents.to_f / 100.0
-  end
+  # --- Bill arithmetic, all in whole paise -------------------------------------
+  # Metal comes from each line's stored value (the board at raise), never today's board.
 
-  def total_cents_with_taxes_cached
-    # prefer stored tax cents if present, else compute using rates
-    if (self.cgst_cents && self.cgst_cents.to_i > 0) || (self.igst_cents && self.igst_cents.to_i > 0)
-      taxable = taxable_amount_cents
-      taxable + (cgst_cents.to_i) + (igst_cents.to_i)
-    else
-      total_cents_with_taxes(cgst_rate: cgst_rate_or_default, igst_rate: igst_rate_or_default)
-    end
-  end
-
-  def paid_cents
-    payments.sum(:amount_cents).to_i
-  end
-
-  def remaining_cents
-    [(bill_breakdown[:total] * 100).round - paid_cents, 0].max
-  end
-
-  def paid_amount
-    paid_cents / 100.0
-  end
-
-  def remaining_amount
-    remaining_cents / 100.0
-  end
-
-  # Float totals used on the bill card and payment desk.
-  # Metal comes from each line's stored rate (the board at raise), not today's rates.
-  def bill_breakdown
-    sub = line_items.to_a.sum { |li| li.line_amount }
-    disc = discount.to_f
-    chg = charges.to_f
-    taxable = sub - disc + chg
-    cgst_r = cgst_rate_or_default
-    igst_r = igst_rate_or_default
-    cgst = taxable * cgst_r / 100.0
-    igst = taxable * igst_r / 100.0
-    tot = taxable + cgst + igst
-    paid = paid_amount
-    {
-      subtotal: sub,
-      discount: disc,
-      charges: chg,
-      taxable: taxable,
-      cgst_rate: cgst_r,
-      igst_rate: igst_r,
-      cgst: cgst,
-      igst: igst,
-      total: tot,
-      paid: paid,
-      remaining: [tot - paid, 0].max
-    }
-  end
-
-  def displayed_cgst
-    stored_tax? ? (cgst_cents.to_i / 100.0) : (cgst_amount_cents(cgst_rate_or_default) / 100.0)
-  end
-
-  def displayed_igst
-    stored_tax? ? (igst_cents.to_i / 100.0) : (igst_amount_cents(igst_rate_or_default) / 100.0)
-  end
-
-  def stored_tax?
-    cgst_cents.to_i.positive? || igst_cents.to_i.positive?
-  end
-
-  def add_item(jewelry_item, quantity = 1)
-    li = line_items.find_by(jewelry_item_id: jewelry_item.id)
-    if li
-      li.quantity += quantity
-      li.price_cents = jewelry_item.price_cents
-      li.save
-    else
-      # weight will be set by caller if provided in attributes
-      line_items.create!(jewelry_item_id: jewelry_item.id, price_cents: jewelry_item.price_cents, quantity: quantity)
-    end
-  end
-
-  # billing helpers
   def subtotal_cents
-    # include per-line amounts (price * qty + making + additional per-item)
-    computed_total_cents
-  end
-
-  def subtotal
-    subtotal_cents.to_f / 100.0
+    line_items.to_a.sum(&:line_amount_cents)
   end
 
   def discount_cents
-    (discount.to_f * 100).to_i
+    Paise.from_rupees(discount)
   end
 
   def charges_cents
-    (charges.to_f * 100).to_i
+    Paise.from_rupees(charges)
+  end
+
+  # New and pending bills take discount and extra charges off the total after
+  # CGST + SGST. Bills settled before that rule keep the before-tax figures.
+  def discount_after_tax?
+    !has_attribute?(:discount_after_tax) || discount_after_tax != false
   end
 
   def taxable_amount_cents
-    subtotal_cents - discount_cents + charges_cents
+    discount_after_tax? ? subtotal_cents : subtotal_cents - discount_cents + charges_cents
   end
 
-  # compute tax amounts (in cents) given a rate percent
-  def cgst_amount_cents(rate_percent)
-    (taxable_amount_cents * rate_percent / 100.0).to_i
+  def cgst_amount_cents(rate_percent = cgst_rate_or_default)
+    Paise.percent_of(taxable_amount_cents, rate_percent)
   end
 
-  def igst_amount_cents(rate_percent)
-    (taxable_amount_cents * rate_percent / 100.0).to_i
+  def sgst_amount_cents(rate_percent = sgst_rate_or_default)
+    Paise.percent_of(taxable_amount_cents, rate_percent)
   end
 
-  def total_cents_with_taxes(cgst_rate: 0, igst_rate: 0)
-    taxable = taxable_amount_cents
-    taxable + cgst_amount_cents(cgst_rate) + igst_amount_cents(igst_rate)
+  # Taxable + CGST + SGST, before any after-tax discount or charges.
+  def after_tax_cents
+    taxable_amount_cents + cgst_amount_cents + sgst_amount_cents
   end
 
-  def total_with_taxes(cgst_rate: 0, igst_rate: 0)
-    total_cents_with_taxes(cgst_rate: cgst_rate, igst_rate: igst_rate).to_f / 100.0
+  def total_cents
+    discount_after_tax? ? after_tax_cents - discount_cents + charges_cents : after_tax_cents
   end
 
-  # Computed totals derived from LineItem#line_amount (per-gram * net_weight * qty + making)
-  def computed_total_cents
-    line_items.sum { |li| li.line_amount_cents }
+  def paid_cents
+    if payments.loaded?
+      payments.sum { |p| p.amount_cents.to_i }
+    else
+      payments.sum(:amount_cents).to_i
+    end
   end
 
-  def computed_total
-    computed_total_cents.to_f / 100.0
+  # The desk collects whole rupees: the bill is rounded off to the nearest rupee.
+  def payable_cents
+    Paise.round_rupee(total_cents)
+  end
+
+  def round_off_cents
+    payable_cents - total_cents
+  end
+
+  # Due is always a whole rupee, so ₹3,491.70 owed shows ₹3,492 and a ₹500
+  # receipt leaves ₹2,992. A bill with under 50 paise left is settled.
+  def remaining_cents
+    [Paise.round_rupee(total_cents - paid_cents), 0].max
+  end
+
+  def subtotal
+    Paise.rupees(subtotal_cents)
+  end
+
+  def total
+    Paise.rupees(total_cents)
+  end
+
+  def paid_amount
+    Paise.rupees(paid_cents)
+  end
+
+  def remaining_amount
+    Paise.rupees(remaining_cents)
+  end
+
+  def live?
+    LIVE_STATUSES.include?(status.to_s)
+  end
+
+  # Figures for the bill card, invoice and payment desk. Rupee values are exact
+  # paise / 100, so formatting to two decimals never re-rounds.
+  def bill_breakdown
+    sub = subtotal_cents
+    disc = discount_cents
+    chg = charges_cents
+    after_rule = discount_after_tax?
+    taxable = after_rule ? sub : sub - disc + chg
+    cgst_r = cgst_rate_or_default
+    sgst_r = sgst_rate_or_default
+    cgst = Paise.percent_of(taxable, cgst_r)
+    sgst = Paise.percent_of(taxable, sgst_r)
+    after_tax = taxable + cgst + sgst
+    tot = after_rule ? after_tax - disc + chg : after_tax
+    payable = Paise.round_rupee(tot)
+    paid = paid_cents
+    remaining = [Paise.round_rupee(tot - paid), 0].max
+    {
+      discount_after_tax: after_rule,
+      after_tax: Paise.rupees(after_tax),
+      after_tax_cents: after_tax,
+      subtotal: Paise.rupees(sub),
+      discount: Paise.rupees(disc),
+      charges: Paise.rupees(chg),
+      taxable: Paise.rupees(taxable),
+      cgst_rate: cgst_r.to_f,
+      sgst_rate: sgst_r.to_f,
+      cgst: Paise.rupees(cgst),
+      sgst: Paise.rupees(sgst),
+      total: Paise.rupees(tot),
+      round_off: Paise.rupees(payable - tot),
+      payable: Paise.rupees(payable),
+      paid: Paise.rupees(paid),
+      remaining: Paise.rupees(remaining),
+      subtotal_cents: sub,
+      discount_cents: disc,
+      charges_cents: chg,
+      taxable_cents: taxable,
+      cgst_cents: cgst,
+      sgst_cents: sgst,
+      total_cents: tot,
+      round_off_cents: payable - tot,
+      payable_cents: payable,
+      paid_cents: paid,
+      remaining_cents: remaining
+    }
+  end
+
+  # Freeze the tax amounts on the row so the stored figures match the invoice.
+  def store_tax_cents!
+    update_columns(cgst_cents: cgst_amount_cents, sgst_cents: sgst_amount_cents)
+  end
+
+  def total_net_grams
+    line_items.to_a.sum(BigDecimal('0'), &:net_grams_total)
+  end
+
+  def total_gross_grams
+    line_items.to_a.sum(BigDecimal('0'), &:gross_grams_total)
   end
 
   def ensure_share_token!
@@ -166,6 +178,14 @@ class Order < ActiveRecord::Base
     assign_share_token
     update_column(:share_token, share_token) if persisted?
     share_token
+  end
+
+  def self.next_invoice_number(date)
+    prefix = "INV-#{date.strftime('%Y%m%d')}-"
+    last = where('invoice_number LIKE ?', "#{prefix}%").pluck(:invoice_number)
+                                                       .map { |n| n.delete_prefix(prefix).to_i }
+                                                       .max.to_i
+    "#{prefix}#{(last + 1).to_s.rjust(3, '0')}"
   end
 
   private
@@ -184,18 +204,13 @@ class Order < ActiveRecord::Base
   end
 
   def set_invoice_and_date
-  self.sale_date ||= Time.zone.today
-    today_invoices_count = Order.where(sale_date: self.sale_date).count + 1
-    self.invoice_number ||= "INV-#{self.sale_date.strftime('%Y%m%d')}-#{today_invoices_count.to_s.rjust(3, '0')}"
+    self.sale_date ||= Time.zone.today
+    self.invoice_number ||= self.class.next_invoice_number(sale_date)
   end
 
   def decrement_inventory_on_payment
-  Rails.logger.warn "Order##{id} after_update fired (status=#{status.inspect}) previous_changes=#{previous_changes.inspect}"
-  # if the order is in paid state and we haven't decremented stock for it yet, proceed
-  return unless status == 'paid'
-  return if self.respond_to?(:stock_decremented_at) && self.stock_decremented_at.present?
-
-  Rails.logger.warn "Order##{id} status is paid and stock not yet decremented - processing #{line_items.count} line_items"
+    return unless status == 'paid'
+    return if respond_to?(:stock_decremented_at) && stock_decremented_at.present?
 
     Order.transaction do
       line_items.each do |li|
@@ -205,23 +220,12 @@ class Order < ActiveRecord::Base
           next
         end
 
-        qty_to_subtract = li.quantity.to_i
-        # log current quantity
-  Rails.logger.warn "JewelryItem##{ji.id} current quantity=#{ji.quantity.inspect}, subtract=#{qty_to_subtract}"
-
-        # Use an atomic SQL update to avoid race conditions and prevent negative quantities.
-        # SQLite does not have GREATEST(), so use a CASE expression which works across adapters.
-        JewelryItem.where(id: ji.id).update_all(["quantity = CASE WHEN quantity - ? < 0 THEN 0 ELSE quantity - ? END", qty_to_subtract, qty_to_subtract])
-
-        # reload and log the new quantity for visibility
-        ji.reload
-        Rails.logger.warn "JewelryItem##{ji.id} new quantity=#{ji.quantity.inspect}"
+        qty = li.quantity.to_i
+        # Atomic update; CASE keeps the tray from going below zero on every adapter.
+        JewelryItem.where(id: ji.id).update_all(['quantity = CASE WHEN quantity - ? < 0 THEN 0 ELSE quantity - ? END', qty, qty])
       end
 
-      # mark that we've decremented stock to make operation idempotent
-        if self.respond_to?(:stock_decremented_at)
-        update_column(:stock_decremented_at, Time.zone.now)
-      end
+      update_column(:stock_decremented_at, Time.zone.now) if respond_to?(:stock_decremented_at)
     end
   end
 end

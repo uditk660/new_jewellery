@@ -1,0 +1,22 @@
+<%
+  stamp_name = local_assigns.fetch(:house).to_s.upcase.first(30)
+  stamp_size = stamp_name.length > 22 ? 8.5 : 10
+  city = local_assigns[:city].presence || 'India'
+%>
+<svg class="stamp" viewBox="0 0 120 120" role="img" aria-label="Store stamp">
+  <defs>
+    <path id="stamp-arc-top" d="M 20 60 A 40 40 0 0 1 100 60" />
+    <path id="stamp-arc-bottom" d="M 16 60 A 44 44 0 0 0 104 60" />
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="none" stroke="#0b1220" stroke-width="2.4" />
+  <circle cx="60" cy="60" r="51" fill="none" stroke="#0b1220" stroke-width="0.8" />
+  <circle cx="60" cy="60" r="27" fill="none" stroke="#c9a227" stroke-width="1.2" />
+  <text font-family="Inter, sans-serif" font-size="<%= stamp_size %>" font-weight="700" letter-spacing="1.2" fill="#0b1220">
+    <textPath href="#stamp-arc-top" startOffset="50%" text-anchor="middle"><%= stamp_name %></textPath>
+  </text>
+  <text font-family="Inter, sans-serif" font-size="8" font-weight="700" letter-spacing="2" fill="#0b1220">
+    <textPath href="#stamp-arc-bottom" startOffset="50%" text-anchor="middle">★ <%= city.to_s.upcase.first(18) %> ★</textPath>
+  </text>
+  <text x="60" y="57" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-size="<%= local_assigns.fetch(:word).to_s.length > 8 ? 11 : 13 %>" font-weight="700" fill="#0b1220"><%= local_assigns.fetch(:word) %></text>
+  <text x="60" y="70" text-anchor="middle" font-family="Inter, sans-serif" font-size="7" font-weight="600" fill="#c9a227"><%= local_assigns.fetch(:date).strftime('%d.%m.%Y') %></text>
+</svg>

@@ -18,8 +18,9 @@
   </div>
 <% else %>
   <div class="ep-plan-grid">
-    <% @plans.each do |plan| %>
-      <article class="ep-plan <%= 'is-featured' if plan.featured? %>">
+    <% @plans.each_with_index do |plan, idx| %>
+      <article class="ep-plan <%= 'is-featured' if plan.featured? %>" style="position:relative">
+        <span class="index-serial-badge"><%= index_serial(idx) %></span>
         <p class="ep-eyebrow" style="margin:0 0 4px"><%= plan.featured? ? 'Most chosen' : (plan.active? ? 'On the board' : 'Hidden') %></p>
         <h2 style="margin:0;font-family:'Cormorant Garamond',Georgia,serif;font-size:1.45rem;font-weight:600"><%= plan.name %></h2>
         <p class="ep-hint" style="margin:4px 0 0"><%= plan.tagline.presence || 'Yearly licence' %></p>

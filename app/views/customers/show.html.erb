@@ -59,13 +59,7 @@
               </thead>
               <tbody>
                 <% @orders.each do |o| %>
-                  <%
-                    total = begin
-                      o.total_with_taxes(cgst_rate: o.cgst_rate.to_f, igst_rate: o.igst_rate.to_f)
-                    rescue
-                      0
-                    end
-                  %>
+                  <% total = o.total %>
                   <tr>
                     <td>
                       <%= link_to "##{o.id}", order_path(o) %>

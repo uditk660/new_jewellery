@@ -2,6 +2,7 @@ class Customer < ActiveRecord::Base
   has_many :orders
   has_many :payments
   has_many :ledger_entries, dependent: :restrict_with_error
+  has_many :khata_receipts, dependent: :restrict_with_error
 
   validates :phone, presence: true, uniqueness: true
   validates :first_name, presence: true
@@ -102,22 +103,34 @@ class Customer < ActiveRecord::Base
     ledger_entries.to_a.sum(&:signed_cents)
   end
 
+  # Cancelled and failed bills are void, so only pending bills carry a due.
+  def bills_due_cents
+    orders.select { |order| order.status.to_s == 'pending' }.sum { |order| order.remaining_cents.to_i }
+  end
+
   def live_outstanding_cents
-    due = orders.reject { |order| order.status.to_s == 'paid' }.sum { |order| order.remaining_cents.to_i }
-    due + journal_cents
+    bills_due_cents + journal_cents
   end
 
   def live_outstanding
     live_outstanding_cents / 100.0
   end
 
+  # Everything the client has paid the house: bill receipts and receipts on account.
+  def deposited_to_date_cents(upto: nil)
+    paid = payments
+    on_account = ledger_entries.where(kind: 'credit')
+    if upto
+      paid = paid.where('created_at <= ?', upto)
+      on_account = on_account.where('created_at <= ?', upto)
+    end
+    paid.sum(:amount_cents).to_i + on_account.sum(:amount_cents).to_i
+  end
+
   # Bills still due, plus journal opening / charge, less on-account receipts.
   def recompute_balance!
-    total_outstanding = orders.where.not(status: 'paid').to_a.sum do |o|
-      o.remaining_cents
-    end
-    total_outstanding += journal_cents
-    update_column(:balance_cents, total_outstanding.to_i)
+    orders.reset
+    update_column(:balance_cents, live_outstanding_cents.to_i)
   end
 
   private

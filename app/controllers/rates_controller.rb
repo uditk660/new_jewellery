@@ -3,9 +3,24 @@ class RatesController < ApplicationController
   helper_method :rate_rupees_for
 
   def index
-    @metals = Metal.includes(:purities).ordered
     @today = Time.zone.today
     load_stock_board
+
+    metals = Metal.includes(:purities).ordered
+    all_rate_rows = build_rate_board_rows(metals)
+    @per_page = (params[:per_page].presence || 20).to_i.clamp(5, 100)
+    @page = [params[:page].to_i, 1].max
+    @total_count = all_rate_rows.size
+    rate_offset = (@page - 1) * @per_page
+    @start_index = rate_offset
+    @rate_rows = all_rate_rows[rate_offset, @per_page] || []
+
+    @stock_per_page = (params[:stock_per_page].presence || 20).to_i.clamp(5, 100)
+    @stock_page = [params[:stock_page].to_i, 1].max
+    @stock_total_count = @stock_items.size
+    stock_offset = (@stock_page - 1) * @stock_per_page
+    @stock_start_index = stock_offset
+    @stock_items = @stock_items[stock_offset, @stock_per_page] || []
   end
 
   def new
@@ -100,6 +115,17 @@ class RatesController < ApplicationController
     return stock.price_per_gram if stock && stock.price_cents_per_gram.to_i.positive?
 
     nil
+  end
+
+  def build_rate_board_rows(metals)
+    metals.flat_map do |metal|
+      purities = metal.purities.ordered.to_a
+      if purities.any?
+        purities.map { |purity| { metal: metal, purity: purity } }
+      else
+        [{ metal: metal, purity: nil }]
+      end
+    end
   end
 
   def parsed_rate_input

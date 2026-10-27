@@ -256,4 +256,64 @@
     .atelier-page .row { flex-direction: column; }
     .atelier-page .field.narrow { flex: 1; }
   }
+  table th.col-serial,
+  table td.col-serial {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    max-width: 3rem;
+    padding-left: 10px;
+    padding-right: 10px;
+    box-sizing: border-box;
+    text-align: center;
+    vertical-align: middle;
+    color: #8a8072;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  table th.col-serial { font-size: 11px; letter-spacing: 0.06em; font-weight: 700; }
+  .col-serial { text-align: center; color: #8a8072; font-variant-numeric: tabular-nums; }
+  .index-serial-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #8a8072;
+    letter-spacing: 0.04em;
+  }
+  .index-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+    margin-top: 18px;
+    width: 100%;
+    color: #6b6258;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .index-pager a.index-pager-btn.atelier-back { text-decoration: none; }
+  .index-pager .index-pager-btn.is-disabled {
+    opacity: 0.42;
+    cursor: default;
+    pointer-events: none;
+  }
+  .index-pager-status {
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    padding: 0 6px;
+    min-width: 7.5rem;
+    line-height: 1.35;
+  }
+  .index-pager-note {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #8a8072;
+  }
 </style>

@@ -43,34 +43,72 @@ class LedgersController < ApplicationController
   def new
     @entry = LedgerEntry.new(entry_date: Time.zone.today, kind: 'opening')
     @entry.customer_id = params[:customer_id] if params[:customer_id].present?
+    @entry.kind = 'credit' if params[:kind].to_s == 'credit'
     load_form
   end
 
   def create
     @entry = LedgerEntry.new(entry_params)
-    if @entry.save
-      @entry.customer.recompute_balance! if @entry.customer.respond_to?(:recompute_balance!)
-      redirect_to ledger_path(@entry.customer), notice: "Posted on #{@entry.customer.full_name}'s khata."
-    else
-      load_form
-      render :new
-    end
+    @payment_method = params[:payment_method].to_s.strip
+    create_receipt
+  end
+
+  # Print link for any statement line posted before slips existed.
+  def entry_slip
+    customer = Customer.includes(:ledger_entries, :payments, orders: [:line_items, :payments]).find(params[:id])
+    entry = customer.ledger_entries.find(params[:entry_id])
+    line = statement_for(customer).find { |l| l[:kind] == entry.kind && l[:id] == entry.id && l[:source] == 'entry' }
+    receipt = entry.khata_receipt || KhataReceipt.for_entry!(entry, balance_after_cents: Paise.from_rupees(line[:balance]))
+    redirect_to ledger_receipt_path(customer, receipt)
+  end
+
+  def receipt
+    @customer = Customer.find(params[:id])
+    @receipt = @customer.khata_receipts.includes(:ledger_entry, payments: :order).find(params[:receipt_id])
+    @shop = current_user.try(:shop_profile)
+    @shop ||= ShopProfile.first if defined?(ShopProfile)
+    render template: 'ledgers/receipt', layout: false
   end
 
   private
+
+  def create_receipt
+    customer = Customer.find_by(id: @entry.customer_id)
+    @entry.valid?
+    @entry.errors.add(:customer_id, 'must be selected') unless customer
+    if @entry.errors.any?
+      load_form
+      return render :new, status: :unprocessable_entity
+    end
+
+    if @entry.credit?
+      receipt = KhataReceipt.post!(customer: customer, amount_cents: @entry.amount_cents,
+                                   payment_method: @payment_method, received_on: @entry.entry_date, note: @entry.note)
+      notice = "Received #{format('₹%.2f', receipt.amount)} on #{customer.full_name}'s khata."
+    else
+      receipt = KhataReceipt.post_entry!(customer: customer, kind: @entry.kind, amount_cents: @entry.amount_cents,
+                                         received_on: @entry.entry_date, note: @entry.note)
+      notice = "#{receipt.title} of #{format('₹%.2f', receipt.amount)} posted on #{customer.full_name}'s khata."
+    end
+    redirect_to ledger_receipt_path(customer, receipt), notice: notice
+  rescue KhataReceipt::Refused => e
+    @entry.errors.add(:base, e.message)
+    load_form
+    render :new, status: :unprocessable_entity
+  end
 
   def entry_params
     params.require(:ledger_entry).permit(:customer_id, :entry_date, :kind, :amount, :amount_cents, :note)
   end
 
   def load_form
-    @customers = Customer.order(:first_name, :last_name)
+    @customers = Customer.includes(:ledger_entries, orders: [:line_items, :payments]).order(:first_name, :last_name)
     @customers_payload = @customers.map do |customer|
       {
         id: customer.id,
         name: customer.full_name,
         phone: customer.phone.to_s,
-        outstanding: customer.outstanding.to_f
+        outstanding: Paise.rupees(customer.live_outstanding_cents)
       }
     end
   end
@@ -81,6 +119,7 @@ class LedgersController < ApplicationController
     @to = parse_date(params[:to])
     @lines = window_statement(statement_for(@customer), @from, @to)
     @cents = @customer.live_outstanding_cents
+    @receipts = @customer.khata_receipts.order(created_at: :desc).limit(10)
   end
 
   def decorate(customer)
@@ -104,6 +143,7 @@ class LedgersController < ApplicationController
     customer.orders.each do |order|
       next if %w[cancelled failed].include?(order.status.to_s)
       at = stamp(order.created_at, order.try(:sale_date))
+      bill = order.bill_breakdown
       lines << {
         occurred: at.to_date,
         occurred_at: at,
@@ -111,10 +151,14 @@ class LedgersController < ApplicationController
         id: order.id,
         kind: 'bill',
         label: 'Bill',
-        note: [order.invoice_number.presence || "Bill ##{order.id}", order.status].compact.join(' · '),
-        debit: order.bill_breakdown[:total].to_f,
+        note: [order.invoice_number.presence || "Bill ##{order.id}", order.status,
+               (bill[:round_off_cents].to_i.zero? ? nil : 'rounded off')].compact.join(' · '),
+        debit: bill[:payable].to_f,
         credit: 0.0,
-        href: order_path(order)
+        href: order_path(order),
+        source: 'bill',
+        print: invoice_order_path(order),
+        print_label: 'Invoice'
       }
     end
 
@@ -130,10 +174,13 @@ class LedgersController < ApplicationController
         id: payment.id,
         kind: 'receipt',
         label: 'Receipt',
-        note: [ref, payment.payment_method.presence, against].compact.join(' · '),
+        note: [ref, payment.payment_method.presence, against, (payment.note.presence if payment.khata_receipt_id)].compact.join(' · '),
         debit: 0.0,
         credit: payment.amount,
-        href: payment.order_id ? order_path(payment.order_id) : nil
+        href: payment.order_id ? order_path(payment.order_id) : nil,
+        source: 'payment',
+        print: payment.khata_receipt_id ? ledger_receipt_path(customer, payment.khata_receipt_id) : invoice_payment_path(payment),
+        print_label: 'Receipt'
       }
     end
 
@@ -149,7 +196,10 @@ class LedgersController < ApplicationController
         note: entry.note.presence || entry.kind_label,
         debit: entry.debit_amount,
         credit: entry.credit_amount,
-        href: nil
+        href: nil,
+        source: 'entry',
+        print: entry.khata_receipt_id ? ledger_receipt_path(customer, entry.khata_receipt_id) : ledger_entry_slip_path(customer, entry),
+        print_label: entry.credit? ? 'Receipt' : 'Slip'
       }
     end
 

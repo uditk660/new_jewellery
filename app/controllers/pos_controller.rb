@@ -14,14 +14,7 @@ class PosController < OrdersController
     @order = Order.new(status: 'pending')
     assign_bill_totals(@order)
 
-    saved = nil
-    begin
-      saved = raise_bill!
-    rescue ActiveRecord::RecordInvalid => e
-      @order.errors.add(:base, e.record.errors.full_messages.to_sentence)
-    rescue ActiveRecord::RecordNotUnique
-      @order.errors.add(:base, 'That phone or email is already on the book. Choose the existing client.')
-    end
+    saved = raise_bill_safely
 
     if saved
       redirect_to saved, notice: 'Ticket raised from the counter. Record payment when the client settles.'
@@ -30,20 +23,12 @@ class PosController < OrdersController
     end
   end
 
+  # No card gateway is connected. A bill is settled only through a recorded
+  # payment on the bill, so the ledger, receipts and stock stay in step.
   def charge
-    @order = Order.find(params[:order_id])
-    payment_info = params[:payment] || {}
-
-    result = BillingService.new(@order, payment_info).charge!
-    if result[:success]
-      @order.update(status: 'paid')
-      redirect_to @order, notice: 'Payment processed successfully.'
-    else
-      @order.update(status: 'failed')
-      redirect_to @order, alert: "Payment failed: #{result[:error]}"
-    end
-  rescue ActiveRecord::RecordNotFound
-    redirect_to orders_path, alert: 'Order not found'
+    order = Order.find_by(id: params[:order_id])
+    target = order ? order_path(order) : orders_path
+    redirect_to target, alert: 'Card charging is not connected. Record the payment on the bill instead.'
   end
 
   private
@@ -52,7 +37,7 @@ class PosController < OrdersController
     @order ||= Order.new(
       status: 'pending',
       cgst_rate: Order::DEFAULT_CGST_RATE,
-      igst_rate: Order::DEFAULT_IGST_RATE,
+      sgst_rate: Order::DEFAULT_SGST_RATE,
       discount: 0,
       charges: 0
     )

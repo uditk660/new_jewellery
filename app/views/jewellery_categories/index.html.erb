@@ -1,7 +1,37 @@
-<h1>Jewellery Categories</h1>
-<p><a href="<%= new_jewellery_category_path %>">New Category</a></p>
-<ul>
-  <% @categories.each do |c| %>
-    <li><%= c.name %> (<%= c.metal.name if c.metal %>)</li>
+<%= render 'shared/atelier_styles' %>
+
+<div class="atelier-page">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Catalogue</p>
+      <h1>Jewellery categories</h1>
+      <p class="lead">Piece types grouped under each metal on the catalogue.</p>
+    </div>
+    <%= link_to 'New category', new_jewellery_category_path, class: 'btn-gold' %>
+  </header>
+
+  <% if @categories.any? %>
+    <div class="cat-table-wrap">
+      <table class="cat-table">
+        <thead>
+          <tr>
+            <%= render 'shared/index_serial_th' %>
+            <th>Name</th>
+            <th>Metal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @categories.each_with_index do |c, idx| %>
+            <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
+              <td><strong><%= c.name %></strong></td>
+              <td><%= c.metal&.name || '—' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% else %>
+    <p class="hint">No categories yet. <%= link_to 'Create the first', new_jewellery_category_path %>.</p>
   <% end %>
-</ul>
+</div>

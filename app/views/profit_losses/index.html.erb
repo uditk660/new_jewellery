@@ -199,6 +199,7 @@
       <table class="stock-table">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Bill</th>
             <th>Client</th>
             <th class="num">Net</th>
@@ -210,9 +211,10 @@
           </tr>
         </thead>
         <tbody>
-          <% bills.each do |row| %>
+          <% bills.each_with_index do |row, idx| %>
             <% order = row[:order] %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td>
                 <strong><%= row[:invoice] %></strong>
                 <span class="sku"><%= row[:date].strftime('%d %b %Y') %> · <%= row[:status] == 'paid' ? 'Settled' : 'Open' %></span>
@@ -371,9 +373,9 @@
     .house-result .pl-hero-strip { grid-template-columns: 1fr; }
     .house-result .pl-spark { height: 64px; }
     .house-result .pl-legend { grid-template-columns: 1fr; }
-    .house-result .stock-table th:nth-child(4),
-    .house-result .stock-table td:nth-child(4),
     .house-result .stock-table th:nth-child(5),
-    .house-result .stock-table td:nth-child(5) { display: none; }
+    .house-result .stock-table td:nth-child(5),
+    .house-result .stock-table th:nth-child(6),
+    .house-result .stock-table td:nth-child(6) { display: none; }
   }
 </style>

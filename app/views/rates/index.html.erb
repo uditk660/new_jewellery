@@ -2,10 +2,14 @@
 
 <%
   today = @today || Time.zone.today
+  rate_rows = @rate_rows || []
   stock_items = @stock_items || []
+  stock_list_total = @stock_total_count || stock_items.size
   total_stock = @total_stock_value.to_f
   tray_pcs = @stock_piece_count.to_i
   tray_grams = @stock_weight_grams.to_f
+  rates_page_url = ->(n) { rates_path(request.query_parameters.merge(page: n)) }
+  stock_page_url = ->(n) { rates_path(request.query_parameters.merge(stock_page: n)) }
 %>
 
 <div class="atelier-page rates-board is-list" id="rates-view">
@@ -41,13 +45,14 @@
     </div>
     <div class="stock-chip">
       <span>Pieces</span>
-      <strong><%= stock_items.size %></strong>
+      <strong><%= stock_list_total %></strong>
     </div>
   </div>
 
-  <% if @metals.any? %>
+  <% if @total_count.to_i > 0 %>
     <div class="rate-cards" data-layout="cards">
-      <% @metals.each do |metal| %>
+      <% rate_rows.group_by { |row| row[:metal].id }.each_value do |rows| %>
+        <% metal = rows.first[:metal] %>
         <section class="rate-card">
           <div class="rate-card-top">
             <span class="swatch" style="background:<%= metal.chip_colour %>"></span>
@@ -57,10 +62,11 @@
             </div>
             <% if metal.rate_board_locked? %><span class="lock-pill">Inactive</span><% end %>
           </div>
-          <% purities = metal.purities.ordered %>
-          <% if purities.any? %>
+          <% if rows.any? { |row| row[:purity].present? } %>
             <ul class="rate-rows">
-              <% purities.each do |purity| %>
+              <% rows.each do |row| %>
+                <% next if row[:purity].blank? %>
+                <% purity = row[:purity] %>
                 <% locked = purity.rate_board_locked? %>
                 <li class="rate-row">
                   <div class="hallmark">
@@ -79,9 +85,9 @@
                       <%= hidden_field_tag :metal_id, metal.id %>
                       <%= hidden_field_tag :purity_id, purity.id %>
                       <%= hidden_field_tag 'rate[date]', today %>
-                      <label class="sr-only" for="price_<%= purity.id %>">₹ / g</label>
+                      <label class="sr-only" for="price_card_<%= purity.id %>">₹ / g</label>
                       <span class="rupee">₹</span>
-                      <%= number_field_tag :price_per_gram, (purity.updated_price.present? ? ('%.2f' % purity.updated_price) : nil), id: "price_#{purity.id}", step: '0.01', min: 0, class: 'form-control rate-input', placeholder: '0.00' %>
+                      <%= number_field_tag :price_per_gram, (purity.updated_price.present? ? ('%.2f' % purity.updated_price) : nil), id: "price_card_#{purity.id}", step: '0.01', min: 0, class: 'form-control rate-input', placeholder: '0.00' %>
                       <span class="per">/g</span>
                       <%= submit_tag 'Save', class: 'btn-gold' %>
                     <% end %>
@@ -100,6 +106,7 @@
       <table class="rate-list">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Metal</th>
             <th>Hallmark</th>
             <th class="col-weight">Weight</th>
@@ -107,10 +114,13 @@
           </tr>
         </thead>
         <tbody>
-          <% @metals.each do |metal| %>
-            <% metal.purities.ordered.each do |purity| %>
+          <% rate_rows.each_with_index do |row, idx| %>
+            <% metal = row[:metal] %>
+            <% purity = row[:purity] %>
+            <% if purity.present? %>
               <% locked = purity.rate_board_locked? %>
               <tr>
+                <%= render 'shared/index_serial_td', position: idx %>
                 <td>
                   <span class="metal-cell">
                     <span class="swatch small" style="background:<%= metal.chip_colour %>"></span>
@@ -144,9 +154,9 @@
                   <% end %>
                 </td>
               </tr>
-            <% end %>
-            <% if metal.purities.empty? %>
+            <% else %>
               <tr>
+                <%= render 'shared/index_serial_td', position: idx %>
                 <td>
                   <span class="metal-cell">
                     <span class="swatch small" style="background:<%= metal.chip_colour %>"></span>
@@ -160,6 +170,13 @@
         </tbody>
       </table>
     </div>
+
+    <%= render 'shared/index_pagination',
+               page: @page,
+               per_page: @per_page,
+               total_count: @total_count,
+               note: 'Hallmarks on the board',
+               url: rates_page_url %>
   <% else %>
     <div class="atelier-form">
       <p class="hint" style="margin:0">No metals yet. Add Gold with 18K, 20K and 22K, then set today’s rates here.</p>
@@ -176,11 +193,12 @@
       <%= link_to 'Open catalogue', jewelry_items_path, class: 'atelier-back' %>
     </div>
 
-    <% if stock_items.any? %>
+    <% if stock_list_total.to_i > 0 %>
       <div class="stock-table-wrap">
         <table class="stock-table">
           <thead>
             <tr>
+              <%= render 'shared/index_serial_th' %>
               <th>Piece</th>
               <th>Metal &amp; hallmark</th>
               <th class="num">Weight</th>
@@ -190,13 +208,14 @@
             </tr>
           </thead>
           <tbody>
-            <% stock_items.each do |item| %>
+            <% stock_items.each_with_index do |item, idx| %>
               <%
                 qty = item.quantity.to_i
                 rate = item.effective_price_per_gram
                 value = item.stock_amount
               %>
               <tr>
+                <%= render 'shared/index_serial_td', position: idx, offset: @stock_start_index %>
                 <td>
                   <%= link_to jewelry_item_path(item), class: 'piece-link' do %>
                     <strong><%= item.name %></strong>
@@ -250,6 +269,13 @@
           </tfoot>
         </table>
       </div>
+
+      <%= render 'shared/index_pagination',
+                 page: @stock_page,
+                 per_page: @stock_per_page,
+                 total_count: @stock_total_count,
+                 note: 'Catalogue pieces',
+                 url: stock_page_url %>
     <% else %>
       <div class="atelier-form empty">
         <p class="hint" style="margin:0">No catalogue pieces yet. Register a piece to see tray value at today’s board.</p>
@@ -381,10 +407,10 @@
     padding: 12px 16px; border-bottom: 1px solid rgba(201,162,39,0.12);
     vertical-align: middle; font-size: 14px; color: #14110f;
   }
-  .rates-board .rate-list th:nth-child(1),
-  .rates-board .rate-list td:nth-child(1) { width: 22%; }
   .rates-board .rate-list th:nth-child(2),
-  .rates-board .rate-list td:nth-child(2) { width: 24%; }
+  .rates-board .rate-list td:nth-child(2) { width: 22%; }
+  .rates-board .rate-list th:nth-child(3),
+  .rates-board .rate-list td:nth-child(3) { width: 24%; }
   .rates-board .rate-list .col-weight {
     width: 16%;
     text-align: right;

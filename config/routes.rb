@@ -64,6 +64,9 @@ Rails.application.routes.draw do
   resources :inventory_items, only: [:index, :show, :new, :create]
   resources :stock_movements, only: [:create]
   resources :ledgers, only: [:index, :show, :new, :create]
+  get 'ledgers/:id/receipts/:receipt_id', to: 'ledgers#receipt', as: :ledger_receipt
+  get 'ledgers/:id/entries/:entry_id/slip', to: 'ledgers#entry_slip', as: :ledger_entry_slip
+  resources :estimates
   resources :profit_losses, only: [:index, :new]
   resources :reports, only: [:index, :new]
   get 'reports/sales_log', to: 'reports#sales_log', as: :sales_log_reports

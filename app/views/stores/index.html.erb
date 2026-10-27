@@ -76,10 +76,11 @@
 
   <% if rows.any? %>
     <div class="house-grid">
-      <% rows.each do |store| %>
+      <% rows.each_with_index do |store, idx| %>
         <% grams = store.vault_grams %>
         <% metals = store.metal_stocks.map(&:metal).compact %>
         <%= link_to store_path(store), class: "house-card#{' is-bare' if store.bare?}#{' is-light' if store.light_vault?}#{' is-empty' if store.empty_vault?}" do %>
+          <span class="index-serial-badge"><%= index_serial(idx) %></span>
           <div class="house-top">
             <h2><%= store.name %></h2>
             <span class="loc"><%= store.location_label %></span>
@@ -168,6 +169,7 @@
     display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;
   }
   .house-book .house-card {
+    position: relative;
     display: flex; flex-direction: column; gap: 14px;
     background: #fffaf3; border: 1px solid rgba(201,162,39,0.28);
     border-radius: 18px; padding: 16px 16px 14px; text-decoration: none; color: inherit;

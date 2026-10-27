@@ -24,8 +24,8 @@
   bill_no = @order.invoice_number.presence || format('INV-%03d', @order.id)
   bill = @order.bill_breakdown
   lines = @order.line_items.to_a
-  gross_total = lines.sum { |li| li.gross_weight.to_f }
-  net_total = lines.sum { |li| li.net_weight.to_f }
+  gross_total = @order.total_gross_grams
+  net_total = @order.total_net_grams
   initials = house.to_s.split(/\s+/).map { |w| w[0] }.compact.first(2).join.upcase
   initials = 'JH' if initials.blank?
   packed = lines.size >= 4
@@ -551,7 +551,7 @@
               <span class="sub formula">
                 Gross <%= '%.2f' % li.gross_weight.to_f %> g
                 · Metal <%= format_rupees(li.metal_amount) %>
-                · <%= '%.1f' % li.making_percent %>% making <%= format_rupees(li.making_charge.to_f) %>
+                · Making <%= format_rupees(li.making_charge.to_f) %>
                 <% if add_total.positive? %> · Extra <%= format_rupees(add_total) %><% end %>
               </span>
             </td>
@@ -572,7 +572,7 @@
       <div>
         <div class="words">
           Amount in words
-          <b><%= rupees_in_words(bill[:total]) %></b>
+          <b><%= rupees_in_words(bill[:payable]) %></b>
         </div>
         <% if bank || ac_no || ifsc %>
           <p class="bank">
@@ -613,15 +613,28 @@
       </div>
 
       <aside class="sum">
-        <div><span>Subtotal</span><b><%= format_rupees(bill[:subtotal]) %></b></div>
-        <div><span>Discount</span><b><%= format_rupees(bill[:discount]) %></b></div>
-        <div><span>Extra charges</span><b><%= format_rupees(bill[:charges]) %></b></div>
-        <div><span>Taxable</span><b><%= format_rupees(bill[:taxable]) %></b></div>
-        <div><span>CGST <%= '%.2f' % bill[:cgst_rate] %>%</span><b><%= format_rupees(bill[:cgst]) %></b></div>
-        <div><span>CGST <%= '%.2f' % bill[:igst_rate] %>%</span><b><%= format_rupees(bill[:igst]) %></b></div>
+        <% if bill[:discount_after_tax] %>
+          <div><span>Taxable value</span><b><%= format_rupees(bill[:taxable]) %></b></div>
+          <div><span>CGST <%= '%.2f' % bill[:cgst_rate] %>%</span><b><%= format_rupees(bill[:cgst]) %></b></div>
+          <div><span>SGST <%= '%.2f' % bill[:sgst_rate] %>%</span><b><%= format_rupees(bill[:sgst]) %></b></div>
+          <div><span>Total after tax</span><b><%= format_rupees(bill[:after_tax]) %></b></div>
+          <div><span>Discount</span><b>−<%= format_rupees(bill[:discount]) %></b></div>
+          <div><span>Extra charges</span><b>+<%= format_rupees(bill[:charges]) %></b></div>
+        <% else %>
+          <div><span>Subtotal</span><b><%= format_rupees(bill[:subtotal]) %></b></div>
+          <div><span>Discount</span><b><%= format_rupees(bill[:discount]) %></b></div>
+          <div><span>Extra charges</span><b><%= format_rupees(bill[:charges]) %></b></div>
+          <div><span>Taxable</span><b><%= format_rupees(bill[:taxable]) %></b></div>
+          <div><span>CGST <%= '%.2f' % bill[:cgst_rate] %>%</span><b><%= format_rupees(bill[:cgst]) %></b></div>
+          <div><span>SGST <%= '%.2f' % bill[:sgst_rate] %>%</span><b><%= format_rupees(bill[:sgst]) %></b></div>
+        <% end %>
         <div><span>Paid</span><b><%= format_rupees(bill[:paid]) %></b></div>
         <div><span>Remaining</span><b><%= format_rupees(bill[:remaining]) %></b></div>
-        <div class="grand"><span>Net payable</span><b><%= format_rupees(bill[:total]) %></b></div>
+        <% if bill[:round_off_cents].nonzero? %>
+          <div><span>Bill total</span><b><%= format_rupees(bill[:total]) %></b></div>
+          <div><span>Round off</span><b><%= bill[:round_off_cents].negative? ? '−' : '+' %><%= format_rupees(bill[:round_off_cents].abs / 100.0) %></b></div>
+        <% end %>
+        <div class="grand"><span>Net payable</span><b><%= format_rupees(bill[:payable]) %></b></div>
       </aside>
     </div>
 

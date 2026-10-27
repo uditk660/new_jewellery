@@ -27,6 +27,7 @@
       <table class="ep-table">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>House</th>
             <th>Plan</th>
             <th>Status</th>
@@ -35,8 +36,9 @@
           </tr>
         </thead>
         <tbody>
-          <% @subscriptions.each do |sub| %>
+          <% @subscriptions.each_with_index do |sub, idx| %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td>
                 <strong><%= sub.user.display_name %></strong>
                 <span class="ep-sub"><%= sub.user.email %></span>

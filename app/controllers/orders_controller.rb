@@ -47,7 +47,7 @@ class OrdersController < ApplicationController
 
     paid_today = Order.where(status: 'paid', sale_date: Time.zone.today)
                       .includes(:line_items, :payments)
-    @today_total = paid_today.sum { |o| o.bill_breakdown[:total] }
+    @today_total = Paise.rupees(paid_today.sum(&:total_cents))
     render template: 'orders/index'
   end
 
@@ -64,61 +64,56 @@ class OrdersController < ApplicationController
     end
 
     pm = params[:payment_method].to_s.strip
-    pay_amt = params[:payment_amount].to_f
-    cgst_rate = params[:cgst_rate].present? ? params[:cgst_rate].to_f : @order.cgst_rate_or_default
-    igst_rate = params[:igst_rate].present? ? params[:igst_rate].to_f : @order.igst_rate_or_default
-    discount = params[:discount].to_f
-    charges = params[:charges].present? ? params[:charges].to_f : @order.charges.to_f
+    pay = Paise.dec(params[:payment_amount])
+    discount = params[:discount].present? ? Paise.dec(params[:discount]) : Paise.dec!(@order.discount)
+    charges = params[:charges].present? ? Paise.dec(params[:charges]) : Paise.dec!(@order.charges)
+    cgst_rate = params[:cgst_rate].present? ? Paise.dec(params[:cgst_rate]) : @order.cgst_rate_or_default
+    sgst_rate = params[:sgst_rate].present? ? Paise.dec(params[:sgst_rate]) : @order.sgst_rate_or_default
 
-    @order.assign_attributes(
-      discount: discount,
-      charges: charges,
-      cgst_rate: cgst_rate,
-      igst_rate: igst_rate
-    )
-    @order.payment_method = pm if @order.respond_to?(:payment_method=)
-
-    if pm.blank?
-      @order.errors.add(:payment_method, 'must be selected')
-      return render :show
-    end
-    if discount.negative? || charges.negative? || cgst_rate.negative? || igst_rate.negative?
-      @order.errors.add(:base, 'Discount, charges and tax cannot be negative.')
-      return render :show
-    end
-    if discount > @order.bill_breakdown[:subtotal]
-      @order.errors.add(:base, 'Discount cannot exceed the bill subtotal.')
-      return render :show
-    end
-    if pay_amt <= 0
-      @order.errors.add(:base, 'Payment amount must be greater than 0.')
-      return render :show
-    end
-
-    bill = @order.bill_breakdown
-    due_cents = (bill[:remaining] * 100).round
-    pay_cents = (pay_amt * 100).round
-    if pay_cents > [due_cents, 0].max
-      @order.errors.add(:base, "Payment cannot exceed remaining amount (₹#{'%.2f' % ([due_cents, 0].max / 100.0)}).")
-      return render :show
-    end
-
+    failure = nil
     Payment.transaction do
+      # Row lock: a second receipt on the same bill waits here, then sees the first.
+      @order.lock!
+      if @order.status != 'pending'
+        failure = :settled
+        raise ActiveRecord::Rollback
+      end
+
+      @order.assign_attributes(
+        discount: discount && Paise.round2(discount),
+        charges: charges && Paise.round2(charges),
+        cgst_rate: cgst_rate && Paise.round2(cgst_rate),
+        sgst_rate: sgst_rate && Paise.round2(sgst_rate)
+      )
+      @order.payment_method = pm if @order.respond_to?(:payment_method=)
+
+      pay_cents = pay ? Paise.from_rupees(pay) : nil
+      check_payment_terms!(pm, pay_cents, [pay, discount, charges, cgst_rate, sgst_rate])
+      if @order.errors.any?
+        failure = :invalid
+        raise ActiveRecord::Rollback
+      end
+
       @order.save!
-      @order.update_columns(cgst_cents: (bill[:cgst] * 100).round, igst_cents: (bill[:igst] * 100).round)
-      p = Payment.create!(order_id: @order.id, customer_id: @order.customer_id, amount_cents: pay_cents, payment_method: pm)
-      rn = "RCT-#{Time.zone.today.strftime('%Y%m%d')}-#{p.id.to_s.rjust(4, '0')}"
-      p.update_columns(receipt_number: rn)
-      paid = @order.payments.sum(:amount_cents).to_i
-      total_cents = (bill[:total] * 100).round
-      @order.update(status: (paid >= total_cents ? 'paid' : 'pending'))
-      @order.customer.recompute_balance! if @order.customer.respond_to?(:recompute_balance!)
+      @order.store_tax_cents!
+      payment = Payment.create!(order_id: @order.id, customer_id: @order.customer_id, amount_cents: pay_cents, payment_method: pm)
+      payment.update_columns(receipt_number: "RCT-#{Time.zone.today.strftime('%Y%m%d')}-#{payment.id.to_s.rjust(4, '0')}")
+      @order.payments.reset
+      @order.update!(status: (@order.remaining_cents.zero? ? 'paid' : 'pending'))
+      @order.customer&.recompute_balance!
     end
 
-    if @order.status == 'paid'
-      redirect_to invoice_order_path(@order)
+    case failure
+    when :settled
+      redirect_to @order, alert: 'This bill is already settled.'
+    when :invalid
+      render :show, status: :unprocessable_entity
     else
-      redirect_to @order, notice: 'Partial payment recorded. Receipt is in the payments list.'
+      if @order.status == 'paid'
+        redirect_to invoice_order_path(@order)
+      else
+        redirect_to @order, notice: 'Partial payment recorded. Receipt is in the payments list.'
+      end
     end
   end
 
@@ -143,7 +138,7 @@ class OrdersController < ApplicationController
     @order = Order.new(
       status: 'pending',
       cgst_rate: Order::DEFAULT_CGST_RATE,
-      igst_rate: Order::DEFAULT_IGST_RATE,
+      sgst_rate: Order::DEFAULT_SGST_RATE,
       discount: 0,
       charges: 0
     )
@@ -162,19 +157,12 @@ class OrdersController < ApplicationController
     @order = Order.new(status: 'pending')
     assign_bill_totals(@order)
 
-    saved = nil
-    begin
-      saved = raise_bill!
-    rescue ActiveRecord::RecordInvalid => e
-      @order.errors.add(:base, e.record.errors.full_messages.to_sentence)
-    rescue ActiveRecord::RecordNotUnique
-      @order.errors.add(:base, 'That phone or email is already on the book. Choose the existing client.')
-    end
+    saved = raise_bill_safely
 
     if saved
       redirect_to saved, notice: 'Bill raised. Record payment when the client settles.'
     else
-      render :new
+      render :new, status: :unprocessable_entity
     end
   end
 
@@ -220,30 +208,55 @@ class OrdersController < ApplicationController
     end
   end
 
+  # Column limits: line_items amounts decimal(12,2), weights decimal(10,2),
+  # orders discount/charges decimal(10,2).
+  MAX_LINE_RUPEES = BigDecimal('9999999999.99')
+  MAX_GRAMS = BigDecimal('99999999.99')
+  MAX_BILL_RUPEES = BigDecimal('99999999.99')
+  MAX_TAX_RATE = BigDecimal('20')
+
   def assign_bill_totals(order)
-    order.discount = params[:discount].to_f
-    order.charges = params[:charges].to_f
-    order.cgst_rate = params[:cgst_rate].present? ? params[:cgst_rate].to_f : Order::DEFAULT_CGST_RATE
-    order.igst_rate = params[:igst_rate].present? ? params[:igst_rate].to_f : Order::DEFAULT_IGST_RATE
+    inputs = {
+      discount: params[:discount].present? ? Paise.dec(params[:discount]) : BigDecimal('0'),
+      charges: params[:charges].present? ? Paise.dec(params[:charges]) : BigDecimal('0'),
+      cgst_rate: params[:cgst_rate].present? ? Paise.dec(params[:cgst_rate]) : BigDecimal(Order::DEFAULT_CGST_RATE.to_s),
+      sgst_rate: params[:sgst_rate].present? ? Paise.dec(params[:sgst_rate]) : BigDecimal(Order::DEFAULT_SGST_RATE.to_s)
+    }
+    @bill_inputs_invalid = inputs.values.any?(&:nil?)
+    inputs.each { |key, value| order[key] = Paise.round2(value) }
+  end
+
+  def whole_number(value)
+    str = value.to_s.strip
+    str.match?(/\A\d+\z/) ? str.to_i : nil
   end
 
   def parsed_line_items
-    raw_line_item_params.filter_map do |raw|
-      next if raw.values.all? { |v| v.blank? }
-      next if (raw['jewelry_item_id'] || raw[:jewelry_item_id]).blank?
+    raw_line_item_params.filter_map do |row|
+      raw = row.to_h.with_indifferent_access
+      next if raw.values.all?(&:blank?)
+      next if raw[:jewelry_item_id].blank?
 
-      item = JewelryItem.find_by(id: raw['jewelry_item_id'] || raw[:jewelry_item_id])
-      qty = (raw['quantity'] || raw[:quantity]).to_i
-      net = (raw['net_weight'] || raw[:net_weight]).to_f
-      gross_raw = raw['gross_weight'] || raw[:gross_weight]
-      gross = gross_raw.present? ? gross_raw.to_f : net
-      rate = (raw['rate_per_gram'] || raw[:rate_per_gram]).to_f
-      making_pct = (raw['making_charge_percent'] || raw[:making_charge_percent]).to_f
-      additional = (raw['additional_charge'] || raw[:additional_charge]).to_f
-      metal = (rate * net * qty).round(2)
-      making = (metal * making_pct / 100.0).round(2)
+      item = JewelryItem.includes(:metal, :purity).find_by(id: raw[:jewelry_item_id])
+      qty = whole_number(raw[:quantity])
+      net = Paise.dec(raw[:net_weight])
+      gross = raw[:gross_weight].present? ? Paise.dec(raw[:gross_weight]) : net
+      rate = Paise.dec(raw[:rate_per_gram])
+      making_pct = raw[:making_charge_percent].present? ? Paise.dec(raw[:making_charge_percent]) : BigDecimal('0')
+      additional = raw[:additional_charge].present? ? Paise.dec(raw[:additional_charge]) : BigDecimal('0')
+      numbers_ok = [qty, net, gross, rate, making_pct, additional].none?(&:nil?)
+
+      qty ||= 0
+      net = Paise.round2(net)
+      gross = Paise.round2(gross)
+      rate = Paise.round2(rate)
+      additional = Paise.round2(additional)
+      making_pct = Paise.dec!(making_pct)
+      metal = (rate * net * qty).round(2, BigDecimal::ROUND_HALF_UP)
+      making = (metal * making_pct / 100).round(2, BigDecimal::ROUND_HALF_UP)
       {
         item: item,
+        numbers_ok: numbers_ok,
         quantity: qty,
         net_weight: net,
         gross_weight: gross,
@@ -252,9 +265,70 @@ class OrdersController < ApplicationController
         making_charge: making,
         additional_charge: additional,
         metal_amount: metal,
-        hsn: (raw['hsn'] || raw[:hsn]).presence || item&.invoice_hsn,
-        huid: (raw['huid'] || raw[:huid]).presence || item&.sku
+        hsn: raw[:hsn].presence || item&.invoice_hsn,
+        huid: raw[:huid].presence || item&.sku
       }
+    end
+  end
+
+  def line_cents(line)
+    Paise.from_rupees(line[:metal_amount]) + Paise.from_rupees(line[:making_charge]) +
+      Paise.from_rupees(line[:additional_charge]) * line[:quantity]
+  end
+
+  # Discount, extra charges and tax rates on @order. The discount is capped at
+  # the amount it comes off: the total after CGST + SGST (subtotal on old bills).
+  def check_bill_amounts!(subtotal_cents)
+    disc = Paise.dec!(@order.discount)
+    chg = Paise.dec!(@order.charges)
+    @order.errors.add(:base, 'Discount cannot be negative.') if disc.negative?
+    @order.errors.add(:base, 'Extra charges cannot be negative.') if chg.negative?
+    if disc > MAX_BILL_RUPEES || chg > MAX_BILL_RUPEES
+      @order.errors.add(:base, 'Discount and extra charges must each stay below ₹10 crore.')
+    end
+    [['CGST', @order.cgst_rate], ['SGST', @order.sgst_rate]].each do |label, rate|
+      r = Paise.dec!(rate)
+      @order.errors.add(:base, "#{label} cannot be negative.") if r.negative?
+      @order.errors.add(:base, "#{label} cannot exceed #{MAX_TAX_RATE.to_i}%.") if r > MAX_TAX_RATE
+    end
+    return if @order.errors.any?
+
+    if @order.discount_after_tax?
+      cap = subtotal_cents + Paise.percent_of(subtotal_cents, @order.cgst_rate_or_default) +
+            Paise.percent_of(subtotal_cents, @order.sgst_rate_or_default)
+      label = 'the bill total after tax'
+    else
+      cap = subtotal_cents
+      label = 'the bill subtotal'
+    end
+    if Paise.from_rupees(disc) > cap
+      @order.errors.add(:base, "Discount cannot exceed #{label} (₹#{'%.2f' % Paise.rupees(cap)}).")
+    end
+  end
+
+  def check_payment_terms!(pm, pay_cents, raw_values)
+    if raw_values.any?(&:nil?)
+      @order.errors.add(:base, 'Payment, discount, charges and tax rates must be plain numbers.')
+      return
+    end
+    @order.errors.add(:payment_method, 'must be selected') if pm.blank?
+    check_bill_amounts!(@order.subtotal_cents)
+    return if @order.errors.any?
+
+    payable = @order.payable_cents
+    paid = @order.paid_cents
+    if payable < paid
+      @order.errors.add(:base, "These terms bring the bill to ₹#{Paise.rupees(payable).to_i}, below the ₹#{'%.2f' % Paise.rupees(paid)} already received. Reduce the discount.")
+      return
+    end
+
+    due = @order.remaining_cents
+    if pay_cents <= 0
+      @order.errors.add(:base, 'Payment amount must be greater than 0.')
+    elsif pay_cents % 100 != 0
+      @order.errors.add(:base, 'Pay in whole rupees; the bill is rounded off to the rupee.')
+    elsif pay_cents > due
+      @order.errors.add(:base, "Payment cannot exceed the remaining due of ₹#{Paise.rupees(due).to_i}.")
     end
   end
 
@@ -294,22 +368,38 @@ class OrdersController < ApplicationController
       @order.errors.add(:base, 'Add at least one catalogue piece to the bill.')
     end
 
-    seen = []
+    @order.errors.add(:base, 'Discount, extra charges and tax rates must be plain numbers.') if @bill_inputs_invalid
+
+    qty_by_item = Hash.new(0)
+    lines.each do |line|
+      qty_by_item[line[:item].id] += line[:quantity].to_i if line[:item] && line[:numbers_ok]
+    end
+    over_stock = []
     lines.each_with_index do |line, index|
       n = index + 1
       unless line[:item]
         @order.errors.add(:base, "Piece #{n}: choose a catalogue piece.")
         next
       end
-      name = line[:item].name
-      if seen.include?(line[:item].id)
-        @order.errors.add(:base, "#{name} is already on this bill.")
+      unless line[:numbers_ok]
+        @order.errors.add(:base, "Piece #{n}: quantity, weights, rate and charges must be plain numbers.")
+        next
       end
-      seen << line[:item].id
+      if line[:net_weight] > MAX_GRAMS || line[:gross_weight] > MAX_GRAMS
+        @order.errors.add(:base, "Piece #{n}: weight is larger than a bill line can hold.")
+      end
+      if [line[:metal_amount], line[:making_charge], line[:additional_charge] * line[:quantity]].any? { |v| v > MAX_LINE_RUPEES }
+        @order.errors.add(:base, "Piece #{n}: amount is larger than a bill line can hold.")
+      end
+      name = line[:item].name
+      stock = line[:item].quantity.to_i
       if line[:quantity] < 1
         @order.errors.add(:base, "Piece #{n}: quantity must be at least 1.")
-      elsif line[:quantity] > line[:item].quantity.to_i
-        @order.errors.add(:base, "Piece #{n}: qty cannot exceed the #{line[:item].quantity.to_i} pcs remaining of #{name}.")
+      elsif line[:quantity] > stock
+        @order.errors.add(:base, "Piece #{n}: qty cannot exceed the #{stock} pcs remaining of #{name}.")
+      elsif qty_by_item[line[:item].id] > stock && !over_stock.include?(line[:item].id)
+        over_stock << line[:item].id
+        @order.errors.add(:base, "#{name} is on this bill #{qty_by_item[line[:item].id]} times in total, but only #{stock} pcs remain.")
       end
       unless line[:item].sellable?
         if line[:item].archived?
@@ -326,13 +416,24 @@ class OrdersController < ApplicationController
       @order.errors.add(:base, "Piece #{n}: additional charge cannot be negative.") if line[:additional_charge] < 0
     end
 
-    @order.errors.add(:base, 'Discount cannot be negative.') if @order.discount.to_f < 0
-    @order.errors.add(:base, 'Extra charges cannot be negative.') if @order.charges.to_f < 0
-    @order.errors.add(:base, 'Tax rates cannot be negative.') if @order.cgst_rate.to_f < 0 || @order.igst_rate.to_f < 0
+    return if @bill_inputs_invalid
 
-    subtotal = lines.sum { |l| l[:metal_amount] + l[:making_charge] + (l[:additional_charge] * l[:quantity]) }
-    if @order.discount.to_f > subtotal && subtotal >= 0
-      @order.errors.add(:base, 'Discount cannot exceed the bill subtotal.')
+    check_bill_amounts!(lines.select { |l| l[:numbers_ok] }.sum { |l| line_cents(l) })
+  end
+
+  def raise_bill_safely
+    attempts = 0
+    begin
+      attempts += 1
+      raise_bill!
+    rescue ActiveRecord::RecordInvalid => e
+      @order.errors.add(:base, e.record.errors.full_messages.to_sentence)
+      nil
+    rescue ActiveRecord::RecordNotUnique => e
+      clash = e.message.include?('invoice_number')
+      retry if clash && attempts < 4
+      @order.errors.add(:base, clash ? 'Another bill took this invoice number at the same moment. Please submit again.' : 'That phone or email is already on the book. Choose the existing client.')
+      nil
     end
   end
 
@@ -347,19 +448,19 @@ class OrdersController < ApplicationController
       order = Order.new(
         status: 'pending',
         customer: customer,
-        discount: @order.discount.to_f,
-        charges: @order.charges.to_f,
-        cgst_rate: @order.cgst_rate.to_f,
-        igst_rate: @order.igst_rate.to_f,
-        gross_weight: lines.sum { |l| l[:gross_weight] },
-        net_weight: lines.sum { |l| l[:net_weight] }
+        discount: @order.discount,
+        charges: @order.charges,
+        cgst_rate: @order.cgst_rate,
+        sgst_rate: @order.sgst_rate,
+        gross_weight: lines.sum(BigDecimal('0')) { |l| l[:gross_weight] * l[:quantity] },
+        net_weight: lines.sum(BigDecimal('0')) { |l| l[:net_weight] * l[:quantity] }
       )
       order.save!
 
       lines.each do |line|
         order.line_items.create!(
           jewelry_item: line[:item],
-          price_cents: (line[:rate_per_gram] * line[:net_weight] * 100).round,
+          price_cents: Paise.from_rupees(line[:rate_per_gram] * line[:net_weight]),
           quantity: line[:quantity],
           weight: line[:net_weight],
           gross_weight: line[:gross_weight],
@@ -372,11 +473,9 @@ class OrdersController < ApplicationController
         )
       end
 
-      order.update_columns(
-        cgst_cents: order.cgst_amount_cents(order.cgst_rate),
-        igst_cents: order.igst_amount_cents(order.igst_rate)
-      )
-      customer.recompute_balance! if customer.respond_to?(:recompute_balance!)
+      order.line_items.reset
+      order.store_tax_cents!
+      customer.recompute_balance!
       order
     end
   end

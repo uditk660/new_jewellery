@@ -44,6 +44,7 @@
       <table class="bills-table">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Bill</th>
             <th>Client</th>
             <th>Pieces</th>
@@ -54,17 +55,18 @@
           </tr>
         </thead>
         <tbody>
-          <% bills.each do |o| %>
+          <% bills.each_with_index do |o, idx| %>
             <%
               bill = o.bill_breakdown
               client = o.customer
               lines = o.line_items.to_a
-              net = lines.sum { |li| li.net_weight.to_f }
+              net = o.total_net_grams
               piece_names = lines.map { |li| "#{li.jewelry_item&.name || 'Piece'} ×#{li.quantity}" }
               bill_no = o.invoice_number.presence || format('INV-%03d', o.id)
               when_at = o.sale_date.presence || o.created_at.to_date
             %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td>
                 <%= link_to order_path(o), class: 'bill-link' do %>
                   <strong><%= bill_no %></strong>
@@ -185,7 +187,7 @@
   }
   @media (max-width: 800px) {
     .bills-index .bills-stats { width: 100%; }
-    .bills-index .bills-table th:nth-child(3),
-    .bills-index .bills-table td:nth-child(3) { display: none; }
+    .bills-index .bills-table th:nth-child(4),
+    .bills-index .bills-table td:nth-child(4) { display: none; }
   }
 </style>

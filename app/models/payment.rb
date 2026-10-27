@@ -1,6 +1,7 @@
 class Payment < ActiveRecord::Base
   belongs_to :order
   belongs_to :customer, optional: true
+  belongs_to :khata_receipt, optional: true
 
   validates :amount_cents, numericality: { greater_than: 0 }
   before_validation :assign_share_token, on: :create

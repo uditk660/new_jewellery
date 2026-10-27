@@ -88,20 +88,22 @@
       <table class="cat-table">
         <thead>
           <tr>
-            <th>Piece</th>
+            <%= render 'shared/index_serial_th' %>
+            <th class="col-piece">Piece</th>
             <th class="col-status">Status</th>
-            <th>Metal &amp; hallmark</th>
+            <th class="col-metal">Metal &amp; hallmark</th>
             <th class="col-weight"><%= sort_for.call('weight', 'Weight/Each') %></th>
             <th class="col-price"><%= sort_for.call('price', 'Price') %></th>
             <th class="col-tray"><%= sort_for.call('available', 'Tray') %></th>
           </tr>
         </thead>
         <tbody>
-          <% items.each do |item| %>
+          <% items.each_with_index do |item, idx| %>
             <% qty = item.quantity.to_i %>
             <% price = line_price.call(item) %>
             <tr>
-              <td>
+              <%= render 'shared/index_serial_td', position: idx %>
+              <td class="col-piece">
                 <%= link_to jewelry_item_path(item), class: 'piece-link' do %>
                   <span class="gem-dot" aria-hidden="true">💍</span>
                   <span>
@@ -120,7 +122,7 @@
                   <span class="status-pill is-active">Active</span>
                 <% end %>
               </td>
-              <td>
+              <td class="col-metal">
                 <div class="marks">
                   <% if item.metal %><span class="mark"><%= item.metal.name %></span><% end %>
                   <% if item.purity %><span class="mark gold-mark"><%= item.purity.name %></span><% end %>
@@ -149,17 +151,11 @@
       </table>
     </div>
 
-    <% if @page && @per_page && (@total_count.to_i > @per_page) %>
-      <div class="cat-pager">
-        <% if @page > 1 %>
-          <%= link_to '← Previous', jewelry_items_path(request.query_parameters.merge(page: @page - 1)), class: 'atelier-back' %>
-        <% end %>
-        <span>Page <%= @page %></span>
-        <% if (@page * @per_page) < @total_count.to_i %>
-          <%= link_to 'Next →', jewelry_items_path(request.query_parameters.merge(page: @page + 1)), class: 'atelier-back' %>
-        <% end %>
-      </div>
-    <% end %>
+    <%= render 'shared/index_pagination',
+               page: @page,
+               per_page: @per_page,
+               total_count: @total_count,
+               url: ->(n) { jewelry_items_path(request.query_parameters.merge(page: n)) } %>
   <% else %>
     <div class="atelier-form empty">
       <p class="eyebrow"><%= empty_copy[:eyebrow] %></p>
@@ -297,10 +293,10 @@
     font-size: 14px;
     color: #14110f;
   }
-  .catalogue-index .cat-table th:nth-child(1),
-  .catalogue-index .cat-table td:nth-child(1) { width: 32%; }
-  .catalogue-index .cat-table th:nth-child(3),
-  .catalogue-index .cat-table td:nth-child(3) { width: 22%; }
+  .catalogue-index .cat-table th.col-piece,
+  .catalogue-index .cat-table td.col-piece { width: 32%; min-width: 200px; }
+  .catalogue-index .cat-table th.col-metal,
+  .catalogue-index .cat-table td.col-metal { width: 22%; }
   .catalogue-index .cat-table th.col-weight,
   .catalogue-index .cat-table td.col-weight {
     width: 118px;
@@ -442,9 +438,6 @@
   }
   .catalogue-index .stock.in { background: #0b1220; color: #e8d5a3; }
   .catalogue-index .stock.out { background: #f3eee6; color: #6b6258; }
-  .catalogue-index .cat-pager {
-    display: flex; align-items: center; gap: 12px; margin-top: 16px; color: #6b6258; font-size: 13px;
-  }
   .catalogue-index .empty h2 {
     font-family: "Cormorant Garamond", Georgia, serif;
     font-size: 1.6rem; margin: 0 0 8px; font-weight: 600;

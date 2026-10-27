@@ -102,8 +102,8 @@ class JewelryItem < ActiveRecord::Base
     price_cents.to_f / 100.0
   end
 
-  def price=(dollars)
-    self.price_cents = (dollars.to_f * 100).round
+  def price=(rupees)
+    self.price_cents = Paise.from_rupees(rupees)
   end
 
   def purity_price_per_gram
@@ -121,12 +121,18 @@ class JewelryItem < ActiveRecord::Base
   def unit_amount
     rate = effective_price_per_gram
     return 0.0 if rate.nil?
-    (rate.to_f * weight_grams.to_f).round(2)
+    Paise.rupees(unit_cents)
+  end
+
+  def unit_cents
+    rate = effective_price_per_gram
+    return 0 if rate.nil?
+    Paise.from_rupees(Paise.dec!(rate) * Paise.dec!(weight_grams))
   end
 
   # Catalogue price: purity rate × weight (g) × quantity (pcs)
   def catalogue_amount
-    (unit_amount * valuation_quantity).round(2)
+    Paise.rupees(unit_cents * valuation_quantity)
   end
 
   # Tray value at the current board: rate × weight (g) × pieces on tray.
@@ -134,7 +140,7 @@ class JewelryItem < ActiveRecord::Base
     qty = quantity.to_i
     return 0.0 if qty <= 0
 
-    (unit_amount * qty).round(2)
+    Paise.rupees(unit_cents * qty)
   end
 
   def computed_price
@@ -153,7 +159,7 @@ class JewelryItem < ActiveRecord::Base
   end
 
   def apply_calculated_price
-    self.price_cents = (catalogue_amount * 100).round
+    self.price_cents = unit_cents * valuation_quantity
   end
 
   def invoice_hsn

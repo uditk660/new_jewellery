@@ -12,7 +12,7 @@
     <div>
       <p class="eyebrow">Khata</p>
       <h1>Post an entry</h1>
-      <p class="lead">Opening from an old book, a charge, or cash taken on account. Bill receipts still post from the invoice.</p>
+      <p class="lead">Opening from an old book, a charge, or a deposit from the client. A deposit pays pending bills first and prints a receipt.</p>
     </div>
     <%= link_to '← Ledgers', ledgers_path, class: 'atelier-back' %>
   </header>
@@ -52,15 +52,29 @@
 
           <section class="section">
             <h2>2 · Kind &amp; amount</h2>
-            <p class="hint">Opening and charge increase what they owe. Receipt reduces it, including an advance.</p>
+            <p class="hint">Opening and charge increase what they owe. A receipt reduces it, never below zero.</p>
             <div class="row">
               <div class="field">
                 <%= f.label :kind do %>Kind <span class="req">*</span><% end %>
-                <%= f.select :kind, [['Opening (they owe)', 'opening'], ['Charge (debit)', 'debit'], ['Receipt (on account)', 'credit']], {}, { class: 'form-control', id: 'ledger_entry_kind' } %>
+                <%= f.select :kind, [['Opening (they owe)', 'opening'], ['Charge (debit)', 'debit'], ['Receipt (client pays)', 'credit']], {}, { class: 'form-control', id: 'ledger_entry_kind' } %>
               </div>
               <div class="field narrow">
                 <%= f.label :amount do %>Amount ₹ <span class="req">*</span><% end %>
                 <%= f.number_field :amount, value: (@entry.amount_cents.to_i.positive? ? ('%.2f' % @entry.amount) : nil), class: 'form-control', id: 'ledger_entry_amount', min: 0.01, step: 0.01, placeholder: '0.00' %>
+              </div>
+            </div>
+            <div class="row" id="receipt-fields">
+              <div class="field narrow">
+                <label for="payment_method_input">Paid via <span class="req">*</span></label>
+                <select name="payment_method" id="payment_method_input" class="form-control">
+                  <option value="">Select</option>
+                  <% KhataReceipt::METHODS.each do |m| %>
+                    <option value="<%= m %>" <%= 'selected' if @payment_method.to_s == m %>><%= m %></option>
+                  <% end %>
+                </select>
+              </div>
+              <div class="field">
+                <span class="hint" id="receipt-cap" style="display:block;margin-top:26px">A receipt cannot exceed what the client owes. Pending bills are paid first, oldest first.</span>
               </div>
             </div>
           </section>
@@ -95,7 +109,7 @@
         <div class="preview-price" id="preview-amount">₹0.00</div>
         <p class="preview-line" id="preview-due">Outstanding appears here</p>
         <p class="preview-desc" id="preview-note">Select a client and amount to see the resulting khata.</p>
-        <p class="preview-note">This does not raise a bill. Take a bill receipt from the invoice.</p>
+        <p class="preview-note">This does not raise a bill. Every entry opens a printable half-A4 slip.</p>
       </aside>
     </div>
   <% end %>
@@ -121,6 +135,9 @@
   var dueEl = document.getElementById('preview-due');
   var noteEl = document.getElementById('preview-note');
   var submit = document.getElementById('khata-submit');
+  var receiptRow = document.getElementById('receipt-fields');
+  var pmEl = document.getElementById('payment_method_input');
+  var capEl = document.getElementById('receipt-cap');
   var labels = { opening: 'Opening', debit: 'Charge', credit: 'Receipt' };
 
   function paint(){
@@ -128,16 +145,34 @@
     var kind = (kindEl && kindEl.value) || 'opening';
     var amt = parseFloat((amtEl && amtEl.value) || '0') || 0;
     var signed = kind === 'credit' ? -amt : amt;
+    var isReceipt = kind === 'credit';
+    var owed = client ? Math.max(Number(client.outstanding || 0), 0) : 0;
+    if(receiptRow) receiptRow.style.display = isReceipt ? '' : 'none';
+    if(pmEl) pmEl.required = isReceipt;
+    if(amtEl){
+      if(isReceipt && client) amtEl.max = owed.toFixed(2); else amtEl.removeAttribute('max');
+    }
     if(nameEl) nameEl.textContent = client ? client.name : 'Choose a client';
     if(kindChip) kindChip.textContent = labels[kind] || kind;
     if(amtPreview) amtPreview.textContent = '₹' + amt.toFixed(2);
-    if(submit) submit.disabled = !(client && amt > 0);
+    var over = isReceipt && client && amt > owed + 0.001;
+    if(capEl && isReceipt){
+      if(!client) capEl.textContent = 'A receipt cannot exceed what the client owes. Pending bills are paid first, oldest first.';
+      else if(owed <= 0) capEl.textContent = 'This khata is settled. There is nothing to receive.';
+      else if(over) capEl.textContent = 'Too much: the most this client owes is ₹' + owed.toFixed(2) + '.';
+      else capEl.textContent = 'Up to ₹' + owed.toFixed(2) + '. Pending bills are paid first, oldest first.';
+    }
+    if(submit){
+      submit.disabled = !(client && amt > 0) || over || (isReceipt && owed <= 0);
+      submit.value = isReceipt ? 'Receive & print receipt' : 'Post & print slip';
+    }
     if(!client){
       if(dueEl) dueEl.textContent = 'Outstanding appears here';
       if(noteEl) noteEl.textContent = 'Select a client and amount to see the resulting khata.';
       return;
     }
     var next = Number(client.outstanding || 0) + signed;
+    if(isReceipt && next < 0) next = 0;
     if(dueEl){
       if(next > 0) dueEl.textContent = 'Khata will read due ₹' + next.toFixed(2);
       else if(next < 0) dueEl.textContent = 'Khata will hold advance ₹' + Math.abs(next).toFixed(2);

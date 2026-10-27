@@ -1,0 +1,22 @@
+<%= render 'shared/atelier_styles' %>
+
+<div class="atelier-page est-page" id="estimate-new">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Rough estimate</p>
+      <h1>Make an estimate</h1>
+      <p class="lead">Pieces by net weight and tunch, old metal taken in, gold bhav and cash. Fine and amount balance to the milligram and the paisa.</p>
+    </div>
+    <%= link_to '← Estimates', estimates_path, class: 'atelier-back' %>
+  </header>
+
+  <div class="steps" aria-hidden="true">
+    <span class="step"><b>1</b> Client</span>
+    <span class="step"><b>2</b> Pieces</span>
+    <span class="step"><b>3</b> Previous balance</span>
+    <span class="step"><b>4</b> Settlement</span>
+    <span class="step"><b>5</b> Print</span>
+  </div>
+
+  <%= render 'form' %>
+</div>

@@ -1,0 +1,135 @@
+<%= render 'shared/atelier_styles' %>
+
+<%
+  rows = @estimates || []
+  fine_label = ->(mg) { mg.to_i.zero? ? 'Nil' : format('%.3f g', Estimate.mg_to_g(mg)) }
+%>
+
+<div class="atelier-page est-book" id="estimates-book">
+  <header class="atelier-hero">
+    <div>
+      <p class="eyebrow">Sales</p>
+      <h1>Rough estimates</h1>
+      <p class="lead">Working slips in fine gold and rupees: pieces at tunch with labour, old metal, bhav and cash. They do not touch stock or the khata.</p>
+    </div>
+    <%= link_to 'Make an estimate', new_estimate_path, class: 'btn-gold' %>
+  </header>
+
+  <% if notice.present? %><p class="est-notice"><%= notice %></p><% end %>
+
+  <div class="cat-toolbar atelier-form">
+    <%= form_tag estimates_path, method: :get, class: 'est-search' do %>
+      <%= text_field_tag :q, @q, class: 'form-control', placeholder: 'Search name, place, mobile or estimate no.' %>
+      <button type="submit" class="atelier-back">Search</button>
+      <% if @q.present? %><%= link_to 'Clear', estimates_path, class: 'atelier-back' %><% end %>
+    <% end %>
+    <div class="est-stats">
+      <div><span>On the book</span><strong><%= @total_count.to_i %></strong></div>
+      <div><span>Balance open</span><strong><%= @open_count.to_i %></strong></div>
+    </div>
+  </div>
+
+  <% if rows.any? %>
+    <div class="est-table-wrap">
+      <table class="est-table">
+        <thead>
+          <tr>
+            <%= render 'shared/index_serial_th' %>
+            <th>No. &amp; date</th>
+            <th>Client</th>
+            <th class="num">Net wt</th>
+            <th class="num">Fine</th>
+            <th class="num">Labour</th>
+            <th class="num">Closing</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.each_with_index do |e, idx| %>
+            <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
+              <td>
+                <%= link_to estimate_path(e), class: 'when-link', data: { turbolinks: false } do %>
+                  <strong>No. <%= e.estimate_no %></strong>
+                  <span class="sub"><%= e.estimate_date.strftime('%d %b %Y') %></span>
+                <% end %>
+              </td>
+              <td>
+                <strong class="piece"><%= e.party_name %></strong>
+                <span class="sub"><%= [e.party_place.presence, e.party_phone.presence].compact.join(' · ').presence || (e.customer ? 'In client book' : 'Walk-in') %></span>
+              </td>
+              <td class="num"><%= format('%.3f g', Estimate.mg_to_g(e.net_mg)) %></td>
+              <td class="num"><%= format('%.3f g', Estimate.mg_to_g(e.fine_mg)) %></td>
+              <td class="num gold"><%= format_rupees(Paise.rupees(e.amount_cents)) %></td>
+              <td class="num">
+                <% if e.settled? %>
+                  <span class="status-pill is-settled">Nil</span>
+                <% else %>
+                  <span class="close-fine"><%= fine_label.call(e.closing_fine_mg) %></span>
+                  <span class="sub"><%= e.closing_amount_cents.to_i.zero? ? 'Nil' : format_rupees(Paise.rupees(e.closing_amount_cents)) %></span>
+                <% end %>
+              </td>
+              <td class="actions">
+                <%= link_to 'Print', estimate_path(e), class: 'atelier-back', data: { turbolinks: false } %>
+                <%= link_to 'Edit', edit_estimate_path(e), class: 'atelier-back' %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    <%= render 'shared/index_pagination',
+               page: @page,
+               per_page: @per_page,
+               total_count: @total_count,
+               url: ->(n) { estimates_path(q: @q.presence, page: n) } %>
+  <% else %>
+    <div class="atelier-form empty">
+      <p class="eyebrow">Rough estimates</p>
+      <h2><%= @q.present? ? 'No matching estimates' : 'No estimates yet' %></h2>
+      <p class="hint">
+        <%= @q.present? ? "Nothing matches “#{@q}”." : 'Write the first rough estimate for a client: pieces at tunch, old metal, bhav and cash.' %>
+      </p>
+      <div class="actions" style="margin-top:16px">
+        <% if @q.present? %>
+          <%= link_to 'Clear search', estimates_path, class: 'atelier-back' %>
+        <% else %>
+          <%= link_to 'Make an estimate', new_estimate_path, class: 'btn-gold' %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .container:has(.est-book) { max-width: 1240px; }
+  .est-book a.btn-gold { text-decoration: none; display: inline-flex; align-items: center; }
+  .est-book .est-notice { margin: 0 0 14px; padding: 10px 14px; border-radius: 12px; background: rgba(63,93,58,0.08); border: 1px solid rgba(63,93,58,0.3); color: #3f5d3a; font-size: 14px; }
+  .est-book .cat-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .est-book .est-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1; }
+  .est-book .est-search .form-control { max-width: 420px; }
+  .est-book .est-stats { display: flex; gap: 22px; color: #6b6258; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .est-book .est-stats strong { display: block; font-size: 1.2rem; color: #0b1220; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+  .est-book .est-table-wrap { background: #fffaf3; border: 1px solid rgba(201,162,39,0.28); border-radius: 18px; overflow: auto; box-shadow: 0 12px 28px rgba(20,17,15,0.05); }
+  .est-book .est-table { width: 100%; border-collapse: collapse; min-width: 860px; }
+  .est-book .est-table th { text-align: left; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6258; font-weight: 700; padding: 14px 16px; border-bottom: 1px solid rgba(201,162,39,0.22); background: #f7f1e8; }
+  .est-book .est-table td { padding: 14px 16px; border-bottom: 1px solid rgba(201,162,39,0.12); vertical-align: middle; font-size: 14px; color: #14110f; }
+  .est-book .est-table tbody tr:last-child td { border-bottom: 0; }
+  .est-book .est-table tbody tr:hover { background: rgba(232,213,163,0.22); }
+  .est-book .when-link { text-decoration: none; color: inherit; display: inline-block; }
+  .est-book .when-link strong { display: block; font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.15rem; font-weight: 600; color: #0b1220; }
+  .est-book .sub { display: block; margin-top: 2px; font-size: 12px; color: #6b6258; }
+  .est-book .piece { font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.1rem; font-weight: 600; }
+  .est-book .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .est-book th.num { text-align: right; }
+  .est-book .num.gold { color: #c9a227; font-weight: 700; }
+  .est-book .close-fine { font-weight: 700; color: #8a5a12; }
+  .est-book .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+  .est-book .status-pill.is-settled { color: #3f5d3a; border: 1px solid rgba(63,93,58,0.35); background: rgba(63,93,58,0.08); }
+  .est-book td.actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .est-book .empty h2 { font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.6rem; margin: 6px 0 8px; font-weight: 600; }
+  @media (max-width: 800px) {
+    .est-book .est-table th:nth-child(4), .est-book .est-table td:nth-child(4),
+    .est-book .est-table th:nth-child(6), .est-book .est-table td:nth-child(6) { display: none; }
+  }
+</style>

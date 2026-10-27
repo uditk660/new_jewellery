@@ -100,7 +100,7 @@
       </p>
       <p>
         GST of <strong><%= format_rupees(book.gst) %></strong> was written on those bills
-        (CGST <%= format_rupees(book.cgst) %>, IGST <%= format_rupees(book.igst) %>) and sits for government.
+        (CGST <%= format_rupees(book.cgst) %>, SGST <%= format_rupees(book.sgst) %>) and sits for government.
         Cash and transfers taken at the desk in the same dates came to <strong><%= format_rupees(payments[:total]) %></strong>
         across <%= word.call(payments[:count], 'receipt', 'receipts') %>.
         Still open on these invoices: <strong><%= format_rupees(book.outstanding) %></strong>.
@@ -241,7 +241,7 @@
         <h2>GST on bills</h2>
         <ul class="report-facts">
           <li><span>CGST</span><b><%= format_rupees(book.cgst) %></b></li>
-          <li><span>IGST</span><b><%= format_rupees(book.igst) %></b></li>
+          <li><span>SGST</span><b><%= format_rupees(book.sgst) %></b></li>
           <li><span>Held for government</span><b class="gold"><%= format_rupees(book.gst) %></b></li>
         </ul>
       </div>
@@ -299,6 +299,7 @@
       <table class="stock-table">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Category</th>
             <th>Metal</th>
             <th class="num">Pcs</th>
@@ -308,8 +309,9 @@
           </tr>
         </thead>
         <tbody>
-          <% categories.each do |row| %>
+          <% categories.each_with_index do |row, idx| %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td><strong><%= row[:name] %></strong></td>
               <td><%= row[:metal].presence || '—' %></td>
               <td class="num"><%= row[:pcs] %></td>
@@ -331,6 +333,7 @@
       <table class="stock-table">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Piece</th>
             <th>Hallmark</th>
             <th class="num">Pcs</th>
@@ -340,8 +343,9 @@
           </tr>
         </thead>
         <tbody>
-          <% pieces.each do |row| %>
+          <% pieces.each_with_index do |row, idx| %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td>
                 <% if row[:item] %>
                   <%= link_to jewelry_item_path(row[:item]), class: 'piece-link' do %>
@@ -372,6 +376,7 @@
       <table class="stock-table">
         <thead>
           <tr>
+            <%= render 'shared/index_serial_th' %>
             <th>Client</th>
             <th class="num">Bills</th>
             <th class="num">Net</th>
@@ -380,8 +385,9 @@
           </tr>
         </thead>
         <tbody>
-          <% clients.each do |row| %>
+          <% clients.each_with_index do |row, idx| %>
             <tr>
+              <%= render 'shared/index_serial_td', position: idx %>
               <td>
                 <% if row[:client] %>
                   <%= link_to customer_path(row[:client]), class: 'piece-link' do %>

@@ -117,16 +117,16 @@ class ProfitLoss
     slices.sum { |row| row[:cgst].to_f }
   end
 
-  def igst
-    slices.sum { |row| row[:igst].to_f }
+  def sgst
+    slices.sum { |row| row[:sgst].to_f }
   end
 
   def taxable
-    metal + making + extra + charges - discount
+    slices.sum { |row| row[:taxable] }
   end
 
   def bill_total
-    taxable + gst
+    slices.sum { |row| row[:total] }
   end
 
   def house_result
@@ -247,10 +247,10 @@ class ProfitLoss
       { kind: 'plus', label: 'Metal at the board', amount: metal, note: "#{format('%.2f', grams)} g net · board ₹/g on the bill. This recovers metal; it is not house profit." },
       { kind: 'plus', label: 'Making', amount: making, note: 'Labour and house margin written on each piece.' },
       { kind: 'plus', label: 'Stones & extras', amount: extra, note: 'Per-piece extras × quantity.' },
-      { kind: 'plus', label: 'Bill charges', amount: charges, note: 'Any extra written on the invoice, not on a line.' },
-      { kind: 'minus', label: 'Discounts given', amount: discount, note: 'Courtesy taken off the taxable amount.' },
-      { kind: 'subtotal', label: 'Taxable on bills', amount: taxable, note: 'What GST is computed on.' },
+      { kind: 'subtotal', label: 'Taxable on bills', amount: taxable, note: 'What CGST + SGST is computed on.' },
       { kind: 'pass', label: 'GST collected', amount: gst, note: 'Held for government. Not kept by the house.' },
+      { kind: 'minus', label: 'Discounts given', amount: discount, note: 'Courtesy taken off the bill total after tax.' },
+      { kind: 'plus', label: 'Bill charges', amount: charges, note: 'Any extra added on the total after tax, not on a line.' },
       { kind: 'subtotal', label: 'Bill total', amount: bill_total, note: "#{bill_count} #{bill_count == 1 ? 'invoice' : 'invoices'} · #{pieces} #{pieces == 1 ? 'piece' : 'pieces'}." },
       { kind: 'minus', label: 'Cash refunds', amount: cash_refunds, note: metal_id.present? ? 'Refunds stay on the full-house book when a metal is chosen.' : 'Cash returns taken in this window.' },
       { kind: 'result', label: 'House result', amount: house_result, note: 'Making, extras and charges after discounts and cash refunds.' }
@@ -274,8 +274,8 @@ class ProfitLoss
     discount_amt = order.discount.to_f * ratio
     charges_amt = order.charges.to_f * ratio
     cgst_amt = breakdown[:cgst].to_f * ratio
-    igst_amt = breakdown[:igst].to_f * ratio
-    gst_amt = cgst_amt + igst_amt
+    sgst_amt = breakdown[:sgst].to_f * ratio
+    gst_amt = cgst_amt + sgst_amt
     house_amt = making_amt + extra_amt + charges_amt - discount_amt
     {
       id: order.id,
@@ -292,9 +292,9 @@ class ProfitLoss
       charges: charges_amt,
       discount: discount_amt,
       cgst: cgst_amt,
-      igst: igst_amt,
+      sgst: sgst_amt,
       gst: gst_amt,
-      taxable: metal_amt + making_amt + extra_amt + charges_amt - discount_amt,
+      taxable: metal_amt + making_amt + extra_amt + (breakdown[:discount_after_tax] ? 0 : charges_amt - discount_amt),
       total: metal_amt + making_amt + extra_amt + charges_amt - discount_amt + gst_amt,
       house: house_amt,
       remaining: order.remaining_amount.to_f * ratio
