@@ -367,26 +367,37 @@
       letter-spacing: 0.01em;
     }
     .sum .grand {
-      margin-top: 2px;
-      padding: 12px 8px 8px 0;
-      border-bottom: 0;
-      border-top: 1.5px solid var(--gold);
+      margin: 6px 2px 4px 0;
+      padding: 10px 12px;
+      border: 1px solid #c9a227;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #e8d5a3, #c9a227);
+      align-items: center;
     }
-    .sheet.is-packed .sum .grand { padding: 10px 6px 6px 0; }
+    .sheet.is-packed .sum .grand { padding: 8px 10px; }
     .sum .grand span {
       font-size: 11px;
       letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: var(--gold);
-      font-weight: 700;
+      color: #0b1220;
+      font-weight: 800;
     }
     .sum .grand b {
       font-family: "Cormorant Garamond", Georgia, serif;
-      font-size: 24px;
-      color: var(--gold);
-      font-weight: 600;
+      font-size: 26px;
+      color: #0b1220;
+      font-weight: 700;
+      font-variant-numeric: lining-nums tabular-nums;
+      font-feature-settings: "lnum" 1, "tnum" 1;
     }
-    .sheet.is-packed .sum .grand b { font-size: 20px; }
+    .sum .last { border-bottom: 0; }
+    .sum .paid span { color: #3f5d3a; font-weight: 700; }
+    .sum .paid b { color: #3f5d3a; font-weight: 800; }
+    .sum .remain span { color: #6e2430; font-weight: 700; }
+    .sum .remain b { color: #6e2430; font-weight: 800; }
+    .sum .remain.is-settled span,
+    .sum .remain.is-settled b { color: #3f5d3a; }
+    .sheet.is-packed .sum .grand b { font-size: 22px; }
     .bank {
       margin-top: 12px;
       font-size: 11px;
@@ -441,6 +452,12 @@
       .meta { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) !important; }
       .foot-grid { grid-template-columns: 1.1fr 0.9fr !important; }
       .sum { background: #fff !important; }
+      .sum .grand {
+        background: linear-gradient(90deg, #e8d5a3, #c9a227) !important;
+        border-color: #c9a227 !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
       table.pieces th { background: #fff !important; color: #0b1220 !important; }
       a.receipt-link { color: #0b1220; text-decoration: underline; font-weight: 700; }
     }
@@ -622,19 +639,17 @@
           <div><span>Extra charges</span><b>+<%= format_rupees(bill[:charges]) %></b></div>
         <% else %>
           <div><span>Subtotal</span><b><%= format_rupees(bill[:subtotal]) %></b></div>
-          <div><span>Discount</span><b><%= format_rupees(bill[:discount]) %></b></div>
-          <div><span>Extra charges</span><b><%= format_rupees(bill[:charges]) %></b></div>
-          <div><span>Taxable</span><b><%= format_rupees(bill[:taxable]) %></b></div>
+          <div><span>Discount</span><b>−<%= format_rupees(bill[:discount]) %></b></div>
+          <div><span>Extra charges</span><b>+<%= format_rupees(bill[:charges]) %></b></div>
+          <div><span>Taxable value</span><b><%= format_rupees(bill[:taxable]) %></b></div>
           <div><span>CGST <%= '%.2f' % bill[:cgst_rate] %>%</span><b><%= format_rupees(bill[:cgst]) %></b></div>
           <div><span>SGST <%= '%.2f' % bill[:sgst_rate] %>%</span><b><%= format_rupees(bill[:sgst]) %></b></div>
         <% end %>
-        <div><span>Paid</span><b><%= format_rupees(bill[:paid]) %></b></div>
-        <div><span>Remaining</span><b><%= format_rupees(bill[:remaining]) %></b></div>
-        <% if bill[:round_off_cents].nonzero? %>
-          <div><span>Bill total</span><b><%= format_rupees(bill[:total]) %></b></div>
-          <div><span>Round off</span><b><%= bill[:round_off_cents].negative? ? '−' : '+' %><%= format_rupees(bill[:round_off_cents].abs / 100.0) %></b></div>
-        <% end %>
+        <div><span>Bill total</span><b><%= format_rupees(bill[:total]) %></b></div>
+        <div><span>Round off</span><b><%= bill[:round_off_cents].negative? ? '−' : '+' %><%= format_rupees(bill[:round_off_cents].abs / 100.0) %></b></div>
         <div class="grand"><span>Net payable</span><b><%= format_rupees(bill[:payable]) %></b></div>
+        <div class="paid"><span>Paid</span><b><%= format_rupees(bill[:paid]) %></b></div>
+        <div class="remain last <%= 'is-settled' if bill[:remaining_cents].to_i.zero? %>"><span>Remaining</span><b><%= format_rupees(bill[:remaining]) %></b></div>
       </aside>
     </div>
 

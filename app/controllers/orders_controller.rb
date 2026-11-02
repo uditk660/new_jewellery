@@ -265,8 +265,8 @@ class OrdersController < ApplicationController
         making_charge: making,
         additional_charge: additional,
         metal_amount: metal,
-        hsn: raw[:hsn].presence || item&.invoice_hsn,
-        huid: raw[:huid].presence || item&.sku
+        hsn: raw[:hsn].to_s.strip.presence || item&.invoice_hsn,
+        huid: raw[:huid].to_s.strip.presence || item&.sku
       }
     end
   end

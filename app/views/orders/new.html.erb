@@ -109,7 +109,7 @@
         <section class="atelier-form" style="margin-top:16px">
           <div class="section">
             <h2>Catalogue pieces</h2>
-            <p class="hint">Each row is one piece. Qty, net weight and ₹/g on the last line must be entered before you can add another. If qty is more than remaining stock, a message will appear. Gross cannot be lighter than net.</p>
+            <p class="hint">Each card is one piece. HUID and HSN fill from the catalogue and can be changed for this bill. Enter qty, net weight and rate before adding another. Gross cannot be lighter than net.</p>
             <div id="piece-rows"></div>
             <% if @items.any? %>
               <button type="button" class="atelier-back" id="add-piece">+ Add another piece</button>
@@ -183,7 +183,8 @@
 </div>
 
 <style>
-  .sale-desk .atelier-grid { grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.85fr); }
+  .container:has(.sale-desk) { max-width: 1280px; }
+  .sale-desk .atelier-grid { grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.8fr); }
   .sale-desk input[type=number]::-webkit-outer-spin-button,
   .sale-desk input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .sale-desk input[type=number] { -moz-appearance: textfield; }
@@ -223,18 +224,37 @@
   .sale-desk .client-chip span { color: #6b6258; font-size: 13px; }
   .sale-desk .client-chip .atelier-back { margin-left: auto; }
   .sale-desk .piece-card {
-    border: 1px solid rgba(201,162,39,0.22); border-radius: 14px; padding: 14px;
-    background: #fff; margin-bottom: 12px;
+    border: 1px solid rgba(201,162,39,0.28); border-radius: 16px; padding: 14px 16px 12px;
+    background: #fff; margin-bottom: 12px; min-width: 0; overflow: hidden;
   }
-  .sale-desk .piece-top { display: flex; gap: 10px; align-items: flex-start; }
-  .sale-desk .piece-top .field { flex: 1; }
-  .sale-desk .piece-meta { margin: 8px 0 0; color: #6b6258; font-size: 12px; }
-  .sale-desk .piece-grid {
-    display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 12px;
+  .sale-desk .piece-head {
+    display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(96px, 132px) minmax(72px, 96px) auto;
+    gap: 10px; align-items: start;
+  }
+  .sale-desk .piece-no {
+    width: 28px; height: 28px; border-radius: 50%; margin-top: 28px;
+    background: #0b1220; color: #e8d5a3; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .sale-desk .piece-remove { margin-top: 24px; }
+  .sale-desk .piece-meta { margin: 6px 0 0; color: #6b6258; font-size: 12px; }
+  .sale-desk .piece-metrics {
+    display: grid; gap: 10px; margin-top: 12px; align-items: end;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .sale-desk .piece-metrics .form-control { padding: 9px 10px; }
+  .sale-desk .piece-foot {
+    display: flex; justify-content: flex-end; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(201,162,39,0.22);
+  }
+  .sale-desk .piece-total-label {
+    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #6b6258; font-weight: 700;
   }
   .sale-desk .piece-total {
-    margin-top: 10px; text-align: right; color: #c9a227; font-weight: 700;
-    font-variant-numeric: tabular-nums;
+    color: #c9a227; font-weight: 700; text-align: right; min-width: 0; max-width: 100%;
+    font-family: "Cormorant Garamond", Georgia, serif; font-size: 1.35rem; line-height: 1.2;
+    font-variant-numeric: lining-nums tabular-nums; font-feature-settings: "lnum" 1, "tnum" 1;
   }
   .sale-desk .qty-popup {
     position: fixed; inset: 0; z-index: 80;
@@ -281,8 +301,14 @@
   .sale-desk .actions .btn-gold,
   .sale-desk button.atelier-back,
   .sale-desk .client-chip .atelier-back { width: auto; }
+  @media (max-width: 1100px) {
+    .sale-desk .atelier-grid { grid-template-columns: 1fr; }
+    .sale-desk .preview { position: static; }
+  }
   @media (max-width: 880px) {
-    .sale-desk .piece-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sale-desk .piece-head { grid-template-columns: 28px minmax(0, 1fr) auto; }
+    .sale-desk .piece-huid-field, .sale-desk .piece-hsn-field { grid-column: 2; }
+    .sale-desk .piece-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
 </style>
 
@@ -364,7 +390,7 @@
     }
 
     function refreshSelects(){
-      wrap.querySelectorAll('.piece-card').forEach(function(card){
+      wrap.querySelectorAll('.piece-card').forEach(function(card, i){
         var sel = card.querySelector('.piece-id');
         var current = sel.value;
         sel.innerHTML = optionHtml(current, card);
@@ -372,8 +398,10 @@
         var it = itemById(current);
         var meta = card.querySelector('.piece-meta');
         if(it && meta){
-          meta.textContent = [it.category, 'SKU ' + (it.sku || '—'), it.hsn ? ('HSN ' + it.hsn) : null, 'up to ' + leftFor(it, card) + ' pcs on this line'].filter(Boolean).join(' · ');
+          meta.textContent = [it.category, 'up to ' + leftFor(it, card) + ' pcs on this line'].filter(Boolean).join(' · ');
         }
+        var no = card.querySelector('.piece-no');
+        if(no) no.textContent = i + 1;
       });
       refreshAddButton();
     }
@@ -412,25 +440,29 @@
       var card = document.createElement('div');
       card.className = 'piece-card';
       card.innerHTML =
-        '<div class="piece-top">'+
+        '<div class="piece-head">'+
+          '<span class="piece-no">1</span>'+
           '<div class="field">'+
-            '<label>Piece <span class="req">*</span></label>'+
-            '<select name="line_items[][jewelry_item_id]" class="form-control piece-id"></select>'+
+            '<label>Item <span class="req">*</span></label>'+
+            '<select name="line_items[][jewelry_item_id]" class="form-control piece-id" aria-label="Item"></select>'+
             '<p class="piece-meta">&nbsp;</p>'+
-            '<input type="hidden" name="line_items[][hsn]" class="piece-hsn">'+
-            '<input type="hidden" name="line_items[][huid]" class="piece-huid">'+
           '</div>'+
+          '<div class="field piece-huid-field"><label>HUID</label><input type="text" name="line_items[][huid]" class="form-control piece-huid" maxlength="16" autocomplete="off" placeholder="HUID" aria-label="HUID"></div>'+
+          '<div class="field piece-hsn-field"><label>HSN</label><input type="text" name="line_items[][hsn]" class="form-control piece-hsn" maxlength="8" autocomplete="off" placeholder="7113" aria-label="HSN"></div>'+
           '<button type="button" class="atelier-back piece-remove">Remove</button>'+
         '</div>'+
-        '<div class="piece-grid">'+
-          '<div class="field"><label>Qty <span class="req">*</span></label><input type="text" name="line_items[][quantity]" class="form-control piece-qty" inputmode="numeric" autocomplete="off" value="1"></div>'+
-          '<div class="field"><label>Gross (g)</label><input type="number" name="line_items[][gross_weight]" class="form-control piece-gross" min="0" step="0.01"></div>'+
-          '<div class="field"><label>Net (g) <span class="req">*</span></label><input type="number" name="line_items[][net_weight]" class="form-control piece-net" min="0" step="0.01"></div>'+
-          '<div class="field"><label>\u20B9 / g <span class="req">*</span></label><input type="number" name="line_items[][rate_per_gram]" class="form-control piece-rate" min="0" step="0.01"></div>'+
-          '<div class="field"><label>Making %</label><input type="number" name="line_items[][making_charge_percent]" class="form-control piece-making" min="0" step="0.01" value="0"></div>'+
-          '<div class="field"><label>Add. \u20B9 / pc</label><input type="number" name="line_items[][additional_charge]" class="form-control piece-add" min="0" step="0.01" value="0"></div>'+
+        '<div class="piece-metrics">'+
+          '<div class="field"><label>Qty <span class="req">*</span></label><input type="text" name="line_items[][quantity]" class="form-control piece-qty" inputmode="numeric" autocomplete="off" value="1" aria-label="Qty"></div>'+
+          '<div class="field"><label>Gross (g)</label><input type="number" name="line_items[][gross_weight]" class="form-control piece-gross" min="0" step="0.01" aria-label="Gross (g)"></div>'+
+          '<div class="field"><label>Net (g) <span class="req">*</span></label><input type="number" name="line_items[][net_weight]" class="form-control piece-net" min="0" step="0.01" aria-label="Net (g)"></div>'+
+          '<div class="field"><label>Rate</label><input type="number" name="line_items[][rate_per_gram]" class="form-control piece-rate" min="0" step="0.01" aria-label="Rate ₹ per gram" title="₹ per gram"></div>'+
+          '<div class="field"><label>Making %</label><input type="number" name="line_items[][making_charge_percent]" class="form-control piece-making" min="0" step="0.01" value="0" aria-label="Making %"></div>'+
+          '<div class="field"><label>Add.</label><input type="number" name="line_items[][additional_charge]" class="form-control piece-add" min="0" step="0.01" value="0" aria-label="Additional ₹ per piece" title="₹ per piece"></div>'+
         '</div>'+
-        '<div class="piece-total">Line total \u20B90.00</div>';
+        '<div class="piece-foot">'+
+          '<span class="piece-total-label">Line total</span>'+
+          '<div class="piece-total">\u20B90.00</div>'+
+        '</div>';
       wrap.appendChild(card);
       var sel = card.querySelector('.piece-id');
       sel.innerHTML = optionHtml('', card);
@@ -449,6 +481,8 @@
       card.querySelector('.piece-rate').value = data.rate_per_gram || '';
       card.querySelector('.piece-making').value = data.making_charge_percent || 0;
       card.querySelector('.piece-add').value = data.additional_charge || 0;
+      card.querySelector('.piece-huid').value = data.huid || '';
+      card.querySelector('.piece-hsn').value = data.hsn || '';
     }
 
     function applyItem(card, it, data){
@@ -466,10 +500,10 @@
       card.querySelector('.piece-rate').value = data.rate_per_gram != null && data.rate_per_gram !== '' ? data.rate_per_gram : (it.price_per_gram ? Number(it.price_per_gram).toFixed(2) : '');
       card.querySelector('.piece-making').value = data.making_charge_percent != null && data.making_charge_percent !== '' ? data.making_charge_percent : Number(it.making_percent || 0).toFixed(2);
       card.querySelector('.piece-add').value = data.additional_charge != null && data.additional_charge !== '' ? data.additional_charge : 0;
-      card.querySelector('.piece-hsn').value = it.hsn || '';
-      card.querySelector('.piece-huid').value = it.sku || '';
+      card.querySelector('.piece-huid').value = Object.prototype.hasOwnProperty.call(data, 'huid') ? (data.huid || '') : (it.sku || '');
+      card.querySelector('.piece-hsn').value = Object.prototype.hasOwnProperty.call(data, 'hsn') ? (data.hsn || '') : (it.hsn || '');
       if(meta){
-        meta.textContent = [it.category, 'SKU ' + (it.sku || '—'), it.hsn ? ('HSN ' + it.hsn) : null, it.quantity + ' pcs remaining'].filter(Boolean).join(' · ');
+        meta.textContent = [it.category, it.quantity + ' pcs remaining'].filter(Boolean).join(' · ');
       }
     }
 
@@ -626,10 +660,12 @@
       var html = '';
       cards.forEach(function(card){
         var l = lineAmount(card);
-        card.querySelector('.piece-total').textContent = 'Line total ' + money(l.total);
+        card.querySelector('.piece-total').textContent = money(l.total);
         subtotalP += l.totalP;
         if(l.it){
-          html += '<div class="preview-line-row"><span>'+l.it.name+' · '+l.qty+' × '+l.net.toFixed(2)+' g</span><strong>'+money(l.total)+'</strong></div>';
+          var huid = (card.querySelector('.piece-huid').value || '').trim();
+          var hsn = (card.querySelector('.piece-hsn').value || '').trim();
+          html += '<div class="preview-line-row"><span>'+l.it.name+' · '+l.qty+' × '+l.net.toFixed(2)+' g'+(huid ? ' · HUID '+huid : '')+(hsn ? ' · HSN '+hsn : '')+'</span><strong>'+money(l.total)+'</strong></div>';
         }
       });
       var t = billTerms(subtotalP);
