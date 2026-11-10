@@ -116,4 +116,10 @@ class OrderTest < Minitest::Test
     assert_equal 0, order.paid_cents
     assert_equal order.total_cents, order.remaining_cents
   end
+
+  def test_making_percent_is_making_over_metal
+    order = bill
+    add_line(order, rate: 1000, net: 10, making: 1200)
+    assert_in_delta 12.0, order.line_items.first.making_percent, 0.0001
+  end
 end

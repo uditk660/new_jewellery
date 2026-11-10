@@ -203,7 +203,7 @@ class OrdersController < ApplicationController
              []
            end
     rows.map do |row|
-      row = row.permit(:jewelry_item_id, :quantity, :gross_weight, :net_weight, :rate_per_gram, :making_charge_percent, :additional_charge, :hsn, :huid) if row.respond_to?(:permit)
+      row = row.permit(:jewelry_item_id, :quantity, :gross_weight, :net_weight, :rate_per_gram, :making_charge_percent, :making_value, :making_mode, :additional_charge, :hsn, :huid) if row.respond_to?(:permit)
       row.to_h
     end
   end
@@ -242,18 +242,26 @@ class OrdersController < ApplicationController
       net = Paise.dec(raw[:net_weight])
       gross = raw[:gross_weight].present? ? Paise.dec(raw[:gross_weight]) : net
       rate = Paise.dec(raw[:rate_per_gram])
-      making_pct = raw[:making_charge_percent].present? ? Paise.dec(raw[:making_charge_percent]) : BigDecimal('0')
+      making_raw = raw[:making_value].presence || raw[:making_charge_percent]
+      making_val = making_raw.present? ? Paise.dec(making_raw) : BigDecimal('0')
       additional = raw[:additional_charge].present? ? Paise.dec(raw[:additional_charge]) : BigDecimal('0')
-      numbers_ok = [qty, net, gross, rate, making_pct, additional].none?(&:nil?)
+      rupees_making = raw[:making_mode].to_s == 'rupees'
+      numbers_ok = [qty, net, gross, rate, making_val, additional].none?(&:nil?)
 
       qty ||= 0
       net = Paise.round2(net)
       gross = Paise.round2(gross)
       rate = Paise.round2(rate)
       additional = Paise.round2(additional)
-      making_pct = Paise.dec!(making_pct)
+      making_val = Paise.dec!(making_val)
       metal = (rate * net * qty).round(2, BigDecimal::ROUND_HALF_UP)
-      making = (metal * making_pct / 100).round(2, BigDecimal::ROUND_HALF_UP)
+      if rupees_making
+        making = Paise.round2(making_val)
+        making_pct = metal.positive? ? (making * 100 / metal).round(4, BigDecimal::ROUND_HALF_UP) : BigDecimal('0')
+      else
+        making_pct = making_val
+        making = (metal * making_pct / 100).round(2, BigDecimal::ROUND_HALF_UP)
+      end
       {
         item: item,
         numbers_ok: numbers_ok,

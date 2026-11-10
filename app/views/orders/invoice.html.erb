@@ -568,7 +568,7 @@
               <span class="sub formula">
                 Gross <%= '%.2f' % li.gross_weight.to_f %> g
                 · Metal <%= format_rupees(li.metal_amount) %>
-                · Making <%= format_rupees(li.making_charge.to_f) %>
+                · Making <%= '%.2f' % li.making_percent %>%
                 <% if add_total.positive? %> · Extra <%= format_rupees(add_total) %><% end %>
               </span>
             </td>
@@ -649,7 +649,7 @@
         <div><span>Round off</span><b><%= bill[:round_off_cents].negative? ? '−' : '+' %><%= format_rupees(bill[:round_off_cents].abs / 100.0) %></b></div>
         <div class="grand"><span>Net payable</span><b><%= format_rupees(bill[:payable]) %></b></div>
         <div class="paid"><span>Paid</span><b><%= format_rupees(bill[:paid]) %></b></div>
-        <div class="remain last <%= 'is-settled' if bill[:remaining_cents].to_i.zero? %>"><span>Remaining</span><b><%= format_rupees(bill[:remaining]) %></b></div>
+        <div class="remain last <%= 'is-settled' if bill[:remaining_cents].to_i.zero? %>"><span>Remaining (बाकी)</span><b><%= format_rupees(bill[:remaining]) %></b></div>
       </aside>
     </div>
 

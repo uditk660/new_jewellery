@@ -109,7 +109,7 @@
         <section class="atelier-form" style="margin-top:16px">
           <div class="section">
             <h2>Catalogue pieces</h2>
-            <p class="hint">Each card is one piece. HUID and HSN fill from the catalogue and can be changed for this bill. Enter qty, net weight and rate before adding another. Gross cannot be lighter than net.</p>
+            <p class="hint">Each card is one piece. Making may be a percent of metal, or a rupee amount on the line. HUID and HSN fill from the catalogue. Enter qty, net weight and rate before adding another. Gross cannot be lighter than net.</p>
             <div id="piece-rows"></div>
             <% if @items.any? %>
               <button type="button" class="atelier-back" id="add-piece">+ Add another piece</button>
@@ -126,21 +126,21 @@
             <div class="row">
               <div class="field">
                 <label for="cgst_rate">CGST (%)</label>
-                <%= number_field_tag :cgst_rate, ('%.2f' % (@order.cgst_rate.presence || Order::DEFAULT_CGST_RATE)), step: 0.01, min: 0, max: 20, class: 'form-control', id: 'cgst_rate' %>
+                <%= text_field_tag :cgst_rate, ('%.2f' % (@order.cgst_rate.presence || Order::DEFAULT_CGST_RATE)), class: 'form-control', id: 'cgst_rate', inputmode: 'decimal', autocomplete: 'off' %>
               </div>
               <div class="field">
                 <label for="sgst_rate">SGST (%)</label>
-                <%= number_field_tag :sgst_rate, ('%.2f' % (@order.sgst_rate.presence || Order::DEFAULT_SGST_RATE)), step: 0.01, min: 0, max: 20, class: 'form-control', id: 'sgst_rate' %>
+                <%= text_field_tag :sgst_rate, ('%.2f' % (@order.sgst_rate.presence || Order::DEFAULT_SGST_RATE)), class: 'form-control', id: 'sgst_rate', inputmode: 'decimal', autocomplete: 'off' %>
               </div>
             </div>
             <div class="row" style="margin-top:12px">
               <div class="field">
                 <label for="discount">Discount on total (₹)</label>
-                <%= number_field_tag :discount, ('%.2f' % @order.discount.to_f), step: 0.01, min: 0, class: 'form-control', id: 'discount' %>
+                <%= text_field_tag :discount, ('%.2f' % @order.discount.to_f), class: 'form-control', id: 'discount', inputmode: 'decimal', autocomplete: 'off' %>
               </div>
               <div class="field">
                 <label for="charges">Extra charges (₹)</label>
-                <%= number_field_tag :charges, ('%.2f' % @order.charges.to_f), step: 0.01, min: 0, class: 'form-control', id: 'charges' %>
+                <%= text_field_tag :charges, ('%.2f' % @order.charges.to_f), class: 'form-control', id: 'charges', inputmode: 'decimal', autocomplete: 'off' %>
               </div>
             </div>
           </div>
@@ -185,9 +185,11 @@
 <style>
   .container:has(.sale-desk) { max-width: 1280px; }
   .sale-desk .atelier-grid { grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.8fr); }
-  .sale-desk input[type=number]::-webkit-outer-spin-button,
-  .sale-desk input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-  .sale-desk input[type=number] { -moz-appearance: textfield; }
+  .sale-desk input[type=number],
+  .sale-desk input[inputmode=decimal],
+  .sale-desk input[inputmode=numeric] { -moz-appearance: textfield; appearance: textfield; }
+  .sale-desk input::-webkit-outer-spin-button,
+  .sale-desk input::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; display: none; }
   .sale-desk .mode-toggle {
     display: inline-flex; padding: 3px; border-radius: 999px; margin-bottom: 14px;
     border: 1px solid rgba(201,162,39,0.4); background: #fffaf3;
@@ -243,6 +245,21 @@
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
   .sale-desk .piece-metrics .form-control { padding: 9px 10px; }
+  .sale-desk .making-label {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #6b6258; margin-bottom: 6px;
+  }
+  .sale-desk .making-toggle {
+    display: inline-flex; padding: 2px; border-radius: 999px;
+    border: 1px solid rgba(201,162,39,0.4); background: #fffaf3;
+  }
+  .sale-desk .making-opt {
+    border: 0; background: none; cursor: pointer; font-family: inherit;
+    font-size: 11px; font-weight: 800; line-height: 1; padding: 3px 7px; border-radius: 999px;
+    color: #6b6258;
+  }
+  .sale-desk .making-opt.is-on { background: linear-gradient(90deg, #e8d5a3, #c9a227); color: #0b1220; }
   .sale-desk .piece-foot {
     display: flex; justify-content: flex-end; align-items: baseline; gap: 10px; flex-wrap: wrap;
     margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(201,162,39,0.22);
@@ -453,11 +470,21 @@
         '</div>'+
         '<div class="piece-metrics">'+
           '<div class="field"><label>Qty <span class="req">*</span></label><input type="text" name="line_items[][quantity]" class="form-control piece-qty" inputmode="numeric" autocomplete="off" value="1" aria-label="Qty"></div>'+
-          '<div class="field"><label>Gross (g)</label><input type="number" name="line_items[][gross_weight]" class="form-control piece-gross" min="0" step="0.01" aria-label="Gross (g)"></div>'+
-          '<div class="field"><label>Net (g) <span class="req">*</span></label><input type="number" name="line_items[][net_weight]" class="form-control piece-net" min="0" step="0.01" aria-label="Net (g)"></div>'+
-          '<div class="field"><label>Rate</label><input type="number" name="line_items[][rate_per_gram]" class="form-control piece-rate" min="0" step="0.01" aria-label="Rate ₹ per gram" title="₹ per gram"></div>'+
-          '<div class="field"><label>Making %</label><input type="number" name="line_items[][making_charge_percent]" class="form-control piece-making" min="0" step="0.01" value="0" aria-label="Making %"></div>'+
-          '<div class="field"><label>Add.</label><input type="number" name="line_items[][additional_charge]" class="form-control piece-add" min="0" step="0.01" value="0" aria-label="Additional ₹ per piece" title="₹ per piece"></div>'+
+          '<div class="field"><label>Gross (g)</label><input type="text" name="line_items[][gross_weight]" class="form-control piece-gross" inputmode="decimal" autocomplete="off" aria-label="Gross (g)"></div>'+
+          '<div class="field"><label>Net (g) <span class="req">*</span></label><input type="text" name="line_items[][net_weight]" class="form-control piece-net" inputmode="decimal" autocomplete="off" aria-label="Net (g)"></div>'+
+          '<div class="field"><label>Rate</label><input type="text" name="line_items[][rate_per_gram]" class="form-control piece-rate" inputmode="decimal" autocomplete="off" aria-label="Rate ₹ per gram" title="₹ per gram"></div>'+
+          '<div class="field piece-making-field">'+
+            '<div class="making-label">'+
+              '<span>Making</span>'+
+              '<span class="making-toggle" role="group" aria-label="Making as percent or rupees">'+
+                '<button type="button" class="making-opt is-on" data-mode="percent">%</button>'+
+                '<button type="button" class="making-opt" data-mode="rupees">\u20B9</button>'+
+              '</span>'+
+            '</div>'+
+            '<input type="hidden" name="line_items[][making_mode]" class="piece-making-mode" value="percent">'+
+            '<input type="text" name="line_items[][making_value]" class="form-control piece-making" inputmode="decimal" autocomplete="off" value="0" aria-label="Making %">'+
+          '</div>'+
+          '<div class="field"><label>Add.</label><input type="text" name="line_items[][additional_charge]" class="form-control piece-add" inputmode="decimal" autocomplete="off" value="0" aria-label="Additional ₹ per piece" title="₹ per piece"></div>'+
         '</div>'+
         '<div class="piece-foot">'+
           '<span class="piece-total-label">Line total</span>'+
@@ -474,15 +501,51 @@
       recalc();
     }
 
+    function makingMode(card){
+      var el = card.querySelector('.piece-making-mode');
+      return el && el.value === 'rupees' ? 'rupees' : 'percent';
+    }
+
+    function updateMakingUI(card){
+      var rupees = makingMode(card) === 'rupees';
+      var input = card.querySelector('.piece-making');
+      card.querySelectorAll('.making-opt').forEach(function(btn){
+        btn.classList.toggle('is-on', btn.getAttribute('data-mode') === (rupees ? 'rupees' : 'percent'));
+      });
+      if(input){
+        input.setAttribute('aria-label', rupees ? 'Making rupees' : 'Making %');
+        input.setAttribute('title', rupees ? 'Making in rupees for this line' : 'Making as a percent of metal');
+      }
+    }
+
+    function setMakingMode(card, mode){
+      var hidden = card.querySelector('.piece-making-mode');
+      var input = card.querySelector('.piece-making');
+      if(!hidden || !input || hidden.value === mode) return;
+      var current = lineAmount(card);
+      hidden.value = mode;
+      if(mode === 'rupees'){
+        input.value = current.making.toFixed(2);
+      } else {
+        input.value = current.metal > 0 ? ((current.making * 100) / current.metal).toFixed(2) : '0.00';
+      }
+      updateMakingUI(card);
+      recalc();
+    }
+
     function applyDraft(card, data){
       card.querySelector('.piece-qty').value = data.quantity || 1;
       card.querySelector('.piece-gross').value = data.gross_weight || '';
       card.querySelector('.piece-net').value = data.net_weight || '';
       card.querySelector('.piece-rate').value = data.rate_per_gram || '';
-      card.querySelector('.piece-making').value = data.making_charge_percent || 0;
+      var mode = data.making_mode === 'rupees' ? 'rupees' : 'percent';
+      card.querySelector('.piece-making-mode').value = mode;
+      var makingVal = data.making_value != null && data.making_value !== '' ? data.making_value : data.making_charge_percent;
+      card.querySelector('.piece-making').value = makingVal != null && makingVal !== '' ? makingVal : 0;
       card.querySelector('.piece-add').value = data.additional_charge || 0;
       card.querySelector('.piece-huid').value = data.huid || '';
       card.querySelector('.piece-hsn').value = data.hsn || '';
+      updateMakingUI(card);
     }
 
     function applyItem(card, it, data){
@@ -498,8 +561,12 @@
       card.querySelector('.piece-net').value = Number(net).toFixed(2);
       card.querySelector('.piece-gross').value = Number(gross).toFixed(2);
       card.querySelector('.piece-rate').value = data.rate_per_gram != null && data.rate_per_gram !== '' ? data.rate_per_gram : (it.price_per_gram ? Number(it.price_per_gram).toFixed(2) : '');
-      card.querySelector('.piece-making').value = data.making_charge_percent != null && data.making_charge_percent !== '' ? data.making_charge_percent : Number(it.making_percent || 0).toFixed(2);
+      var mode = data.making_mode === 'rupees' ? 'rupees' : 'percent';
+      card.querySelector('.piece-making-mode').value = mode;
+      var makingVal = data.making_value != null && data.making_value !== '' ? data.making_value : data.making_charge_percent;
+      card.querySelector('.piece-making').value = makingVal != null && makingVal !== '' ? makingVal : Number(it.making_percent || 0).toFixed(2);
       card.querySelector('.piece-add').value = data.additional_charge != null && data.additional_charge !== '' ? data.additional_charge : 0;
+      updateMakingUI(card);
       card.querySelector('.piece-huid').value = Object.prototype.hasOwnProperty.call(data, 'huid') ? (data.huid || '') : (it.sku || '');
       card.querySelector('.piece-hsn').value = Object.prototype.hasOwnProperty.call(data, 'hsn') ? (data.hsn || '') : (it.hsn || '');
       if(meta){
@@ -513,12 +580,13 @@
       var qty = int(card.querySelector('.piece-qty'));
       var net = num(card.querySelector('.piece-net'));
       var rate = num(card.querySelector('.piece-rate'));
-      var makingPct = num(card.querySelector('.piece-making'));
+      var makingVal = num(card.querySelector('.piece-making'));
       var add = num(card.querySelector('.piece-add'));
       var metalP = Math.round(paise(rate) * paise(net) * qty / 100);
-      var makingP = share(metalP, paise(makingPct));
+      var makingP = makingMode(card) === 'rupees' ? paise(Math.max(0, makingVal)) : share(metalP, paise(makingVal));
+      var makingPct = metalP > 0 ? (makingP * 10000 / metalP) / 100 : makingVal;
       var totalP = metalP + makingP + paise(add) * qty;
-      return { it: it, qty: qty, net: net, gross: num(card.querySelector('.piece-gross')), rate: rate, makingPct: makingPct, add: add, metal: metalP / 100, making: makingP / 100, totalP: totalP, total: totalP / 100 };
+      return { it: it, qty: qty, net: net, gross: num(card.querySelector('.piece-gross')), rate: rate, makingPct: makingPct, makingVal: makingVal, add: add, metal: metalP / 100, making: makingP / 100, totalP: totalP, total: totalP / 100 };
     }
 
     function qtyOverStock(card){
@@ -575,6 +643,11 @@
         var msg = qtyOverStock(card);
         if(msg) showQtyPopup(msg);
       });
+      card.querySelectorAll('.making-opt').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          setMakingMode(card, btn.getAttribute('data-mode'));
+        });
+      });
     }
 
     function clientValid(){
@@ -617,7 +690,7 @@
         if(l.net <= 0){ ok = false; message = message || 'Piece ' + n + ': net weight must be greater than 0 g.'; }
         if(l.gross > 0 && l.gross < l.net){ ok = false; message = message || 'Piece ' + n + ': gross weight cannot be less than net weight.'; }
         if(l.rate <= 0){ ok = false; message = message || 'Piece ' + n + ': set a \u20B9 per gram rate.'; }
-        if(l.makingPct < 0 || l.add < 0){ ok = false; message = message || 'Piece ' + n + ': charges cannot be negative.'; }
+        if(l.making < 0 || l.makingVal < 0 || l.add < 0){ ok = false; message = message || 'Piece ' + n + ': charges cannot be negative.'; }
       });
       var discount = num(document.getElementById('discount'));
       var charges = num(document.getElementById('charges'));
